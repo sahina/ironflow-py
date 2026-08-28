@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Build + install + import (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Build sdist + wheel
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip build
+          python -m build --outdir dist .
+
+      # --only-binary=:all: is the point: without it a dependency missing a
+      # wheel on this target silently starts a Rust build (pyqwest) or a C
+      # build (protobuf-py-ext), and the smoke passes having proved the
+      # toolchain works rather than that the wheel does.
+      - name: Install the wheel into a clean venv
+        run: |
+          set -euo pipefail
+          python -m venv .venv-smoke
+          .venv-smoke/bin/pip install --quiet --only-binary=:all: dist/*.whl
+
+      # Runs from a NEUTRAL cwd. At the repo root the source `ironflow/` dir
+      # shadows the installed package, so a wheel shipping zero modules still
+      # imports clean — that is the #1829 defect, and the check that hid it.
+      #
+      # The script, not a bare `import ironflow`: the ConnectRPC facade
+      # resolves lazily through a PEP 562 module __getattr__, so a bare import
+      # loads neither connectrpc nor either compiled package and passes on a
+      # machine where they cannot load at all.
+      - name: Import from a neutral cwd
+        run: |
+          set -euo pipefail
+          SMOKE="$PWD/.venv-smoke/bin/python"
+          SCRIPT="$PWD/scripts/python-install-smoke.py"
+          cd /
+          "$SMOKE" "$SCRIPT"

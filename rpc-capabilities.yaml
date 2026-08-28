@@ -1,0 +1,412 @@
+# Python SDK ConnectRPC capability ledger (#1781, ADR 0062)
+#
+# Classifies every served, non-transport ConnectRPC method for the Python SDK.
+# The universe is NOT enumerated here: scripts/check-sdk-parity.sh derives it the
+# way ADR 0059 does — Connect handler registrations in internal/server/server.go,
+# expanded to that service's `rpc Foo(...)` lines in api/proto/ironflow/v1, minus
+# RPC_SKIP. This file only answers "what do we do with each one". A served RPC
+# with no row here fails the gate by service and method name.
+#
+# Two files listing 83 paths independently is the failure ADR 0059 was written
+# about, so this one holds classification and nothing else.
+#
+# classification:
+#   rest         The generated REST client already delivers this capability.
+#                Records WHICH route, so the row is auditable rather than
+#                asserted. Not re-exposed: Tier 2 promises capability parity,
+#                not endpoint-for-endpoint parity.
+#   rpc          Missing unary capability. Exposed by the PR-2 facade.
+#   stream       Supported stream. Exposed by the PR-3 facade.
+#   unsupported  Served, but not implemented. Never generate a method.
+#
+# capability:    The namespace the method attaches to (rpc.webhooks, rpc.runs).
+#                Only on rpc and stream rows — a rest row is not exposed, so it
+#                has no namespace.
+#
+# method:        The stable PUBLIC method name on that namespace, so the call
+#                reads rpc.webhooks.create_source(...). Required on rpc and
+#                stream rows, forbidden on rest rows, unique within a namespace
+#                — all three checked by the gate.
+#
+#                Recorded EXPLICITLY rather than computed by the generator. A
+#                generator that derives names produces names nobody chose, and
+#                a rename becomes invisible; that is how deduplicateMethods got
+#                its positional fallback (see tests/api_snapshot.py). Here a
+#                rename is a diff line someone approves.
+#
+#                Proposed by a rule — take the GENERATED method name and drop
+#                the noun the namespace already says (create_webhook_source ->
+#                create_source under `webhooks`) — then reviewed row by row.
+#                Deriving from the generated name rather than the proto name
+#                matters: buf renders CreateSQLProjection as
+#                create_sql_projection, while a naive snake_case gives
+#                create_s_q_l. Rows where the rule changed nothing keep the
+#                generated name.
+#
+#                The generator does NOT re-derive the name it calls. It looks up
+#                the one attribute on the generated client whose name matches
+#                the RPC ignoring underscores, and fails closed if that is
+#                missing or ambiguous.
+#
+# Rows are in proto declaration order within each service, matching the
+# extraction order, so a diff against a regenerated list stays readable.
+
+# Declared partition. The gate asserts these match the actual row counts AND
+# that the sum equals the served set it derived independently.
+#
+# Why declare them instead of only counting rows: a per-path presence check
+# catches a NEW rpc, but it cannot catch an EXISTING row being flipped from
+# `rpc` to `rest` to dodge the work — every path still has a row, so the check
+# passes. Changing a row's class now also means changing a number here, which
+# is a deliberate, reviewable act instead of a one-word edit.
+#
+# The numbers live here and not in check-sdk-parity.sh so there is one place to
+# edit, not two.
+expect:
+  rest: 41
+  rpc: 42
+  stream: 4
+  unsupported: 1
+
+rpcs:
+  # ── IronflowService ──
+  - path: ironflow.v1.IronflowService/RegisterFunction
+    classification: rpc
+    capability: functions
+    method: register
+  - path: ironflow.v1.IronflowService/GetFunction
+    classification: rest
+    rest: "GET /api/v1/functions/{id}"
+  - path: ironflow.v1.IronflowService/ListFunctions
+    classification: rest
+    rest: "GET /api/v1/functions"
+  - path: ironflow.v1.IronflowService/UpdateFunctionStatus
+    classification: rpc
+    capability: functions
+    method: update_status
+  - path: ironflow.v1.IronflowService/DeleteFunction
+    classification: rpc
+    capability: functions
+    method: delete
+  - path: ironflow.v1.IronflowService/ListFunctionHistory
+    classification: rpc
+    capability: functions
+    method: list_history
+  - path: ironflow.v1.IronflowService/GetFunctionAtVersion
+    classification: rpc
+    capability: functions
+    method: get_at_version
+  - path: ironflow.v1.IronflowService/RollbackFunction
+    classification: rpc
+    capability: functions
+    method: rollback
+  - path: ironflow.v1.IronflowService/Trigger
+    classification: rest
+    rest: "POST /api/v1/functions/{id}/invoke"
+    note: >-
+      InvokeFunctionResponse returns {run_id, event_id}: async, so this is Trigger. TriggerSync has no REST sibling.
+  - path: ironflow.v1.IronflowService/Emit
+    classification: rest
+    rest: "POST /api/v1/events"
+  - path: ironflow.v1.IronflowService/TriggerSync
+    classification: rpc
+    capability: runs
+    method: trigger_sync
+  - path: ironflow.v1.IronflowService/TriggerBatch
+    classification: rpc
+    capability: runs
+    method: trigger_batch
+  - path: ironflow.v1.IronflowService/GetRun
+    classification: rest
+    rest: "GET /api/v1/runs/{id}"
+  - path: ironflow.v1.IronflowService/ListRuns
+    classification: rest
+    rest: "GET /api/v1/runs"
+  - path: ironflow.v1.IronflowService/GetRunSteps
+    classification: rest
+    rest: "GET /api/v1/runs/{id}/steps"
+  - path: ironflow.v1.IronflowService/CancelRun
+    classification: rest
+    rest: "POST /api/v1/runs/{id}/cancel"
+  - path: ironflow.v1.IronflowService/PatchStep
+    classification: rest
+    rest: "POST /api/v1/steps/patch"
+    note: >-
+      The route is grouped under steps, so the generated REST method is
+      steps_patch and matches the action it performs.
+  - path: ironflow.v1.IronflowService/ResumeRun
+    classification: rest
+    rest: "POST /api/v1/runs/resume"
+  - path: ironflow.v1.IronflowService/PauseRun
+    classification: rpc
+    capability: runs
+    method: pause
+  - path: ironflow.v1.IronflowService/GetPausedState
+    classification: rpc
+    capability: runs
+    method: get_paused_state
+  - path: ironflow.v1.IronflowService/InjectStepOutput
+    classification: rpc
+    capability: runs
+    method: inject_step_output
+
+  # ── EnvironmentService ──
+  - path: ironflow.v1.EnvironmentService/CreateEnvironment
+    classification: rest
+    rest: "POST /api/v1/environments"
+  - path: ironflow.v1.EnvironmentService/GetEnvironment
+    classification: rpc
+    capability: environments
+    method: get
+  - path: ironflow.v1.EnvironmentService/ListEnvironments
+    classification: rest
+    rest: "GET /api/v1/environments"
+  - path: ironflow.v1.EnvironmentService/DeleteEnvironment
+    classification: rest
+    rest: "DELETE /api/v1/environments/{id}"
+  - path: ironflow.v1.EnvironmentService/RotateAPIKey
+    classification: rpc
+    capability: environments
+    method: rotate_api_key
+
+  # ── EntityStreamService ──
+  - path: ironflow.v1.EntityStreamService/AppendEvent
+    classification: rest
+    rest: "POST /api/v1/streams/{entityId}/events"
+  - path: ironflow.v1.EntityStreamService/ReadStream
+    classification: rest
+    rest: "GET /api/v1/streams/{entityId}/events"
+  - path: ironflow.v1.EntityStreamService/GetStreamInfo
+    classification: rest
+    rest: "GET /api/v1/streams/{entityId}"
+  - path: ironflow.v1.EntityStreamService/ListStreams
+    classification: rest
+    rest: "GET /api/v1/streams"
+  - path: ironflow.v1.EntityStreamService/GetEntityHistory
+    classification: rest
+    rest: "GET /api/v1/streams/{entityId}/history"
+  - path: ironflow.v1.EntityStreamService/CreateSnapshot
+    classification: rest
+    rest: "POST /api/v1/streams/{entityId}/snapshots"
+  - path: ironflow.v1.EntityStreamService/GetSnapshot
+    classification: rest
+    rest: "GET /api/v1/streams/{entityId}/snapshots"
+
+  # ── ProjectionService ──
+  - path: ironflow.v1.ProjectionService/RegisterProjection
+    classification: rpc
+    capability: projections
+    method: register
+  - path: ironflow.v1.ProjectionService/UnregisterProjection
+    classification: rest
+    rest: "DELETE /api/v1/projections/{name}"
+  - path: ironflow.v1.ProjectionService/StreamProjectionEvents
+    classification: stream
+    capability: projections
+    method: stream_events
+  - path: ironflow.v1.ProjectionService/GetProjection
+    classification: rest
+    rest: "GET /api/v1/projections/{name}"
+  - path: ironflow.v1.ProjectionService/ListProjections
+    classification: rest
+    rest: "GET /api/v1/projections"
+  - path: ironflow.v1.ProjectionService/GetProjectionStatus
+    classification: rest
+    rest: "GET /api/v1/projections/{name}/status"
+  - path: ironflow.v1.ProjectionService/RebuildProjection
+    classification: rest
+    rest: "POST /api/v1/projections/{name}/rebuild"
+  - path: ironflow.v1.ProjectionService/GetRebuildJob
+    classification: rest
+    rest: "GET /api/v1/projections/{name}/rebuild"
+  - path: ironflow.v1.ProjectionService/CancelRebuild
+    classification: rest
+    rest: "POST /api/v1/projections/{name}/cancel"
+  - path: ironflow.v1.ProjectionService/PauseProjection
+    classification: rest
+    rest: "POST /api/v1/projections/{name}/pause"
+  - path: ironflow.v1.ProjectionService/ResumeProjection
+    classification: rest
+    rest: "POST /api/v1/projections/{name}/resume"
+  - path: ironflow.v1.ProjectionService/CreateSQLProjection
+    classification: rpc
+    capability: projections
+    method: create_sql
+  - path: ironflow.v1.ProjectionService/QuerySQLProjection
+    classification: rpc
+    capability: projections
+    method: query_sql
+    note: >-
+      POST /api/v1/sql is QueryService/ExecuteSQL (generic read-only SQL), not this. No REST sibling.
+  - path: ironflow.v1.ProjectionService/WaitProjectionCatchup
+    classification: rest
+    rest: "GET /api/v1/projections/{name}/catchup"
+  - path: ironflow.v1.ProjectionService/WaitProjectionCatchupBatch
+    classification: rest
+    rest: "POST /api/v1/projections/catchup/batch"
+  - path: ironflow.v1.ProjectionService/WaitForEvent
+    classification: rest
+    rest: "POST /api/v1/projections/wait-for-event"
+  - path: ironflow.v1.ProjectionService/WaitProjectionCatchupStream
+    classification: stream
+    capability: projections
+    method: wait_catchup_stream
+
+  # ── QueryService ──
+  - path: ironflow.v1.QueryService/ExecuteSQL
+    classification: rest
+    rest: "POST /api/v1/sql"
+
+  # ── EventSchemaService ──
+  - path: ironflow.v1.EventSchemaService/RegisterSchema
+    classification: rest
+    rest: "POST /api/v1/events/schemas"
+  - path: ironflow.v1.EventSchemaService/GetSchema
+    classification: rest
+    rest: "GET /api/v1/events/schemas/{name}"
+  - path: ironflow.v1.EventSchemaService/ListSchemas
+    classification: rest
+    rest: "GET /api/v1/events/schemas"
+  - path: ironflow.v1.EventSchemaService/DeleteSchema
+    classification: rest
+    rest: "DELETE /api/v1/events/schemas/{name}/{version}"
+  - path: ironflow.v1.EventSchemaService/TestUpcast
+    classification: rest
+    rest: "POST /api/v1/events/upcast"
+
+  # ── WebhookService ──
+  - path: ironflow.v1.WebhookService/CreateWebhookSource
+    classification: rpc
+    capability: webhooks
+    method: create_source
+  - path: ironflow.v1.WebhookService/GetWebhookSource
+    classification: rpc
+    capability: webhooks
+    method: get_source
+  - path: ironflow.v1.WebhookService/ListWebhookSources
+    classification: rpc
+    capability: webhooks
+    method: list_sources
+  - path: ironflow.v1.WebhookService/UpdateWebhookSource
+    classification: rpc
+    capability: webhooks
+    method: update_source
+  - path: ironflow.v1.WebhookService/RotateWebhookSecret
+    classification: rpc
+    capability: webhooks
+    method: rotate_secret
+  - path: ironflow.v1.WebhookService/ExpireWebhookSecretPrev
+    classification: rpc
+    capability: webhooks
+    method: expire_secret_prev
+  - path: ironflow.v1.WebhookService/DisableWebhookSignatureVerification
+    classification: rpc
+    capability: webhooks
+    method: disable_signature_verification
+  - path: ironflow.v1.WebhookService/RotateWebhookIngestToken
+    classification: rpc
+    capability: webhooks
+    method: rotate_ingest_token
+  - path: ironflow.v1.WebhookService/TestWebhookVerifyConfig
+    classification: rpc
+    capability: webhooks
+    method: test_verify_config
+  - path: ironflow.v1.WebhookService/DeleteWebhookSource
+    classification: rpc
+    capability: webhooks
+    method: delete_source
+  - path: ironflow.v1.WebhookService/ListWebhookDeliveries
+    classification: rpc
+    capability: webhooks
+    method: list_deliveries
+
+  # ── AuditService ──
+  - path: ironflow.v1.AuditService/GetAuditTrail
+    classification: rest
+    rest: "GET /api/v1/audit"
+  - path: ironflow.v1.AuditService/GetAuthAuditTrail
+    classification: rpc
+    capability: audit
+    method: get_auth_trail
+
+  # ── AgentToolsService ──
+  - path: ironflow.v1.AgentToolsService/RegisterTool
+    classification: rpc
+    capability: agent_tools
+    method: register
+  - path: ironflow.v1.AgentToolsService/InvokeTool
+    classification: rpc
+    capability: agent_tools
+    method: invoke
+  - path: ironflow.v1.AgentToolsService/UnregisterTool
+    classification: rpc
+    capability: agent_tools
+    method: unregister
+  - path: ironflow.v1.AgentToolsService/ListTools
+    classification: rpc
+    capability: agent_tools
+    method: list
+
+  # ── TimeTravelService ──
+  - path: ironflow.v1.TimeTravelService/GetRunStateAt
+    classification: rpc
+    capability: time_travel
+    method: get_run_state_at
+  - path: ironflow.v1.TimeTravelService/GetRunTimeline
+    classification: rpc
+    capability: time_travel
+    method: get_run_timeline
+  - path: ironflow.v1.TimeTravelService/GetStepOutputAt
+    classification: rpc
+    capability: time_travel
+    method: get_step_output_at
+
+  # ── PubSubService ──
+  - path: ironflow.v1.PubSubService/Emit
+    classification: rest
+    rest: "POST /api/v1/events"
+    note: >-
+      Proto: 'alias for Trigger with emit semantics'. Same capability as IronflowService/Emit; both are delivered by POST /api/v1/events.
+  - path: ironflow.v1.PubSubService/Subscribe
+    classification: stream
+    capability: pubsub
+    method: subscribe
+  - path: ironflow.v1.PubSubService/SubscribeBidirectional
+    classification: unsupported
+    note: >-
+      Served, but internal/server/connect/pubsub_handler.go:407 returns CodeUnimplemented. Never generate a method for it.
+  - path: ironflow.v1.PubSubService/CreateConsumerGroup
+    classification: rpc
+    capability: pubsub
+    method: create_consumer_group
+  - path: ironflow.v1.PubSubService/GetConsumerGroup
+    classification: rpc
+    capability: pubsub
+    method: get_consumer_group
+  - path: ironflow.v1.PubSubService/ListConsumerGroups
+    classification: rpc
+    capability: pubsub
+    method: list_consumer_groups
+  - path: ironflow.v1.PubSubService/UpdateConsumerGroup
+    classification: rpc
+    capability: pubsub
+    method: update_consumer_group
+  - path: ironflow.v1.PubSubService/DeleteConsumerGroup
+    classification: rpc
+    capability: pubsub
+    method: delete_consumer_group
+  - path: ironflow.v1.PubSubService/JoinConsumerGroup
+    classification: stream
+    capability: pubsub
+    method: join_consumer_group
+  - path: ironflow.v1.PubSubService/Publish
+    classification: rest
+    rest: "POST /api/v1/publish"
+  - path: ironflow.v1.PubSubService/ListTopics
+    classification: rpc
+    capability: pubsub
+    method: list_topics
+  - path: ironflow.v1.PubSubService/GetTopicStats
+    classification: rpc
+    capability: pubsub
+    method: get_topic_stats

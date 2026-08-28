@@ -1,0 +1,161 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+# Distribution name is `ironflow-py`: the name `ironflow` on PyPI belongs to an
+# unrelated third-party project (pyiron, dormant at 0.1.0 since 2024-05-22).
+# The IMPORT name stays `ironflow`, so a venv holding both packages has two
+# claimants on the top-level `ironflow` module and the install order decides
+# which wins, silently. Accepted: the audiences do not overlap and `ironflow`
+# is the name in every doc and sample. Noted in README.md.
+#
+# Version is LOCKSTEP with the engine, set by the "Update version files" step
+# in release.yml — do not hand-edit to a number the engine has not cut. That
+# step SKIPS this file when the release is a prerelease: engine prereleases are
+# SemVer (`0.33.0-mirror.1`) and not valid PEP 440, so writing one here would
+# make hatchling reject the file on a branch where nothing Python changed.
+name = "ironflow-py"
+version = "0.32.0"
+description = "Ironflow Python SDK — event-driven backend platform client"
+readme = "README.md"
+license = "LicenseRef-Ironflow-EULA"
+# A `LicenseRef-` expression is a POINTER to a custom license, so the text has
+# to ship with it. Without this key the wheel carried the expression and no
+# license file at all — metadata naming terms the installer could not read.
+# `LICENSE` is a verbatim copy of the repo-root file. A build backend cannot
+# reach outside the package directory for a license file, so it has to be a real
+# file here rather than generated like the mirror-root one.
+# `make license-copies-check` asserts it matches root.
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# ConnectRPC support is part of the default contract, not an extra (#1781, ADR
+# 0062). An extra would put the typed client — the entire point of the feature —
+# behind a flag, and turn a heavier install into a runtime ImportError.
+#
+# These two lines resolve to SIX packages, two of them compiled:
+#   connectrpc  ─┬─ protobuf-py ── protobuf-py-ext   (native, CPython only)
+#                ├─ pyqwest                          (Rust)
+#                │    └─ opentelemetry-api
+#                └─ typing_extensions
+# Before this landed the package had zero runtime dependencies (stdlib urllib).
+#
+# The pyqwest floor is ours, not upstream's: connectrpc asks for >=0.5.1, which
+# can resolve to releases without wheels on supported targets. Installation
+# tests use `pip install --only-binary=:all:` so a missing wheel fails loudly
+# instead of silently starting a Rust source build.
+dependencies = [
+    "connectrpc>=0.11.1,<0.12",
+    "pyqwest>=0.10,<0.11",
+]
+
+# Point at the PUBLIC mirror, not this repo — these render as the sidebar links
+# on the PyPI project page and must resolve for someone who cannot see the
+# engine repo. Set once here per ADR 0021; mirror-py-sync.sh never rewrites
+# them at sync time.
+[project.urls]
+Homepage = "https://ironflow.run"
+Documentation = "https://docs.ironflow.run"
+Repository = "https://github.com/sahina/ironflow-py"
+Issues = "https://github.com/sahina/ironflow-py/issues"
+
+[project.optional-dependencies]
+# uvicorn serves the generated ASGI apps in tests. NOT optional and not a
+# convenience: wsgiref cannot serve Connect streaming in either direction —
+# pyqwest sends the streaming request chunked (no CONTENT_LENGTH) and wsgiref
+# neither de-chunks it nor streams the response back. See tests/rpc_server.py.
+dev = ["pytest>=7.0", "mypy>=1.0", "ruff>=0.1", "build>=1.0", "uvicorn>=0.30"]
+# Build-time ONLY — used by `make proto-python`, never shipped in the wheel.
+#
+# All four packages move as a set. connectrpc 0.11.1 pins protobuf-py==0.1.1
+# EXACTLY, so generating with a newer protoc-gen-py (0.3.0 is current on PyPI)
+# emits code against a runtime that is not installed. Pinning a subset is the
+# trap; see ADR 0062. Bump the runtime pins above and these four together, and
+# re-run `make proto-python` in the same change.
+gen = [
+    "connectrpc==0.11.1",
+    "protoc-gen-connectrpc==0.11.1",
+    "protobuf-py==0.1.1",
+    "protoc-gen-py==0.1.1",
+]
+
+[tool.hatch.build]
+# DO NOT REMOVE. Without this the wheel ships metadata and NO CODE (#1829).
+#
+# Hatchling walks up to the VCS root and applies the repo-root .gitignore to
+# the build. That file carries `/ironflow` — anchored, and there to ignore the
+# compiled Go binary at the repo root — but hatchling matches it against this
+# package directory too, so `sdk/python/ironflow/` is excluded wholesale. The
+# result builds and installs cleanly and then raises ModuleNotFoundError on
+# `import ironflow`.
+#
+# Measured: 3,267 bytes and 0 modules inside the repo, 127,071 bytes and 34
+# modules with the same source outside it. Reproduced from scratch with a
+# one-line .gitignore.
+#
+# Changing the .gitignore instead is not an option: `/ironflow` is correct for
+# git and dropping it would let the Go binary be committed.
+ignore-vcs = true
+
+# Turning off VCS awareness turns off ALL of it, so the build stops skipping the
+# working-directory clutter .gitignore used to hide. `packages` below scopes the
+# WHEEL, but the sdist has its own file selection and swept in `.venv-gen`,
+# whose absolute symlinks fail the build outright:
+#
+#   ERROR 'ironflow_py-0.15.0/.venv-gen/bin/python3' is a link to an absolute path
+#
+# These are exactly the sdk/python entries git ignores. Keep the two lists in
+# step: anything added to .gitignore for this directory belongs here too.
+exclude = [
+  "/.venv",
+  "/.venv-*",
+  "/dist",
+  "/.mypy_cache",
+  "/.pytest_cache",
+  "/.ruff_cache",
+  "**/__pycache__",
+  "**/*.py[co]",
+  # Mirror-only, and the reason they are here is that the sdist PyPI serves is
+  # built at the MIRROR root, not from sdk/python. There the package root also
+  # holds the seed's `.github/workflows/` and the `scripts/` copy of the
+  # install-smoke script, and hatchling swept both into the sdist — so the
+  # published artifact did not match the one `make test-python` builds and
+  # gates. No-ops in this repo, where neither path exists under sdk/python.
+  "/.github",
+  "/scripts",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["ironflow"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+
+# Generated by buf (`make proto-python`). Not ours to fix, and regenerated
+# wholesale on every proto change — a strict finding here has no author to route
+# to. The hand-written surface above it stays strict.
+[[tool.mypy.overrides]]
+module = "ironflow._gen.*"
+ignore_errors = true
+
+# connectrpc and protobuf-py ship py.typed, but their transitive deps may not.
+[[tool.mypy.overrides]]
+module = ["pyqwest.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py310"

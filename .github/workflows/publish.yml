@@ -1,0 +1,114 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish (e.g., v0.33.0)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build + publish ironflow-py
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Half of the OIDC claim PyPI matches on; the other half is this file's
+    # name. Both must equal what the Trusted Publisher on PyPI declares, or
+    # the upload is rejected with no token to fall back on. Must also exist
+    # as an environment on this repo's settings.
+    environment: pypi
+    permissions:
+      contents: read
+      # Required for Trusted Publishing. There is no PyPI API token for this
+      # project anywhere — an OIDC failure is the ONLY auth failure mode.
+      id-token: write
+    env:
+      # All untrusted inputs routed through env vars; never interpolate
+      # ${{ github.* }} directly into a `run:` block (workflow-injection
+      # hardening — see github.blog/security/...workflow-injections).
+      INPUT_TAG: ${{ github.event.inputs.tag }}
+      REF_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Resolve version from tag
+        id: resolve
+        run: |
+          set -euo pipefail
+          REF="${INPUT_TAG:-$REF_NAME}"
+          # Validate tag shape before downstream use.
+          if ! [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: invalid tag/ref: $REF"
+            echo "Python releases are stable-only. Engine prereleases"
+            echo "(0.33.0-mirror.1) have no PEP 440 form and are not mirrored"
+            echo "here — release.yml skips this mirror when is_prerelease."
+            exit 1
+          fi
+          echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
+          echo "Resolved: version=${REF#v}"
+
+      # BEFORE the build, so a mismatch costs seconds rather than a burned
+      # version number. PyPI never allows a version to be reused or lowered.
+      - name: Verify pyproject version matches tag
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          pkg_version=$(python -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          if [ "$pkg_version" != "$VERSION" ]; then
+            echo "Error: pyproject.toml version ($pkg_version) does not match tag ($VERSION)"
+            exit 1
+          fi
+          echo "pyproject.toml version matches tag: $VERSION"
+
+      - name: Build sdist + wheel
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip build twine
+          python -m build --outdir dist .
+          python -m twine check dist/*
+
+      # Assert the wheel carries code AND license text. Both have shipped
+      # broken before: #1829 produced a wheel with metadata and zero modules
+      # (repo-root .gitignore applied to the package dir), and the wheel
+      # carried a LicenseRef- expression pointing at a file that was not there
+      # until #1856. Neither failure is visible in `twine check`.
+      - name: Assert wheel contents
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import glob, sys, zipfile
+          whl = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(whl).namelist()
+          mods = [n for n in names if n.startswith("ironflow/") and n.endswith(".py")]
+          lics = [n for n in names if "LICENSE" in n.upper()]
+          print(f"{whl}: {len(mods)} modules, license files: {lics}")
+          if not mods:
+              sys.exit("FATAL: wheel ships no modules (#1829)")
+          if not lics:
+              sys.exit("FATAL: wheel ships no license text (#1856)")
+          PY
+
+      # Trusted Publishing. Attestations are on by default and bind the
+      # artifact to this workflow run on a public SHA — the whole reason this
+      # mirror exists rather than publishing from the private engine repo.
+      #
+      # skip-existing so a manual re-run after a partial publish is idempotent:
+      # PyPI answers `400 File already exists`, which is success here.
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.14.2
+        with:
+          skip-existing: true
