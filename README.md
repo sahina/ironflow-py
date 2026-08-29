@@ -1,6 +1,8 @@
-# Ironflow Python SDK
+# Ironflow — Python SDK
 
 Python client for [Ironflow](https://ironflow.run) — the Continuous History platform for backend systems.
+
+[![PyPI](https://img.shields.io/pypi/v/ironflow-py)](https://pypi.org/project/ironflow-py/)
 
 ## Installation
 
@@ -194,26 +196,93 @@ contract, so putting it behind a flag would turn a heavier install into a runtim
 and `import ironflow` does not load the ConnectRPC stack — that cost is paid on
 first use of `IronflowRPC`.
 
-## Where this package is published from
+## What lives here
 
-The Ironflow engine is closed source. This SDK's source is mirrored to
-[`sahina/ironflow-py`](https://github.com/sahina/ironflow-py) at each release, and PyPI
-uploads happen from there over [Trusted Publishing](https://docs.pypi.org/trusted-publishers/).
-No PyPI API token exists for this project, so every release carries an attestation
-binding the artifact to a public commit you can inspect.
+- `ironflow/` — SDK source: `client.py` (REST), `rpc/` (ConnectRPC), `models.py`, `_http.py`
+- `ironflow/_gen/` — generated protobuf + ConnectRPC code, vendored from the engine repo
+- `tests/` — the same suite the engine repo gates on
+- `pyproject.toml`, `rpc-capabilities.yaml`, and the install-smoke script under `scripts/`
+- `LICENSE` and security policy
 
-The mirror is **read-only**. Pull requests against it are closed without review; source
-changes land in the engine repo and appear at the next release.
+## Where the engine source lives
 
-## Bugs and security
+The Ironflow engine is **closed source** and lives at `sahina/ironflow` (private). This
+mirror exists so that:
 
-Issues are disabled on the mirror. Everything goes to one tracker:
+- PyPI's "Repository" link resolves to public source
+- README source links (`/blob/main/...`) resolve to public source
+- PyPI Trusted Publishing attests each artifact to a publicly verifiable Git SHA
 
-- Bugs and feature requests → [sahina/ironflow-issues](https://github.com/sahina/ironflow-issues/issues/new/choose), component **Python SDK**. Include your Python version, platform, and a minimal repro.
-- Security issues → [private advisory](https://github.com/sahina/ironflow-issues/security/advisories/new). Do **not** open a public issue.
-- Commercial licensing → the contact in [LICENSE](LICENSE).
+## Building locally
+
+```bash
+pip install -e '.[dev]'
+pytest
+python -m build
+```
+
+Requires Python 3.10+.
+
+Import-check a built wheel from a **neutral working directory**. At the package root the
+source `ironflow/` directory shadows the installed one, so a wheel shipping no modules
+still imports cleanly:
+
+```bash
+python -m venv .venv-smoke
+.venv-smoke/bin/pip install --only-binary=:all: dist/*.whl
+SMOKE_PY="$PWD/.venv-smoke/bin/python"
+SMOKE="$PWD/scripts/python-install-smoke.py"
+cd / && "$SMOKE_PY" "$SMOKE"
+```
+
+`--only-binary=:all:` is the point: without it a dependency missing a wheel on your
+target starts a Rust build (`pyqwest`) or a C build (`protobuf-py-ext`), and the check
+passes having proved your toolchain works rather than that the wheel does.
+
+## Read-only mirror
+
+This repo is **read-only**. Pull requests will be closed without review. Source changes
+land in the engine repo and are synced here at each release.
+
+## Bug reports
+
+Issues are disabled on this repo. All Ironflow bug reports — SDK, engine, CLI, dashboard,
+desktop — go to one tracker:
+
+- Bugs and feature requests → [sahina/ironflow-issues](https://github.com/sahina/ironflow-issues/issues/new/choose). Pick **Python SDK** as the component, and include your Python version, platform, and a minimal repro.
+- Security issues → [private advisory](https://github.com/sahina/ironflow-issues/security/advisories/new) or see [SECURITY.md](https://github.com/sahina/ironflow-py/blob/main/SECURITY.md) — do **not** open a public issue
+- Commercial-licensing enquiries → the support address in [LICENSE](https://github.com/sahina/ironflow-py/blob/main/LICENSE)
+
+## Verifying release provenance
+
+Two independent trails.
+
+**The published artifact.** PyPI uploads run from this mirror over
+[Trusted Publishing](https://docs.pypi.org/trusted-publishers/). No PyPI API token exists
+for this project, so every file carries an attestation binding it to a public commit.
+Take a file URL from the project's PyPI download list and verify it with
+[`pypi-attestations`](https://docs.pypi.org/attestations/consuming-attestations/):
+
+```bash
+pipx run pypi-attestations verify pypi \
+  --repository https://github.com/sahina/ironflow-py \
+  https://files.pythonhosted.org/packages/.../ironflow_py-<version>-py3-none-any.whl
+```
+
+**The mirror commit.** Each release tag carries an annotated message containing the
+engine-side commit SHA the snapshot was built from:
+
+```bash
+git fetch --tags
+git for-each-ref --format='%(contents)' refs/tags/v<version>
+```
+
+This forensic trail correlates a mirror release to the private engine commit. The
+mirror's Git history is squash-snapshot per release (no engine commit messages leak
+through).
 
 ## License
 
-See [LICENSE](LICENSE) — SPDX `LicenseRef-Ironflow-EULA`. Not an OSI-approved open source
-licence; read it before deploying commercially.
+See [LICENSE](https://github.com/sahina/ironflow-py/blob/main/LICENSE) — SPDX
+`LicenseRef-Ironflow-EULA`. Not an OSI-approved open source licence; read it before
+deploying commercially.
