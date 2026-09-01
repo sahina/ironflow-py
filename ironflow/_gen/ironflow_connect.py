@@ -15,7 +15,7 @@ from connectrpc.method import IdempotencyLevel, MethodInfo
 from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, Endpoint, EndpointSync
 from protobuf.wkt import Empty
 
-from .ironflow_pb import CancelRunRequest, DeleteFunctionRequest, GetFunctionAtVersionRequest, GetFunctionAtVersionResponse, GetFunctionRequest, GetPausedStateRequest, GetPausedStateResponse, GetRunRequest, GetRunStepsRequest, GetRunStepsResponse, HealthRequest, HealthResponse, InfoRequest, InfoResponse, InjectStepOutputRequest, InjectStepOutputResponse, ListFunctionHistoryRequest, ListFunctionHistoryResponse, ListFunctionsRequest, ListFunctionsResponse, ListRunsRequest, ListRunsResponse, PatchStepRequest, PauseRunRequest, PauseRunResponse, RegisterFunctionRequest, RegisterFunctionResponse, ResumeRunRequest, RollbackFunctionRequest, RollbackFunctionResponse, TriggerBatchRequest, TriggerBatchResponse, TriggerRequest, TriggerResponse, TriggerSyncRequest, TriggerSyncResponse, UpdateFunctionStatusRequest
+from .ironflow_pb import CancelRunRequest, DeleteFunctionRequest, GetFunctionAtVersionRequest, GetFunctionAtVersionResponse, GetFunctionRequest, GetPausedStateRequest, GetPausedStateResponse, GetRunRequest, GetRunStepsRequest, GetRunStepsResponse, HealthRequest, HealthResponse, InfoRequest, InfoResponse, InjectStepOutputRequest, InjectStepOutputResponse, InvokeFunctionSyncRequest, InvokeFunctionSyncResponse, ListFunctionHistoryRequest, ListFunctionHistoryResponse, ListFunctionsRequest, ListFunctionsResponse, ListRunsRequest, ListRunsResponse, PatchStepRequest, PauseRunRequest, PauseRunResponse, RegisterFunctionRequest, RegisterFunctionResponse, ResumeRunRequest, RollbackFunctionRequest, RollbackFunctionResponse, TriggerBatchRequest, TriggerBatchResponse, TriggerRequest, TriggerResponse, TriggerSyncRequest, TriggerSyncResponse, UpdateFunctionStatusRequest
 from .types_pb import Function, Run, Step
 
 if TYPE_CHECKING:
@@ -59,6 +59,9 @@ class IronflowService(Protocol):
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     async def trigger_sync(self, request: TriggerSyncRequest, ctx: RequestContext[TriggerSyncRequest, TriggerSyncResponse]) -> TriggerSyncResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def invoke_function_sync(self, request: InvokeFunctionSyncRequest, ctx: RequestContext[InvokeFunctionSyncRequest, InvokeFunctionSyncResponse]) -> InvokeFunctionSyncResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     async def trigger_batch(self, request: TriggerBatchRequest, ctx: RequestContext[TriggerBatchRequest, TriggerBatchResponse]) -> TriggerBatchResponse:
@@ -220,6 +223,16 @@ class IronflowServiceASGIApplication(ConnectASGIApplication[IronflowService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.trigger_sync,
+                ),
+                "/ironflow.v1.IronflowService/InvokeFunctionSync": Endpoint.unary(
+                    method=MethodInfo(
+                        name="InvokeFunctionSync",
+                        service_name="ironflow.v1.IronflowService",
+                        input=InvokeFunctionSyncRequest,
+                        output=InvokeFunctionSyncResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.invoke_function_sync,
                 ),
                 "/ironflow.v1.IronflowService/TriggerBatch": Endpoint.unary(
                     method=MethodInfo(
@@ -583,6 +596,26 @@ class IronflowServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def invoke_function_sync(
+        self,
+        request: InvokeFunctionSyncRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> InvokeFunctionSyncResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="InvokeFunctionSync",
+                service_name="ironflow.v1.IronflowService",
+                input=InvokeFunctionSyncRequest,
+                output=InvokeFunctionSyncResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
     async def trigger_batch(
         self,
         request: TriggerBatchRequest,
@@ -865,6 +898,9 @@ class IronflowServiceSync(Protocol):
     def trigger_sync(self, request: TriggerSyncRequest, ctx: RequestContext[TriggerSyncRequest, TriggerSyncResponse]) -> TriggerSyncResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
+    def invoke_function_sync(self, request: InvokeFunctionSyncRequest, ctx: RequestContext[InvokeFunctionSyncRequest, InvokeFunctionSyncResponse]) -> InvokeFunctionSyncResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
     def trigger_batch(self, request: TriggerBatchRequest, ctx: RequestContext[TriggerBatchRequest, TriggerBatchResponse]) -> TriggerBatchResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -1022,6 +1058,16 @@ class IronflowServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.trigger_sync,
+                ),
+                "/ironflow.v1.IronflowService/InvokeFunctionSync": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="InvokeFunctionSync",
+                        service_name="ironflow.v1.IronflowService",
+                        input=InvokeFunctionSyncRequest,
+                        output=InvokeFunctionSyncResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.invoke_function_sync,
                 ),
                 "/ironflow.v1.IronflowService/TriggerBatch": EndpointSync.unary(
                     method=MethodInfo(
@@ -1369,6 +1415,25 @@ class IronflowServiceClientSync(ConnectClientSync):
                 service_name="ironflow.v1.IronflowService",
                 input=TriggerSyncRequest,
                 output=TriggerSyncResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def invoke_function_sync(
+        self,
+        request: InvokeFunctionSyncRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> InvokeFunctionSyncResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="InvokeFunctionSync",
+                service_name="ironflow.v1.IronflowService",
+                input=InvokeFunctionSyncRequest,
+                output=InvokeFunctionSyncResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

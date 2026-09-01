@@ -14,7 +14,7 @@ from connectrpc.errors import ConnectError
 from connectrpc.method import IdempotencyLevel, MethodInfo
 from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, Endpoint, EndpointSync
 
-from .event_schema_pb import DeleteSchemaRequest, DeleteSchemaResponse, GetSchemaRequest, GetSchemaResponse, ListSchemasRequest, ListSchemasResponse, RegisterSchemaRequest, RegisterSchemaResponse, TestUpcastRequest, TestUpcastResponse
+from .event_schema_pb import CheckEnforcementRequest, CheckEnforcementResponse, DeleteSchemaRequest, DeleteSchemaResponse, GetSchemaRequest, GetSchemaResponse, ListSchemasRequest, ListSchemasResponse, RegisterSchemaRequest, RegisterSchemaResponse, TestUpcastRequest, TestUpcastResponse
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable, Mapping
@@ -39,6 +39,9 @@ class EventSchemaService(Protocol):
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     async def test_upcast(self, request: TestUpcastRequest, ctx: RequestContext[TestUpcastRequest, TestUpcastResponse]) -> TestUpcastResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def check_enforcement(self, request: CheckEnforcementRequest, ctx: RequestContext[CheckEnforcementRequest, CheckEnforcementResponse]) -> CheckEnforcementResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
 
@@ -104,6 +107,16 @@ class EventSchemaServiceASGIApplication(ConnectASGIApplication[EventSchemaServic
                         idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
                     ),
                     function=svc.test_upcast,
+                ),
+                "/ironflow.v1.EventSchemaService/CheckEnforcement": Endpoint.unary(
+                    method=MethodInfo(
+                        name="CheckEnforcement",
+                        service_name="ironflow.v1.EventSchemaService",
+                        input=CheckEnforcementRequest,
+                        output=CheckEnforcementResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=svc.check_enforcement,
                 ),
             },
             interceptors=interceptors,
@@ -225,6 +238,28 @@ class EventSchemaServiceClient(ConnectClient):
             use_get=use_get,
         )
 
+    async def check_enforcement(
+        self,
+        request: CheckEnforcementRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> CheckEnforcementResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="CheckEnforcement",
+                service_name="ironflow.v1.EventSchemaService",
+                input=CheckEnforcementRequest,
+                output=CheckEnforcementResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
+        )
+
 class EventSchemaServiceSync(Protocol):
     def register_schema(self, request: RegisterSchemaRequest, ctx: RequestContext[RegisterSchemaRequest, RegisterSchemaResponse]) -> RegisterSchemaResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
@@ -239,6 +274,9 @@ class EventSchemaServiceSync(Protocol):
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     def test_upcast(self, request: TestUpcastRequest, ctx: RequestContext[TestUpcastRequest, TestUpcastResponse]) -> TestUpcastResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def check_enforcement(self, request: CheckEnforcementRequest, ctx: RequestContext[CheckEnforcementRequest, CheckEnforcementResponse]) -> CheckEnforcementResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
 
@@ -302,6 +340,16 @@ class EventSchemaServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
                     ),
                     function=service.test_upcast,
+                ),
+                "/ironflow.v1.EventSchemaService/CheckEnforcement": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="CheckEnforcement",
+                        service_name="ironflow.v1.EventSchemaService",
+                        input=CheckEnforcementRequest,
+                        output=CheckEnforcementResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=service.check_enforcement,
                 ),
             },
             interceptors=interceptors,
@@ -412,6 +460,27 @@ class EventSchemaServiceClientSync(ConnectClientSync):
                 service_name="ironflow.v1.EventSchemaService",
                 input=TestUpcastRequest,
                 output=TestUpcastResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
+        )
+    def check_enforcement(
+        self,
+        request: CheckEnforcementRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> CheckEnforcementResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="CheckEnforcement",
+                service_name="ironflow.v1.EventSchemaService",
+                input=CheckEnforcementRequest,
+                output=CheckEnforcementResponse,
                 idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
             ),
             headers=headers,

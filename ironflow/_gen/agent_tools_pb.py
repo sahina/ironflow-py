@@ -14,7 +14,7 @@ from protobuf.wkt import struct_pb, timestamp_pb
 
 if TYPE_CHECKING:
     from protobuf import DescFile
-    from protobuf.wkt import Struct, Timestamp
+    from protobuf.wkt import Struct, Timestamp, Value
 
 
 _ToolDefFields: TypeAlias = Literal["name", "description", "input_schema_json", "required_scopes", "timeout_ms"]
@@ -188,7 +188,7 @@ class RegisterToolResponse(Message[_RegisterToolResponseFields]):
         registered_tool_names: list[str]
         registered_at: Timestamp | None
 
-_InvokeToolRequestFields: TypeAlias = Literal["tool_name", "input"]
+_InvokeToolRequestFields: TypeAlias = Literal["tool_name", "input", "input_value"]
 
 class InvokeToolRequest(Message[_InvokeToolRequestFields]):
     """
@@ -209,9 +209,18 @@ class InvokeToolRequest(Message[_InvokeToolRequestFields]):
             ```proto
             optional google.protobuf.Struct input = 2;
             ```
+        input_value:
+            Set ONLY when the payload is not a JSON object, which input cannot
+            represent (#1963). Readers take this when present and fall back to
+            input, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value input_value = 3;
+            ```
     """
 
-    __slots__ = ("tool_name", "input")
+    __slots__ = ("tool_name", "input", "input_value")
 
     if TYPE_CHECKING:
 
@@ -220,13 +229,15 @@ class InvokeToolRequest(Message[_InvokeToolRequestFields]):
             *,
             tool_name: str = "",
             input: Struct | None = None,
+            input_value: Value | None = None,
         ) -> None:
             pass
 
         tool_name: str
         input: Struct | None
+        input_value: Value | None
 
-_InvokeToolResponseFields: TypeAlias = Literal["output", "error"]
+_InvokeToolResponseFields: TypeAlias = Literal["output", "output_value", "error"]
 
 class InvokeToolResponse(Message[_InvokeToolResponseFields]):
     """
@@ -242,6 +253,15 @@ class InvokeToolResponse(Message[_InvokeToolResponseFields]):
             ```proto
             optional google.protobuf.Struct output = 1;
             ```
+        output_value:
+            Set ONLY when the payload is not a JSON object, which output cannot
+            represent (#1963). Readers take this when present and fall back to
+            output, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value output_value = 3;
+            ```
         error:
             Error envelope. Set when dispatch failed or the SDK handler
             returned an error. Mutually exclusive with output.
@@ -251,7 +271,7 @@ class InvokeToolResponse(Message[_InvokeToolResponseFields]):
             ```
     """
 
-    __slots__ = ("output", "error")
+    __slots__ = ("output", "output_value", "error")
 
     if TYPE_CHECKING:
 
@@ -259,11 +279,13 @@ class InvokeToolResponse(Message[_InvokeToolResponseFields]):
             self,
             *,
             output: Struct | None = None,
+            output_value: Value | None = None,
             error: ToolError | None = None,
         ) -> None:
             pass
 
         output: Struct | None
+        output_value: Value | None
         error: ToolError | None
 
 _ToolErrorFields: TypeAlias = Literal["code", "message"]
@@ -497,7 +519,7 @@ class VisibleTool(Message[_VisibleToolFields]):
 
 
 _DESC = file_desc(
-    b'\n\x1dironflow/v1/agent_tools.proto\x12\x0bironflow.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto"\xb3\x01\n\x07ToolDef\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12 \n\x0bdescription\x18\x02 \x01(\tR\x0bdescription\x12*\n\x11input_schema_json\x18\x03 \x01(\tR\x0finputSchemaJson\x12\'\n\x0frequired_scopes\x18\x04 \x03(\tR\x0erequiredScopes\x12\x1d\n\ntimeout_ms\x18\x05 \x01(\rR\ttimeoutMs"\x83\x01\n\x13RegisterToolRequest\x12\x1d\n\nagent_name\x18\x01 \x01(\tR\tagentName\x12!\n\x0ccallback_url\x18\x02 \x01(\tR\x0bcallbackUrl\x12*\n\x05tools\x18\x03 \x03(\x0b2\x14.ironflow.v1.ToolDefR\x05tools"\xac\x01\n\x14RegisterToolResponse\x12\x1f\n\x0bhmac_secret\x18\x01 \x01(\tR\nhmacSecret\x122\n\x15registered_tool_names\x18\x02 \x03(\tR\x13registeredToolNames\x12?\n\rregistered_at\x18\x03 \x01(\x0b2\x1a.google.protobuf.TimestampR\x0cregisteredAt"_\n\x11InvokeToolRequest\x12\x1b\n\ttool_name\x18\x01 \x01(\tR\x08toolName\x12-\n\x05input\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x05input"s\n\x12InvokeToolResponse\x12/\n\x06output\x18\x01 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x12,\n\x05error\x18\x02 \x01(\x0b2\x16.ironflow.v1.ToolErrorR\x05error"9\n\tToolError\x12\x12\n\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n\x07message\x18\x02 \x01(\tR\x07message"6\n\x15UnregisterToolRequest\x12\x1d\n\nagent_name\x18\x01 \x01(\tR\tagentName"=\n\x16UnregisterToolResponse\x12#\n\rremoved_count\x18\x01 \x01(\rR\x0cremovedCount"*\n\x10ListToolsRequest\x12\x16\n\x06cursor\x18\x01 \x01(\tR\x06cursor"d\n\x11ListToolsResponse\x12.\n\x05tools\x18\x01 \x03(\x0b2\x18.ironflow.v1.VisibleToolR\x05tools\x12\x1f\n\x0bnext_cursor\x18\x02 \x01(\tR\nnextCursor"\xab\x01\n\x0bVisibleTool\x12%\n\x0equalified_name\x18\x01 \x01(\tR\rqualifiedName\x12 \n\x0bdescription\x18\x02 \x01(\tR\x0bdescription\x12*\n\x11input_schema_json\x18\x03 \x01(\tR\x0finputSchemaJson\x12\'\n\x0frequired_scopes\x18\x04 \x03(\tR\x0erequiredScopes2\xe3\x02\n\x11AgentToolsService\x12S\n\x0cRegisterTool\x12 .ironflow.v1.RegisterToolRequest\x1a!.ironflow.v1.RegisterToolResponse\x12M\n\nInvokeTool\x12\x1e.ironflow.v1.InvokeToolRequest\x1a\x1f.ironflow.v1.InvokeToolResponse\x12Y\n\x0eUnregisterTool\x12".ironflow.v1.UnregisterToolRequest\x1a#.ironflow.v1.UnregisterToolResponse\x12O\n\tListTools\x12\x1d.ironflow.v1.ListToolsRequest\x1a\x1e.ironflow.v1.ListToolsResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x1dironflow/v1/agent_tools.proto\x12\x0bironflow.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto"\xb3\x01\n\x07ToolDef\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12 \n\x0bdescription\x18\x02 \x01(\tR\x0bdescription\x12*\n\x11input_schema_json\x18\x03 \x01(\tR\x0finputSchemaJson\x12\'\n\x0frequired_scopes\x18\x04 \x03(\tR\x0erequiredScopes\x12\x1d\n\ntimeout_ms\x18\x05 \x01(\rR\ttimeoutMs"\x83\x01\n\x13RegisterToolRequest\x12\x1d\n\nagent_name\x18\x01 \x01(\tR\tagentName\x12!\n\x0ccallback_url\x18\x02 \x01(\tR\x0bcallbackUrl\x12*\n\x05tools\x18\x03 \x03(\x0b2\x14.ironflow.v1.ToolDefR\x05tools"\xac\x01\n\x14RegisterToolResponse\x12\x1f\n\x0bhmac_secret\x18\x01 \x01(\tR\nhmacSecret\x122\n\x15registered_tool_names\x18\x02 \x03(\tR\x13registeredToolNames\x12?\n\rregistered_at\x18\x03 \x01(\x0b2\x1a.google.protobuf.TimestampR\x0cregisteredAt"\x98\x01\n\x11InvokeToolRequest\x12\x1b\n\ttool_name\x18\x01 \x01(\tR\x08toolName\x12-\n\x05input\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x05input\x127\n\x0binput_value\x18\x03 \x01(\x0b2\x16.google.protobuf.ValueR\ninputValue"\xae\x01\n\x12InvokeToolResponse\x12/\n\x06output\x18\x01 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x03 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12,\n\x05error\x18\x02 \x01(\x0b2\x16.ironflow.v1.ToolErrorR\x05error"9\n\tToolError\x12\x12\n\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n\x07message\x18\x02 \x01(\tR\x07message"6\n\x15UnregisterToolRequest\x12\x1d\n\nagent_name\x18\x01 \x01(\tR\tagentName"=\n\x16UnregisterToolResponse\x12#\n\rremoved_count\x18\x01 \x01(\rR\x0cremovedCount"*\n\x10ListToolsRequest\x12\x16\n\x06cursor\x18\x01 \x01(\tR\x06cursor"d\n\x11ListToolsResponse\x12.\n\x05tools\x18\x01 \x03(\x0b2\x18.ironflow.v1.VisibleToolR\x05tools\x12\x1f\n\x0bnext_cursor\x18\x02 \x01(\tR\nnextCursor"\xab\x01\n\x0bVisibleTool\x12%\n\x0equalified_name\x18\x01 \x01(\tR\rqualifiedName\x12 \n\x0bdescription\x18\x02 \x01(\tR\x0bdescription\x12*\n\x11input_schema_json\x18\x03 \x01(\tR\x0finputSchemaJson\x12\'\n\x0frequired_scopes\x18\x04 \x03(\tR\x0erequiredScopes2\xe3\x02\n\x11AgentToolsService\x12S\n\x0cRegisterTool\x12 .ironflow.v1.RegisterToolRequest\x1a!.ironflow.v1.RegisterToolResponse\x12M\n\nInvokeTool\x12\x1e.ironflow.v1.InvokeToolRequest\x1a\x1f.ironflow.v1.InvokeToolResponse\x12Y\n\x0eUnregisterTool\x12".ironflow.v1.UnregisterToolRequest\x1a#.ironflow.v1.UnregisterToolResponse\x12O\n\tListTools\x12\x1d.ironflow.v1.ListToolsRequest\x1a\x1e.ironflow.v1.ListToolsResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         timestamp_pb.desc(),
         struct_pb.desc(),

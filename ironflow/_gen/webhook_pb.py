@@ -159,7 +159,7 @@ class WebhookVerifyConfig(Message[_WebhookVerifyConfigFields]):
         event_name_path: str
         dedup_id_path: str
 
-_WebhookSourceFields: TypeAlias = Literal["id", "event_prefix", "verify_header", "verify_algorithm", "source_type", "metadata", "created_at", "updated_at", "verify_secret_set", "name", "verify_secret_prev_set", "verify_secret_prev_expires_at", "ingest_token_prefix", "ingest_token", "verify_config"]
+_WebhookSourceFields: TypeAlias = Literal["id", "event_prefix", "verify_header", "verify_algorithm", "source_type", "metadata", "created_at", "updated_at", "verify_secret_set", "name", "verify_secret_prev_set", "verify_secret_prev_expires_at", "ingest_token_prefix", "ingest_token", "verify_config", "schema_version"]
 
 class WebhookSource(Message[_WebhookSourceFields]):
     """
@@ -254,9 +254,18 @@ class WebhookSource(Message[_WebhookSourceFields]):
             ```proto
             optional ironflow.v1.WebhookVerifyConfig verify_config = 15;
             ```
+        schema_version:
+            Event schema version every event this source emits carries (#1955).
+            Always >= 1 — the column defaults to 1 and is CHECK-constrained, so
+            sources predating migration 060/055 read back as 1, which is the version
+            they were hardcoded to.
+
+            ```proto
+            int32 schema_version = 16;
+            ```
     """
 
-    __slots__ = ("id", "event_prefix", "verify_header", "verify_algorithm", "source_type", "metadata", "created_at", "updated_at", "verify_secret_set", "name", "verify_secret_prev_set", "verify_secret_prev_expires_at", "ingest_token_prefix", "ingest_token", "verify_config")
+    __slots__ = ("id", "event_prefix", "verify_header", "verify_algorithm", "source_type", "metadata", "created_at", "updated_at", "verify_secret_set", "name", "verify_secret_prev_set", "verify_secret_prev_expires_at", "ingest_token_prefix", "ingest_token", "verify_config", "schema_version")
 
     if TYPE_CHECKING:
 
@@ -278,6 +287,7 @@ class WebhookSource(Message[_WebhookSourceFields]):
             ingest_token_prefix: str = "",
             ingest_token: str = "",
             verify_config: WebhookVerifyConfig | None = None,
+            schema_version: int = 0,
         ) -> None:
             pass
 
@@ -296,6 +306,7 @@ class WebhookSource(Message[_WebhookSourceFields]):
         ingest_token_prefix: str
         ingest_token: str
         verify_config: WebhookVerifyConfig | None
+        schema_version: int
 
 _GetWebhookSourceRequestFields: TypeAlias = Literal["id"]
 
@@ -325,7 +336,7 @@ class GetWebhookSourceRequest(Message[_GetWebhookSourceRequestFields]):
 
         id: str
 
-_CreateWebhookSourceRequestFields: TypeAlias = Literal["event_prefix", "verify_header", "verify_algorithm", "verify_secret", "metadata", "name", "verify_config"]
+_CreateWebhookSourceRequestFields: TypeAlias = Literal["event_prefix", "verify_header", "verify_algorithm", "verify_secret", "metadata", "name", "verify_config", "schema_version"]
 
 class CreateWebhookSourceRequest(Message[_CreateWebhookSourceRequestFields]):
     """
@@ -367,9 +378,23 @@ class CreateWebhookSourceRequest(Message[_CreateWebhookSourceRequestFields]):
             ```proto
             optional ironflow.v1.WebhookVerifyConfig verify_config = 8;
             ```
+        schema_version:
+            Event schema version every event this source emits carries (#1955).
+            Omit (0) for 1. A third-party sender cannot express an Ironflow schema
+            version, so it is the operator's choice at the source, not the payload's.
+
+            One version for the whole source: buildWebhookEventName derives the event
+            name per request, so a Stripe source emitting both
+            stripe.payment_intent.succeeded and stripe.charge.refunded pins both to
+            this version. A source mid-migration on only some of its names needs a
+            name->version map; that is additive if it ever comes up.
+
+            ```proto
+            int32 schema_version = 9;
+            ```
     """
 
-    __slots__ = ("event_prefix", "verify_header", "verify_algorithm", "verify_secret", "metadata", "name", "verify_config")
+    __slots__ = ("event_prefix", "verify_header", "verify_algorithm", "verify_secret", "metadata", "name", "verify_config", "schema_version")
 
     if TYPE_CHECKING:
 
@@ -383,6 +408,7 @@ class CreateWebhookSourceRequest(Message[_CreateWebhookSourceRequestFields]):
             metadata: Struct | None = None,
             name: str = "",
             verify_config: WebhookVerifyConfig | None = None,
+            schema_version: int = 0,
         ) -> None:
             pass
 
@@ -393,6 +419,7 @@ class CreateWebhookSourceRequest(Message[_CreateWebhookSourceRequestFields]):
         metadata: Struct | None
         name: str
         verify_config: WebhookVerifyConfig | None
+        schema_version: int
 
 _ListWebhookSourcesRequestFields: TypeAlias = Literal["limit", "offset"]
 
@@ -462,7 +489,7 @@ class ListWebhookSourcesResponse(Message[_ListWebhookSourcesResponseFields]):
         sources: list[WebhookSource]
         total_count: int
 
-_UpdateWebhookSourceRequestFields: TypeAlias = Literal["id", "name", "verify_header", "verify_algorithm", "metadata", "verify_config", "expected_updated_at"]
+_UpdateWebhookSourceRequestFields: TypeAlias = Literal["id", "name", "verify_header", "verify_algorithm", "metadata", "verify_config", "expected_updated_at", "schema_version"]
 
 class UpdateWebhookSourceRequest(Message[_UpdateWebhookSourceRequestFields]):
     """
@@ -532,9 +559,20 @@ class UpdateWebhookSourceRequest(Message[_UpdateWebhookSourceRequestFields]):
             ```proto
             optional google.protobuf.Timestamp expected_updated_at = 7;
             ```
+        schema_version:
+            Event schema version (#1955). PRESERVE-ON-OMIT like verify_config: 0
+            leaves the stored value alone.
+
+            Mutable, unlike event_prefix. Recreating a source to change its version
+            would mint a new ID and therefore a new ingest URL, turning a schema
+            migration into a coordinated config change in someone else's dashboard.
+
+            ```proto
+            int32 schema_version = 8;
+            ```
     """
 
-    __slots__ = ("id", "name", "verify_header", "verify_algorithm", "metadata", "verify_config", "expected_updated_at")
+    __slots__ = ("id", "name", "verify_header", "verify_algorithm", "metadata", "verify_config", "expected_updated_at", "schema_version")
 
     if TYPE_CHECKING:
 
@@ -548,6 +586,7 @@ class UpdateWebhookSourceRequest(Message[_UpdateWebhookSourceRequestFields]):
             metadata: Struct | None = None,
             verify_config: WebhookVerifyConfig | None = None,
             expected_updated_at: Timestamp | None = None,
+            schema_version: int = 0,
         ) -> None:
             pass
 
@@ -558,6 +597,7 @@ class UpdateWebhookSourceRequest(Message[_UpdateWebhookSourceRequestFields]):
         metadata: Struct | None
         verify_config: WebhookVerifyConfig | None
         expected_updated_at: Timestamp | None
+        schema_version: int
 
 _RotateWebhookSecretRequestFields: TypeAlias = Literal["id", "verify_secret", "grace_seconds", "expected_updated_at"]
 
@@ -1090,7 +1130,7 @@ class TestWebhookVerifyConfigResponse(Message[_TestWebhookVerifyConfigResponseFi
 
 
 _DESC = file_desc(
-    b'\n\x19ironflow/v1/webhook.proto\x12\x0bironflow.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xdf\x03\n\x13WebhookVerifyConfig\x12)\n\x10signature_header\x18\x01 \x01(\tR\x0fsignatureHeader\x12\'\n\x0fentry_separator\x18\x02 \x01(\tR\x0eentrySeparator\x12!\n\x0ckv_delimiter\x18\x03 \x01(\tR\x0bkvDelimiter\x12#\n\rsignature_key\x18\x04 \x01(\tR\x0csignatureKey\x12)\n\x10timestamp_header\x18\x05 \x01(\tR\x0ftimestampHeader\x12#\n\rtimestamp_key\x18\x06 \x01(\tR\x0ctimestampKey\x12)\n\x10signing_template\x18\x07 \x01(\tR\x0fsigningTemplate\x12\x1a\n\x08encoding\x18\x08 \x01(\tR\x08encoding\x12\x1c\n\talgorithm\x18\t \x01(\tR\talgorithm\x12+\n\x11tolerance_seconds\x18\n \x01(\x05R\x10toleranceSeconds\x12&\n\x0fevent_name_path\x18\x0b \x01(\tR\reventNamePath\x12"\n\rdedup_id_path\x18\x0c \x01(\tR\x0bdedupIdPath"\xcb\x05\n\rWebhookSource\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12!\n\x0cevent_prefix\x18\x02 \x01(\tR\x0beventPrefix\x12#\n\rverify_header\x18\x03 \x01(\tR\x0cverifyHeader\x12)\n\x10verify_algorithm\x18\x04 \x01(\tR\x0fverifyAlgorithm\x12\x1f\n\x0bsource_type\x18\x05 \x01(\tR\nsourceType\x123\n\x08metadata\x18\x06 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x129\n\ncreated_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x08 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt\x12*\n\x11verify_secret_set\x18\t \x01(\x08R\x0fverifySecretSet\x12\x12\n\x04name\x18\n \x01(\tR\x04name\x123\n\x16verify_secret_prev_set\x18\x0b \x01(\x08R\x13verifySecretPrevSet\x12\\\n\x1dverify_secret_prev_expires_at\x18\x0c \x01(\x0b2\x1a.google.protobuf.TimestampR\x19verifySecretPrevExpiresAt\x12.\n\x13ingest_token_prefix\x18\r \x01(\tR\x11ingestTokenPrefix\x12!\n\x0cingest_token\x18\x0e \x01(\tR\x0bingestToken\x12E\n\rverify_config\x18\x0f \x01(\x0b2 .ironflow.v1.WebhookVerifyConfigR\x0cverifyConfig")\n\x17GetWebhookSourceRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id"\xce\x02\n\x1aCreateWebhookSourceRequest\x12!\n\x0cevent_prefix\x18\x02 \x01(\tR\x0beventPrefix\x12#\n\rverify_header\x18\x03 \x01(\tR\x0cverifyHeader\x12)\n\x10verify_algorithm\x18\x04 \x01(\tR\x0fverifyAlgorithm\x12#\n\rverify_secret\x18\x05 \x01(\tR\x0cverifySecret\x123\n\x08metadata\x18\x06 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12\x12\n\x04name\x18\x07 \x01(\tR\x04name\x12E\n\rverify_config\x18\x08 \x01(\x0b2 .ironflow.v1.WebhookVerifyConfigR\x0cverifyConfigJ\x04\x08\x01\x10\x02R\x02id"I\n\x19ListWebhookSourcesRequest\x12\x14\n\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x02 \x01(\x05R\x06offset"s\n\x1aListWebhookSourcesResponse\x124\n\x07sources\x18\x01 \x03(\x0b2\x1a.ironflow.v1.WebhookSourceR\x07sources\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\xd8\x02\n\x1aUpdateWebhookSourceRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12#\n\rverify_header\x18\x03 \x01(\tR\x0cverifyHeader\x12)\n\x10verify_algorithm\x18\x04 \x01(\tR\x0fverifyAlgorithm\x123\n\x08metadata\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12E\n\rverify_config\x18\x06 \x01(\x0b2 .ironflow.v1.WebhookVerifyConfigR\x0cverifyConfig\x12J\n\x13expected_updated_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\x11expectedUpdatedAt"\xd9\x01\n\x1aRotateWebhookSecretRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12#\n\rverify_secret\x18\x02 \x01(\tR\x0cverifySecret\x12(\n\rgrace_seconds\x18\x03 \x01(\x05H\x00R\x0cgraceSeconds\x88\x01\x01\x12J\n\x13expected_updated_at\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\x11expectedUpdatedAtB\x10\n\x0e_grace_seconds"|\n\x1eExpireWebhookSecretPrevRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12J\n\x13expected_updated_at\x18\x02 \x01(\x0b2\x1a.google.protobuf.TimestampR\x11expectedUpdatedAt"\xc4\x01\n*DisableWebhookSignatureVerificationRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12(\n\rgrace_seconds\x18\x02 \x01(\x05H\x00R\x0cgraceSeconds\x88\x01\x01\x12J\n\x13expected_updated_at\x18\x03 \x01(\x0b2\x1a.google.protobuf.TimestampR\x11expectedUpdatedAtB\x10\n\x0e_grace_seconds"}\n\x1fRotateWebhookIngestTokenRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12J\n\x13expected_updated_at\x18\x02 \x01(\x0b2\x1a.google.protobuf.TimestampR\x11expectedUpdatedAt",\n\x1aDeleteWebhookSourceRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id"\xed\x02\n\x0fWebhookDelivery\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n\tsource_id\x18\x02 \x01(\tR\x08sourceId\x12\x1f\n\x0bexternal_id\x18\x03 \x01(\tR\nexternalId\x12\x16\n\x06status\x18\x04 \x01(\tR\x06status\x12\x19\n\x08event_id\x18\x05 \x01(\tR\x07eventId\x12\x14\n\x05error\x18\x06 \x01(\tR\x05error\x129\n\ncreated_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x12!\n\x0crequest_body\x18\x08 \x01(\tR\x0brequestBody\x12@\n\x0frequest_headers\x18\t \x01(\x0b2\x17.google.protobuf.StructR\x0erequestHeaders\x12#\n\rsignature_key\x18\n \x01(\tR\x0csignatureKey"\x81\x01\n\x1cListWebhookDeliveriesRequest\x12\x1b\n\tsource_id\x18\x01 \x01(\tR\x08sourceId\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x04 \x01(\x05R\x06offset"~\n\x1dListWebhookDeliveriesResponse\x12<\n\ndeliveries\x18\x01 \x03(\x0b2\x1c.ironflow.v1.WebhookDeliveryR\ndeliveries\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\xcd\x02\n\x1eTestWebhookVerifyConfigRequest\x12E\n\rverify_config\x18\x01 \x01(\x0b2 .ironflow.v1.WebhookVerifyConfigR\x0cverifyConfig\x12\x12\n\x04body\x18\x02 \x01(\tR\x04body\x12R\n\x07headers\x18\x03 \x03(\x0b28.ironflow.v1.TestWebhookVerifyConfigRequest.HeadersEntryR\x07headers\x12#\n\rverify_secret\x18\x04 \x01(\tR\x0cverifySecret\x12\x1b\n\tsource_id\x18\x05 \x01(\tR\x08sourceId\x1a:\n\x0cHeadersEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01"\xe7\x02\n\x1fTestWebhookVerifyConfigResponse\x12\x1a\n\x08verified\x18\x01 \x01(\x08R\x08verified\x12%\n\x0esigning_string\x18\x02 \x01(\tR\rsigningString\x12-\n\x12computed_signature\x18\x03 \x01(\tR\x11computedSignature\x121\n\x14presented_signatures\x18\x04 \x03(\tR\x13presentedSignatures\x12-\n\x12resolved_timestamp\x18\x05 \x01(\tR\x11resolvedTimestamp\x12.\n\x13resolved_event_name\x18\x06 \x01(\tR\x11resolvedEventName\x12*\n\x11resolved_dedup_id\x18\x07 \x01(\tR\x0fresolvedDedupId\x12\x14\n\x05error\x18\x08 \x01(\tR\x05error2\xf4\x08\n\x0eWebhookService\x12Z\n\x13CreateWebhookSource\x12\'.ironflow.v1.CreateWebhookSourceRequest\x1a\x1a.ironflow.v1.WebhookSource\x12Y\n\x10GetWebhookSource\x12$.ironflow.v1.GetWebhookSourceRequest\x1a\x1a.ironflow.v1.WebhookSource"\x03\x90\x02\x01\x12j\n\x12ListWebhookSources\x12&.ironflow.v1.ListWebhookSourcesRequest\x1a\'.ironflow.v1.ListWebhookSourcesResponse"\x03\x90\x02\x01\x12Z\n\x13UpdateWebhookSource\x12\'.ironflow.v1.UpdateWebhookSourceRequest\x1a\x1a.ironflow.v1.WebhookSource\x12Z\n\x13RotateWebhookSecret\x12\'.ironflow.v1.RotateWebhookSecretRequest\x1a\x1a.ironflow.v1.WebhookSource\x12b\n\x17ExpireWebhookSecretPrev\x12+.ironflow.v1.ExpireWebhookSecretPrevRequest\x1a\x1a.ironflow.v1.WebhookSource\x12z\n#DisableWebhookSignatureVerification\x127.ironflow.v1.DisableWebhookSignatureVerificationRequest\x1a\x1a.ironflow.v1.WebhookSource\x12d\n\x18RotateWebhookIngestToken\x12,.ironflow.v1.RotateWebhookIngestTokenRequest\x1a\x1a.ironflow.v1.WebhookSource\x12t\n\x17TestWebhookVerifyConfig\x12+.ironflow.v1.TestWebhookVerifyConfigRequest\x1a,.ironflow.v1.TestWebhookVerifyConfigResponse\x12V\n\x13DeleteWebhookSource\x12\'.ironflow.v1.DeleteWebhookSourceRequest\x1a\x16.google.protobuf.Empty\x12s\n\x15ListWebhookDeliveries\x12).ironflow.v1.ListWebhookDeliveriesRequest\x1a*.ironflow.v1.ListWebhookDeliveriesResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x19ironflow/v1/webhook.proto\x12\x0bironflow.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xdf\x03\n\x13WebhookVerifyConfig\x12)\n\x10signature_header\x18\x01 \x01(\tR\x0fsignatureHeader\x12\'\n\x0fentry_separator\x18\x02 \x01(\tR\x0eentrySeparator\x12!\n\x0ckv_delimiter\x18\x03 \x01(\tR\x0bkvDelimiter\x12#\n\rsignature_key\x18\x04 \x01(\tR\x0csignatureKey\x12)\n\x10timestamp_header\x18\x05 \x01(\tR\x0ftimestampHeader\x12#\n\rtimestamp_key\x18\x06 \x01(\tR\x0ctimestampKey\x12)\n\x10signing_template\x18\x07 \x01(\tR\x0fsigningTemplate\x12\x1a\n\x08encoding\x18\x08 \x01(\tR\x08encoding\x12\x1c\n\talgorithm\x18\t \x01(\tR\talgorithm\x12+\n\x11tolerance_seconds\x18\n \x01(\x05R\x10toleranceSeconds\x12&\n\x0fevent_name_path\x18\x0b \x01(\tR\reventNamePath\x12"\n\rdedup_id_path\x18\x0c \x01(\tR\x0bdedupIdPath"\xf2\x05\n\rWebhookSource\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12!\n\x0cevent_prefix\x18\x02 \x01(\tR\x0beventPrefix\x12#\n\rverify_header\x18\x03 \x01(\tR\x0cverifyHeader\x12)\n\x10verify_algorithm\x18\x04 \x01(\tR\x0fverifyAlgorithm\x12\x1f\n\x0bsource_type\x18\x05 \x01(\tR\nsourceType\x123\n\x08metadata\x18\x06 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x129\n\ncreated_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x08 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt\x12*\n\x11verify_secret_set\x18\t \x01(\x08R\x0fverifySecretSet\x12\x12\n\x04name\x18\n \x01(\tR\x04name\x123\n\x16verify_secret_prev_set\x18\x0b \x01(\x08R\x13verifySecretPrevSet\x12\\\n\x1dverify_secret_prev_expires_at\x18\x0c \x01(\x0b2\x1a.google.protobuf.TimestampR\x19verifySecretPrevExpiresAt\x12.\n\x13ingest_token_prefix\x18\r \x01(\tR\x11ingestTokenPrefix\x12!\n\x0cingest_token\x18\x0e \x01(\tR\x0bingestToken\x12E\n\rverify_config\x18\x0f \x01(\x0b2 .ironflow.v1.WebhookVerifyConfigR\x0cverifyConfig\x12%\n\x0eschema_version\x18\x10 \x01(\x05R\rschemaVersion")\n\x17GetWebhookSourceRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id"\xf5\x02\n\x1aCreateWebhookSourceRequest\x12!\n\x0cevent_prefix\x18\x02 \x01(\tR\x0beventPrefix\x12#\n\rverify_header\x18\x03 \x01(\tR\x0cverifyHeader\x12)\n\x10verify_algorithm\x18\x04 \x01(\tR\x0fverifyAlgorithm\x12#\n\rverify_secret\x18\x05 \x01(\tR\x0cverifySecret\x123\n\x08metadata\x18\x06 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12\x12\n\x04name\x18\x07 \x01(\tR\x04name\x12E\n\rverify_config\x18\x08 \x01(\x0b2 .ironflow.v1.WebhookVerifyConfigR\x0cverifyConfig\x12%\n\x0eschema_version\x18\t \x01(\x05R\rschemaVersionJ\x04\x08\x01\x10\x02R\x02id"I\n\x19ListWebhookSourcesRequest\x12\x14\n\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x02 \x01(\x05R\x06offset"s\n\x1aListWebhookSourcesResponse\x124\n\x07sources\x18\x01 \x03(\x0b2\x1a.ironflow.v1.WebhookSourceR\x07sources\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\xff\x02\n\x1aUpdateWebhookSourceRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12#\n\rverify_header\x18\x03 \x01(\tR\x0cverifyHeader\x12)\n\x10verify_algorithm\x18\x04 \x01(\tR\x0fverifyAlgorithm\x123\n\x08metadata\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12E\n\rverify_config\x18\x06 \x01(\x0b2 .ironflow.v1.WebhookVerifyConfigR\x0cverifyConfig\x12J\n\x13expected_updated_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\x11expectedUpdatedAt\x12%\n\x0eschema_version\x18\x08 \x01(\x05R\rschemaVersion"\xd9\x01\n\x1aRotateWebhookSecretRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12#\n\rverify_secret\x18\x02 \x01(\tR\x0cverifySecret\x12(\n\rgrace_seconds\x18\x03 \x01(\x05H\x00R\x0cgraceSeconds\x88\x01\x01\x12J\n\x13expected_updated_at\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\x11expectedUpdatedAtB\x10\n\x0e_grace_seconds"|\n\x1eExpireWebhookSecretPrevRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12J\n\x13expected_updated_at\x18\x02 \x01(\x0b2\x1a.google.protobuf.TimestampR\x11expectedUpdatedAt"\xc4\x01\n*DisableWebhookSignatureVerificationRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12(\n\rgrace_seconds\x18\x02 \x01(\x05H\x00R\x0cgraceSeconds\x88\x01\x01\x12J\n\x13expected_updated_at\x18\x03 \x01(\x0b2\x1a.google.protobuf.TimestampR\x11expectedUpdatedAtB\x10\n\x0e_grace_seconds"}\n\x1fRotateWebhookIngestTokenRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12J\n\x13expected_updated_at\x18\x02 \x01(\x0b2\x1a.google.protobuf.TimestampR\x11expectedUpdatedAt",\n\x1aDeleteWebhookSourceRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id"\xed\x02\n\x0fWebhookDelivery\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n\tsource_id\x18\x02 \x01(\tR\x08sourceId\x12\x1f\n\x0bexternal_id\x18\x03 \x01(\tR\nexternalId\x12\x16\n\x06status\x18\x04 \x01(\tR\x06status\x12\x19\n\x08event_id\x18\x05 \x01(\tR\x07eventId\x12\x14\n\x05error\x18\x06 \x01(\tR\x05error\x129\n\ncreated_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x12!\n\x0crequest_body\x18\x08 \x01(\tR\x0brequestBody\x12@\n\x0frequest_headers\x18\t \x01(\x0b2\x17.google.protobuf.StructR\x0erequestHeaders\x12#\n\rsignature_key\x18\n \x01(\tR\x0csignatureKey"\x81\x01\n\x1cListWebhookDeliveriesRequest\x12\x1b\n\tsource_id\x18\x01 \x01(\tR\x08sourceId\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x04 \x01(\x05R\x06offset"~\n\x1dListWebhookDeliveriesResponse\x12<\n\ndeliveries\x18\x01 \x03(\x0b2\x1c.ironflow.v1.WebhookDeliveryR\ndeliveries\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\xcd\x02\n\x1eTestWebhookVerifyConfigRequest\x12E\n\rverify_config\x18\x01 \x01(\x0b2 .ironflow.v1.WebhookVerifyConfigR\x0cverifyConfig\x12\x12\n\x04body\x18\x02 \x01(\tR\x04body\x12R\n\x07headers\x18\x03 \x03(\x0b28.ironflow.v1.TestWebhookVerifyConfigRequest.HeadersEntryR\x07headers\x12#\n\rverify_secret\x18\x04 \x01(\tR\x0cverifySecret\x12\x1b\n\tsource_id\x18\x05 \x01(\tR\x08sourceId\x1a:\n\x0cHeadersEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01"\xe7\x02\n\x1fTestWebhookVerifyConfigResponse\x12\x1a\n\x08verified\x18\x01 \x01(\x08R\x08verified\x12%\n\x0esigning_string\x18\x02 \x01(\tR\rsigningString\x12-\n\x12computed_signature\x18\x03 \x01(\tR\x11computedSignature\x121\n\x14presented_signatures\x18\x04 \x03(\tR\x13presentedSignatures\x12-\n\x12resolved_timestamp\x18\x05 \x01(\tR\x11resolvedTimestamp\x12.\n\x13resolved_event_name\x18\x06 \x01(\tR\x11resolvedEventName\x12*\n\x11resolved_dedup_id\x18\x07 \x01(\tR\x0fresolvedDedupId\x12\x14\n\x05error\x18\x08 \x01(\tR\x05error2\xf4\x08\n\x0eWebhookService\x12Z\n\x13CreateWebhookSource\x12\'.ironflow.v1.CreateWebhookSourceRequest\x1a\x1a.ironflow.v1.WebhookSource\x12Y\n\x10GetWebhookSource\x12$.ironflow.v1.GetWebhookSourceRequest\x1a\x1a.ironflow.v1.WebhookSource"\x03\x90\x02\x01\x12j\n\x12ListWebhookSources\x12&.ironflow.v1.ListWebhookSourcesRequest\x1a\'.ironflow.v1.ListWebhookSourcesResponse"\x03\x90\x02\x01\x12Z\n\x13UpdateWebhookSource\x12\'.ironflow.v1.UpdateWebhookSourceRequest\x1a\x1a.ironflow.v1.WebhookSource\x12Z\n\x13RotateWebhookSecret\x12\'.ironflow.v1.RotateWebhookSecretRequest\x1a\x1a.ironflow.v1.WebhookSource\x12b\n\x17ExpireWebhookSecretPrev\x12+.ironflow.v1.ExpireWebhookSecretPrevRequest\x1a\x1a.ironflow.v1.WebhookSource\x12z\n#DisableWebhookSignatureVerification\x127.ironflow.v1.DisableWebhookSignatureVerificationRequest\x1a\x1a.ironflow.v1.WebhookSource\x12d\n\x18RotateWebhookIngestToken\x12,.ironflow.v1.RotateWebhookIngestTokenRequest\x1a\x1a.ironflow.v1.WebhookSource\x12t\n\x17TestWebhookVerifyConfig\x12+.ironflow.v1.TestWebhookVerifyConfigRequest\x1a,.ironflow.v1.TestWebhookVerifyConfigResponse\x12V\n\x13DeleteWebhookSource\x12\'.ironflow.v1.DeleteWebhookSourceRequest\x1a\x16.google.protobuf.Empty\x12s\n\x15ListWebhookDeliveries\x12).ironflow.v1.ListWebhookDeliveriesRequest\x1a*.ironflow.v1.ListWebhookDeliveriesResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         empty_pb.desc(),
         struct_pb.desc(),

@@ -16,7 +16,7 @@ from . import types_pb
 
 if TYPE_CHECKING:
     from protobuf import DescFile
-    from protobuf.wkt import Struct, Timestamp
+    from protobuf.wkt import Struct, Timestamp, Value
 
     from .types_pb import CancelOnSpec, ConcurrencyConfig, DebounceConfig, Error, ExecutionMode, Function, FunctionStatus, RetryConfig, Run, RunStatus, Step, Trigger
 
@@ -365,7 +365,7 @@ class DeleteFunctionRequest(Message[_DeleteFunctionRequestFields]):
 
         id: str
 
-_TriggerRequestFields: TypeAlias = Literal["event", "data", "idempotency_key", "metadata", "version"]
+_TriggerRequestFields: TypeAlias = Literal["event", "data", "data_value", "idempotency_key", "metadata", "version"]
 
 class TriggerRequest(Message[_TriggerRequestFields]):
     """
@@ -385,6 +385,15 @@ class TriggerRequest(Message[_TriggerRequestFields]):
 
             ```proto
             optional google.protobuf.Struct data = 2;
+            ```
+        data_value:
+            Set ONLY when the payload is not a JSON object, which data cannot
+            represent (#1963). Readers take this when present and fall back to
+            data, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value data_value = 6;
             ```
         idempotency_key:
             Optional deduplication key
@@ -406,7 +415,7 @@ class TriggerRequest(Message[_TriggerRequestFields]):
             ```
     """
 
-    __slots__ = ("event", "data", "idempotency_key", "metadata", "version")
+    __slots__ = ("event", "data", "data_value", "idempotency_key", "metadata", "version")
 
     if TYPE_CHECKING:
 
@@ -415,6 +424,7 @@ class TriggerRequest(Message[_TriggerRequestFields]):
             *,
             event: str = "",
             data: Struct | None = None,
+            data_value: Value | None = None,
             idempotency_key: str = "",
             metadata: Struct | None = None,
             version: int = 0,
@@ -423,6 +433,7 @@ class TriggerRequest(Message[_TriggerRequestFields]):
 
         event: str
         data: Struct | None
+        data_value: Value | None
         idempotency_key: str
         metadata: Struct | None
         version: int
@@ -465,7 +476,7 @@ class TriggerResponse(Message[_TriggerResponseFields]):
         run_ids: list[str]
         event_id: str
 
-_TriggerSyncRequestFields: TypeAlias = Literal["event", "data", "idempotency_key", "timeout_ms", "metadata"]
+_TriggerSyncRequestFields: TypeAlias = Literal["event", "data", "data_value", "idempotency_key", "timeout_ms", "metadata", "version"]
 
 class TriggerSyncRequest(Message[_TriggerSyncRequestFields]):
     """
@@ -481,6 +492,15 @@ class TriggerSyncRequest(Message[_TriggerSyncRequestFields]):
         data:
             ```proto
             optional google.protobuf.Struct data = 2;
+            ```
+        data_value:
+            Set ONLY when the payload is not a JSON object, which data cannot
+            represent (#1963). Readers take this when present and fall back to
+            data, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value data_value = 6;
             ```
         idempotency_key:
             ```proto
@@ -498,9 +518,24 @@ class TriggerSyncRequest(Message[_TriggerSyncRequestFields]):
             ```proto
             optional google.protobuf.Struct metadata = 5;
             ```
+        version:
+            Event schema version (default 1). Matches TriggerRequest.version -- this
+            path pinned to 1 until #1955 because the field was absent, which on a
+            governed event name whose v1 schema had been dropped turned every sync
+            emit into a 400.
+
+            7, not 6: #1979 took 6 for data_value on this message while #1955 was in
+            flight. Both landed on tag 6 through a clean text merge (different lines,
+            no textual conflict), which protoc rejects and a wire reader would not --
+            a client setting data_value emits length-delimited bytes that an int32
+            varint read would silently misparse.
+
+            ```proto
+            int32 version = 7;
+            ```
     """
 
-    __slots__ = ("event", "data", "idempotency_key", "timeout_ms", "metadata")
+    __slots__ = ("event", "data", "data_value", "idempotency_key", "timeout_ms", "metadata", "version")
 
     if TYPE_CHECKING:
 
@@ -509,17 +544,21 @@ class TriggerSyncRequest(Message[_TriggerSyncRequestFields]):
             *,
             event: str = "",
             data: Struct | None = None,
+            data_value: Value | None = None,
             idempotency_key: str = "",
             timeout_ms: int = 0,
             metadata: Struct | None = None,
+            version: int = 0,
         ) -> None:
             pass
 
         event: str
         data: Struct | None
+        data_value: Value | None
         idempotency_key: str
         timeout_ms: int
         metadata: Struct | None
+        version: int
 
 _TriggerSyncResponseFields: TypeAlias = Literal["results", "event_id"]
 
@@ -555,7 +594,7 @@ class TriggerSyncResponse(Message[_TriggerSyncResponseFields]):
         results: list[RunResult]
         event_id: str
 
-_RunResultFields: TypeAlias = Literal["run_id", "function_id", "status", "output", "error", "duration_ms"]
+_RunResultFields: TypeAlias = Literal["run_id", "function_id", "status", "output", "output_value", "error", "duration_ms", "wait_timed_out"]
 
 class RunResult(Message[_RunResultFields]):
     """
@@ -580,6 +619,15 @@ class RunResult(Message[_RunResultFields]):
             ```proto
             optional google.protobuf.Struct output = 4;
             ```
+        output_value:
+            Set ONLY when the payload is not a JSON object, which output cannot
+            represent (#1963). Readers take this when present and fall back to
+            output, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value output_value = 8;
+            ```
         error:
             ```proto
             optional ironflow.v1.Error error = 5;
@@ -588,9 +636,17 @@ class RunResult(Message[_RunResultFields]):
             ```proto
             int32 duration_ms = 6;
             ```
+        wait_timed_out:
+            True when a synchronous call (TriggerSync, InvokeFunctionSync) stopped
+            waiting before this run reached a terminal state.
+            The run continues and status contains its last-known state.
+
+            ```proto
+            bool wait_timed_out = 7;
+            ```
     """
 
-    __slots__ = ("run_id", "function_id", "status", "output", "error", "duration_ms")
+    __slots__ = ("run_id", "function_id", "status", "output", "output_value", "error", "duration_ms", "wait_timed_out")
 
     if TYPE_CHECKING:
 
@@ -601,8 +657,10 @@ class RunResult(Message[_RunResultFields]):
             function_id: str = "",
             status: RunStatus | None = None,
             output: Struct | None = None,
+            output_value: Value | None = None,
             error: Error | None = None,
             duration_ms: int = 0,
+            wait_timed_out: bool = False,
         ) -> None:
             pass
 
@@ -610,8 +668,122 @@ class RunResult(Message[_RunResultFields]):
         function_id: str
         status: RunStatus
         output: Struct | None
+        output_value: Value | None
         error: Error | None
         duration_ms: int
+        wait_timed_out: bool
+
+_InvokeFunctionSyncRequestFields: TypeAlias = Literal["function_id", "data", "data_value", "timeout_ms", "idempotency_key", "metadata"]
+
+class InvokeFunctionSyncRequest(Message[_InvokeFunctionSyncRequestFields]):
+    """
+    ```proto
+    message ironflow.v1.InvokeFunctionSyncRequest
+    ```
+
+    Attributes:
+        function_id:
+            ID of the function to invoke. Not an event name — no trigger matching runs.
+
+            ```proto
+            string function_id = 1;
+            ```
+        data:
+            Function input payload
+
+            ```proto
+            optional google.protobuf.Struct data = 2;
+            ```
+        data_value:
+            Set ONLY when the payload is not a JSON object, which data cannot
+            represent (#1963). Readers take this when present and fall back to
+            data, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value data_value = 6;
+            ```
+        timeout_ms:
+            Max wait time in ms (default: 30000).
+
+            SDK authors: this is the ONLY timeout that belongs on this call. Do not
+            implement it as an HTTP/fetch abort. Cancelling the request cancels the
+            RUN (see the rpc comment), so a transport deadline shorter than timeout_ms
+            kills the run on every timeout and makes wait_timed_out unreachable. Send
+            the budget here and leave the transport deadline longer — the browser
+            emitSync precedent is timeout + 5000 — or absent.
+
+            ```proto
+            int32 timeout_ms = 3;
+            ```
+        idempotency_key:
+            Optional deduplication key. A repeat call with the same key returns the
+            original run instead of creating a second one.
+
+            ```proto
+            string idempotency_key = 4;
+            ```
+        metadata:
+            Optional metadata stored on the generated event
+
+            ```proto
+            optional google.protobuf.Struct metadata = 5;
+            ```
+    """
+
+    __slots__ = ("function_id", "data", "data_value", "timeout_ms", "idempotency_key", "metadata")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            function_id: str = "",
+            data: Struct | None = None,
+            data_value: Value | None = None,
+            timeout_ms: int = 0,
+            idempotency_key: str = "",
+            metadata: Struct | None = None,
+        ) -> None:
+            pass
+
+        function_id: str
+        data: Struct | None
+        data_value: Value | None
+        timeout_ms: int
+        idempotency_key: str
+        metadata: Struct | None
+
+_InvokeFunctionSyncResponseFields: TypeAlias = Literal["result"]
+
+class InvokeFunctionSyncResponse(Message[_InvokeFunctionSyncResponseFields]):
+    """
+    ```proto
+    message ironflow.v1.InvokeFunctionSyncResponse
+    ```
+
+    Attributes:
+        result:
+            Exactly one run. Singular by design: the single-result guarantee is the
+            reason this RPC exists alongside TriggerSync's repeated results.
+
+            ```proto
+            optional ironflow.v1.RunResult result = 1;
+            ```
+    """
+
+    __slots__ = ("result",)
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            result: RunResult | None = None,
+        ) -> None:
+            pass
+
+        result: RunResult | None
 
 _TriggerBatchRequestFields: TypeAlias = Literal["events"]
 
@@ -895,7 +1067,7 @@ class CancelRunRequest(Message[_CancelRunRequestFields]):
         id: str
         reason: str
 
-_PatchStepRequestFields: TypeAlias = Literal["step_id", "output", "reason"]
+_PatchStepRequestFields: TypeAlias = Literal["step_id", "output", "output_value", "reason"]
 
 class PatchStepRequest(Message[_PatchStepRequestFields]):
     """
@@ -914,6 +1086,15 @@ class PatchStepRequest(Message[_PatchStepRequestFields]):
             ```proto
             optional google.protobuf.Struct output = 2;
             ```
+        output_value:
+            Set ONLY when the payload is not a JSON object, which output cannot
+            represent (#1963). Readers take this when present and fall back to
+            output, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value output_value = 4;
+            ```
         reason:
             Audit reason
 
@@ -922,7 +1103,7 @@ class PatchStepRequest(Message[_PatchStepRequestFields]):
             ```
     """
 
-    __slots__ = ("step_id", "output", "reason")
+    __slots__ = ("step_id", "output", "output_value", "reason")
 
     if TYPE_CHECKING:
 
@@ -931,12 +1112,14 @@ class PatchStepRequest(Message[_PatchStepRequestFields]):
             *,
             step_id: str = "",
             output: Struct | None = None,
+            output_value: Value | None = None,
             reason: str = "",
         ) -> None:
             pass
 
         step_id: str
         output: Struct | None
+        output_value: Value | None
         reason: str
 
 _ResumeRunRequestFields: TypeAlias = Literal["run_id", "from_step"]
@@ -1718,7 +1901,7 @@ class RollbackFunctionResponse(Message[_RollbackFunctionResponseFields]):
 
 
 _DESC = file_desc(
-    b'\n\x1aironflow/v1/ironflow.proto\x12\x0bironflow.v1\x1a\x17ironflow/v1/types.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\x8b\x06\n\x17RegisterFunctionRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription\x120\n\x08triggers\x18\x04 \x03(\x0b2\x14.ironflow.v1.TriggerR\x08triggers\x12.\n\x05retry\x18\x05 \x01(\x0b2\x18.ironflow.v1.RetryConfigR\x05retry\x12\x1d\n\ntimeout_ms\x18\x06 \x01(\x05R\ttimeoutMs\x12@\n\x0bconcurrency\x18\x07 \x01(\x0b2\x1e.ironflow.v1.ConcurrencyConfigR\x0bconcurrency\x12A\n\x0epreferred_mode\x18\x08 \x01(\x0e2\x1a.ironflow.v1.ExecutionModeR\rpreferredMode\x12!\n\x0cendpoint_url\x18\t \x01(\tR\x0bendpointUrl\x12\x1b\n\tactor_key\x18\n \x01(\tR\x08actorKey\x12\x18\n\x07secrets\x18\x0b \x03(\tR\x07secrets\x12\x1c\n\trecording\x18\x0c \x01(\x08R\trecording\x12/\n\x13recording_retention\x18\r \x01(\tR\x12recordingRetention\x123\n\x08metadata\x18\x0f \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12#\n\rchange_reason\x18\x10 \x01(\tR\x0cchangeReason\x127\n\x08debounce\x18\x11 \x01(\x0b2\x1b.ironflow.v1.DebounceConfigR\x08debounce\x126\n\tcancel_on\x18\x13 \x03(\x0b2\x19.ironflow.v1.CancelOnSpecR\x08cancelOnJ\x04\x08\x0e\x10\x0fJ\x04\x08\x12\x10\x13R\x0epause_behaviorR\x14compensate_on_cancel"g\n\x18RegisterFunctionResponse\x121\n\x08function\x18\x01 \x01(\x0b2\x15.ironflow.v1.FunctionR\x08function\x12\x18\n\x07created\x18\x02 \x01(\x08R\x07created"$\n\x12GetFunctionRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id"y\n\x14ListFunctionsRequest\x123\n\x06status\x18\x01 \x01(\x0e2\x1b.ironflow.v1.FunctionStatusR\x06status\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06cursor\x18\x03 \x01(\tR\x06cursor"\x8e\x01\n\x15ListFunctionsResponse\x123\n\tfunctions\x18\x01 \x03(\x0b2\x15.ironflow.v1.FunctionR\tfunctions\x12\x1f\n\x0bnext_cursor\x18\x02 \x01(\tR\nnextCursor\x12\x1f\n\x0btotal_count\x18\x03 \x01(\x05R\ntotalCount"b\n\x1bUpdateFunctionStatusRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x123\n\x06status\x18\x02 \x01(\x0e2\x1b.ironflow.v1.FunctionStatusR\x06status"\'\n\x15DeleteFunctionRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id"\xcb\x01\n\x0eTriggerRequest\x12\x14\n\x05event\x18\x01 \x01(\tR\x05event\x12+\n\x04data\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x12\'\n\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x123\n\x08metadata\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12\x18\n\x07version\x18\x05 \x01(\x05R\x07version"E\n\x0fTriggerResponse\x12\x17\n\x07run_ids\x18\x01 \x03(\tR\x06runIds\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId"\xd4\x01\n\x12TriggerSyncRequest\x12\x14\n\x05event\x18\x01 \x01(\tR\x05event\x12+\n\x04data\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x12\'\n\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x12\x1d\n\ntimeout_ms\x18\x04 \x01(\x05R\ttimeoutMs\x123\n\x08metadata\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata"b\n\x13TriggerSyncResponse\x120\n\x07results\x18\x01 \x03(\x0b2\x16.ironflow.v1.RunResultR\x07results\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId"\xef\x01\n\tRunResult\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1f\n\x0bfunction_id\x18\x02 \x01(\tR\nfunctionId\x12.\n\x06status\x18\x03 \x01(\x0e2\x16.ironflow.v1.RunStatusR\x06status\x12/\n\x06output\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x12(\n\x05error\x18\x05 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x1f\n\x0bduration_ms\x18\x06 \x01(\x05R\ndurationMs"J\n\x13TriggerBatchRequest\x123\n\x06events\x18\x01 \x03(\x0b2\x1b.ironflow.v1.TriggerRequestR\x06events"N\n\x14TriggerBatchResponse\x126\n\x07results\x18\x01 \x03(\x0b2\x1c.ironflow.v1.TriggerResponseR\x07results"\x1f\n\rGetRunRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id"\xf4\x01\n\x0fListRunsRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12.\n\x06status\x18\x02 \x01(\x0e2\x16.ironflow.v1.RunStatusR\x06status\x120\n\x05since\x18\x03 \x01(\x0b2\x1a.google.protobuf.TimestampR\x05since\x120\n\x05until\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\x05until\x12\x14\n\x05limit\x18\x05 \x01(\x05R\x05limit\x12\x16\n\x06cursor\x18\x06 \x01(\tR\x06cursor"z\n\x10ListRunsResponse\x12$\n\x04runs\x18\x01 \x03(\x0b2\x10.ironflow.v1.RunR\x04runs\x12\x1f\n\x0bnext_cursor\x18\x02 \x01(\tR\nnextCursor\x12\x1f\n\x0btotal_count\x18\x03 \x01(\x05R\ntotalCount"+\n\x12GetRunStepsRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId">\n\x13GetRunStepsResponse\x12\'\n\x05steps\x18\x01 \x03(\x0b2\x11.ironflow.v1.StepR\x05steps":\n\x10CancelRunRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n\x06reason\x18\x02 \x01(\tR\x06reason"t\n\x10PatchStepRequest\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12/\n\x06output\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x12\x16\n\x06reason\x18\x03 \x01(\tR\x06reason"F\n\x10ResumeRunRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1b\n\tfrom_step\x18\x02 \x01(\tR\x08fromStep"(\n\x0fPauseRunRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId"*\n\x10PauseRunResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status".\n\x15GetPausedStateRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId"\x94\x01\n\x16GetPausedStateResponse\x121\n\x05steps\x18\x01 \x03(\x0b2\x1b.ironflow.v1.PausedStepInfoR\x05steps\x12$\n\x0enext_step_hint\x18\x02 \x01(\tR\x0cnextStepHint\x12!\n\x0cpause_reason\x18\x03 \x01(\tR\x0bpauseReason"\xf2\x01\n\x0ePausedStepInfo\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n\x06output\x18\x03 \x01(\x0cR\x06output\x12\x1a\n\x08injected\x18\x04 \x01(\x08R\x08injected\x12=\n\x0ccompleted_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\x0bcompletedAt\x12\x1b\n\tstep_type\x18\x06 \x01(\tR\x08stepType\x12\x16\n\x06status\x18\x07 \x01(\tR\x06status\x12\x14\n\x05error\x18\x08 \x01(\x0cR\x05error"\x80\x01\n\x17InjectStepOutputRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12\x1d\n\nnew_output\x18\x03 \x01(\x0cR\tnewOutput\x12\x16\n\x06reason\x18\x04 \x01(\tR\x06reason"\\\n\x18InjectStepOutputResponse\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\'\n\x0fprevious_output\x18\x02 \x01(\x0cR\x0epreviousOutput"\x0f\n\rHealthRequest"\x8c\x02\n\x0eHealthResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\x128\n\ttimestamp\x18\x02 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x12K\n\ncomponents\x18\x03 \x03(\x0b2+.ironflow.v1.HealthResponse.ComponentsEntryR\ncomponents\x1a[\n\x0fComponentsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x122\n\x05value\x18\x02 \x01(\x0b2\x1c.ironflow.v1.ComponentHealthR\x05value:\x028\x01"C\n\x0fComponentHealth\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n\x07message\x18\x02 \x01(\tR\x07message"\r\n\x0bInfoRequest"\xf7\x01\n\x0cInfoResponse\x12\x18\n\x07version\x18\x01 \x01(\tR\x07version\x12\x1d\n\ngo_version\x18\x02 \x01(\tR\tgoVersion\x129\n\nstarted_at\x18\x03 \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x12%\n\x0efunction_count\x18\x04 \x01(\x05R\rfunctionCount\x12\x1f\n\x0bactive_runs\x18\x05 \x01(\x05R\nactiveRuns\x12+\n\x11connected_workers\x18\x06 \x01(\x05R\x10connectedWorkers"\xdb\x02\n\x14FunctionHistoryEntry\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12%\n\x0eentity_version\x18\x02 \x01(\x03R\rentityVersion\x12\x1f\n\x0bfunction_id\x18\x03 \x01(\tR\nfunctionId\x12B\n\x11function_snapshot\x18\x04 \x01(\x0b2\x15.ironflow.v1.FunctionR\x10functionSnapshot\x12\x19\n\x08actor_id\x18\x05 \x01(\tR\x07actorId\x12#\n\rchange_reason\x18\x06 \x01(\tR\x0cchangeReason\x12\x1f\n\x0bchange_type\x18\x07 \x01(\tR\nchangeType\x12;\n\x0brecorded_at\x18\x08 \x01(\x0b2\x1a.google.protobuf.TimestampR\nrecordedAt"v\n\x1aListFunctionHistoryRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12!\n\x0cfrom_version\x18\x03 \x01(\x03R\x0bfromVersion"u\n\x1bListFunctionHistoryResponse\x12;\n\x07entries\x18\x01 \x03(\x0b2!.ironflow.v1.FunctionHistoryEntryR\x07entries\x12\x19\n\x08has_more\x18\x02 \x01(\x08R\x07hasMore"X\n\x1bGetFunctionAtVersionRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x18\n\x07version\x18\x02 \x01(\x03R\x07version"W\n\x1cGetFunctionAtVersionResponse\x127\n\x05entry\x18\x01 \x01(\x0b2!.ironflow.v1.FunctionHistoryEntryR\x05entry"y\n\x17RollbackFunctionRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x18\n\x07version\x18\x02 \x01(\x03R\x07version\x12#\n\rchange_reason\x18\x03 \x01(\tR\x0cchangeReason"M\n\x18RollbackFunctionResponse\x121\n\x08function\x18\x01 \x01(\x0b2\x15.ironflow.v1.FunctionR\x08function2\xdb\x0e\n\x0fIronflowService\x12_\n\x10RegisterFunction\x12$.ironflow.v1.RegisterFunctionRequest\x1a%.ironflow.v1.RegisterFunctionResponse\x12J\n\x0bGetFunction\x12\x1f.ironflow.v1.GetFunctionRequest\x1a\x15.ironflow.v1.Function"\x03\x90\x02\x01\x12[\n\rListFunctions\x12!.ironflow.v1.ListFunctionsRequest\x1a".ironflow.v1.ListFunctionsResponse"\x03\x90\x02\x01\x12W\n\x14UpdateFunctionStatus\x12(.ironflow.v1.UpdateFunctionStatusRequest\x1a\x15.ironflow.v1.Function\x12L\n\x0eDeleteFunction\x12".ironflow.v1.DeleteFunctionRequest\x1a\x16.google.protobuf.Empty\x12m\n\x13ListFunctionHistory\x12\'.ironflow.v1.ListFunctionHistoryRequest\x1a(.ironflow.v1.ListFunctionHistoryResponse"\x03\x90\x02\x01\x12p\n\x14GetFunctionAtVersion\x12(.ironflow.v1.GetFunctionAtVersionRequest\x1a).ironflow.v1.GetFunctionAtVersionResponse"\x03\x90\x02\x01\x12_\n\x10RollbackFunction\x12$.ironflow.v1.RollbackFunctionRequest\x1a%.ironflow.v1.RollbackFunctionResponse\x12D\n\x07Trigger\x12\x1b.ironflow.v1.TriggerRequest\x1a\x1c.ironflow.v1.TriggerResponse\x12A\n\x04Emit\x12\x1b.ironflow.v1.TriggerRequest\x1a\x1c.ironflow.v1.TriggerResponse\x12P\n\x0bTriggerSync\x12\x1f.ironflow.v1.TriggerSyncRequest\x1a .ironflow.v1.TriggerSyncResponse\x12S\n\x0cTriggerBatch\x12 .ironflow.v1.TriggerBatchRequest\x1a!.ironflow.v1.TriggerBatchResponse\x12;\n\x06GetRun\x12\x1a.ironflow.v1.GetRunRequest\x1a\x10.ironflow.v1.Run"\x03\x90\x02\x01\x12L\n\x08ListRuns\x12\x1c.ironflow.v1.ListRunsRequest\x1a\x1d.ironflow.v1.ListRunsResponse"\x03\x90\x02\x01\x12U\n\x0bGetRunSteps\x12\x1f.ironflow.v1.GetRunStepsRequest\x1a .ironflow.v1.GetRunStepsResponse"\x03\x90\x02\x01\x12<\n\tCancelRun\x12\x1d.ironflow.v1.CancelRunRequest\x1a\x10.ironflow.v1.Run\x12=\n\tPatchStep\x12\x1d.ironflow.v1.PatchStepRequest\x1a\x11.ironflow.v1.Step\x12<\n\tResumeRun\x12\x1d.ironflow.v1.ResumeRunRequest\x1a\x10.ironflow.v1.Run\x12G\n\x08PauseRun\x12\x1c.ironflow.v1.PauseRunRequest\x1a\x1d.ironflow.v1.PauseRunResponse\x12^\n\x0eGetPausedState\x12".ironflow.v1.GetPausedStateRequest\x1a#.ironflow.v1.GetPausedStateResponse"\x03\x90\x02\x01\x12_\n\x10InjectStepOutput\x12$.ironflow.v1.InjectStepOutputRequest\x1a%.ironflow.v1.InjectStepOutputResponse\x12A\n\x06Health\x12\x1a.ironflow.v1.HealthRequest\x1a\x1b.ironflow.v1.HealthResponse\x12;\n\x04Info\x12\x18.ironflow.v1.InfoRequest\x1a\x19.ironflow.v1.InfoResponseB:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x1aironflow/v1/ironflow.proto\x12\x0bironflow.v1\x1a\x17ironflow/v1/types.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\x8b\x06\n\x17RegisterFunctionRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription\x120\n\x08triggers\x18\x04 \x03(\x0b2\x14.ironflow.v1.TriggerR\x08triggers\x12.\n\x05retry\x18\x05 \x01(\x0b2\x18.ironflow.v1.RetryConfigR\x05retry\x12\x1d\n\ntimeout_ms\x18\x06 \x01(\x05R\ttimeoutMs\x12@\n\x0bconcurrency\x18\x07 \x01(\x0b2\x1e.ironflow.v1.ConcurrencyConfigR\x0bconcurrency\x12A\n\x0epreferred_mode\x18\x08 \x01(\x0e2\x1a.ironflow.v1.ExecutionModeR\rpreferredMode\x12!\n\x0cendpoint_url\x18\t \x01(\tR\x0bendpointUrl\x12\x1b\n\tactor_key\x18\n \x01(\tR\x08actorKey\x12\x18\n\x07secrets\x18\x0b \x03(\tR\x07secrets\x12\x1c\n\trecording\x18\x0c \x01(\x08R\trecording\x12/\n\x13recording_retention\x18\r \x01(\tR\x12recordingRetention\x123\n\x08metadata\x18\x0f \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12#\n\rchange_reason\x18\x10 \x01(\tR\x0cchangeReason\x127\n\x08debounce\x18\x11 \x01(\x0b2\x1b.ironflow.v1.DebounceConfigR\x08debounce\x126\n\tcancel_on\x18\x13 \x03(\x0b2\x19.ironflow.v1.CancelOnSpecR\x08cancelOnJ\x04\x08\x0e\x10\x0fJ\x04\x08\x12\x10\x13R\x0epause_behaviorR\x14compensate_on_cancel"g\n\x18RegisterFunctionResponse\x121\n\x08function\x18\x01 \x01(\x0b2\x15.ironflow.v1.FunctionR\x08function\x12\x18\n\x07created\x18\x02 \x01(\x08R\x07created"$\n\x12GetFunctionRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id"y\n\x14ListFunctionsRequest\x123\n\x06status\x18\x01 \x01(\x0e2\x1b.ironflow.v1.FunctionStatusR\x06status\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06cursor\x18\x03 \x01(\tR\x06cursor"\x8e\x01\n\x15ListFunctionsResponse\x123\n\tfunctions\x18\x01 \x03(\x0b2\x15.ironflow.v1.FunctionR\tfunctions\x12\x1f\n\x0bnext_cursor\x18\x02 \x01(\tR\nnextCursor\x12\x1f\n\x0btotal_count\x18\x03 \x01(\x05R\ntotalCount"b\n\x1bUpdateFunctionStatusRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x123\n\x06status\x18\x02 \x01(\x0e2\x1b.ironflow.v1.FunctionStatusR\x06status"\'\n\x15DeleteFunctionRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id"\x82\x02\n\x0eTriggerRequest\x12\x14\n\x05event\x18\x01 \x01(\tR\x05event\x12+\n\x04data\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x06 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12\'\n\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x123\n\x08metadata\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12\x18\n\x07version\x18\x05 \x01(\x05R\x07version"E\n\x0fTriggerResponse\x12\x17\n\x07run_ids\x18\x01 \x03(\tR\x06runIds\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId"\xa5\x02\n\x12TriggerSyncRequest\x12\x14\n\x05event\x18\x01 \x01(\tR\x05event\x12+\n\x04data\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x06 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12\'\n\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x12\x1d\n\ntimeout_ms\x18\x04 \x01(\x05R\ttimeoutMs\x123\n\x08metadata\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12\x18\n\x07version\x18\x07 \x01(\x05R\x07version"b\n\x13TriggerSyncResponse\x120\n\x07results\x18\x01 \x03(\x0b2\x16.ironflow.v1.RunResultR\x07results\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId"\xd0\x02\n\tRunResult\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1f\n\x0bfunction_id\x18\x02 \x01(\tR\nfunctionId\x12.\n\x06status\x18\x03 \x01(\x0e2\x16.ironflow.v1.RunStatusR\x06status\x12/\n\x06output\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x08 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12(\n\x05error\x18\x05 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x1f\n\x0bduration_ms\x18\x06 \x01(\x05R\ndurationMs\x12$\n\x0ewait_timed_out\x18\x07 \x01(\x08R\x0cwaitTimedOut"\x9d\x02\n\x19InvokeFunctionSyncRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12+\n\x04data\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x06 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12\x1d\n\ntimeout_ms\x18\x03 \x01(\x05R\ttimeoutMs\x12\'\n\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x123\n\x08metadata\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata"L\n\x1aInvokeFunctionSyncResponse\x12.\n\x06result\x18\x01 \x01(\x0b2\x16.ironflow.v1.RunResultR\x06result"J\n\x13TriggerBatchRequest\x123\n\x06events\x18\x01 \x03(\x0b2\x1b.ironflow.v1.TriggerRequestR\x06events"N\n\x14TriggerBatchResponse\x126\n\x07results\x18\x01 \x03(\x0b2\x1c.ironflow.v1.TriggerResponseR\x07results"\x1f\n\rGetRunRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id"\xf4\x01\n\x0fListRunsRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12.\n\x06status\x18\x02 \x01(\x0e2\x16.ironflow.v1.RunStatusR\x06status\x120\n\x05since\x18\x03 \x01(\x0b2\x1a.google.protobuf.TimestampR\x05since\x120\n\x05until\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\x05until\x12\x14\n\x05limit\x18\x05 \x01(\x05R\x05limit\x12\x16\n\x06cursor\x18\x06 \x01(\tR\x06cursor"z\n\x10ListRunsResponse\x12$\n\x04runs\x18\x01 \x03(\x0b2\x10.ironflow.v1.RunR\x04runs\x12\x1f\n\x0bnext_cursor\x18\x02 \x01(\tR\nnextCursor\x12\x1f\n\x0btotal_count\x18\x03 \x01(\x05R\ntotalCount"+\n\x12GetRunStepsRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId">\n\x13GetRunStepsResponse\x12\'\n\x05steps\x18\x01 \x03(\x0b2\x11.ironflow.v1.StepR\x05steps":\n\x10CancelRunRequest\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n\x06reason\x18\x02 \x01(\tR\x06reason"\xaf\x01\n\x10PatchStepRequest\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12/\n\x06output\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x04 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12\x16\n\x06reason\x18\x03 \x01(\tR\x06reason"F\n\x10ResumeRunRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1b\n\tfrom_step\x18\x02 \x01(\tR\x08fromStep"(\n\x0fPauseRunRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId"*\n\x10PauseRunResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status".\n\x15GetPausedStateRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId"\x94\x01\n\x16GetPausedStateResponse\x121\n\x05steps\x18\x01 \x03(\x0b2\x1b.ironflow.v1.PausedStepInfoR\x05steps\x12$\n\x0enext_step_hint\x18\x02 \x01(\tR\x0cnextStepHint\x12!\n\x0cpause_reason\x18\x03 \x01(\tR\x0bpauseReason"\xf2\x01\n\x0ePausedStepInfo\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n\x06output\x18\x03 \x01(\x0cR\x06output\x12\x1a\n\x08injected\x18\x04 \x01(\x08R\x08injected\x12=\n\x0ccompleted_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\x0bcompletedAt\x12\x1b\n\tstep_type\x18\x06 \x01(\tR\x08stepType\x12\x16\n\x06status\x18\x07 \x01(\tR\x06status\x12\x14\n\x05error\x18\x08 \x01(\x0cR\x05error"\x80\x01\n\x17InjectStepOutputRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12\x1d\n\nnew_output\x18\x03 \x01(\x0cR\tnewOutput\x12\x16\n\x06reason\x18\x04 \x01(\tR\x06reason"\\\n\x18InjectStepOutputResponse\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\'\n\x0fprevious_output\x18\x02 \x01(\x0cR\x0epreviousOutput"\x0f\n\rHealthRequest"\x8c\x02\n\x0eHealthResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\x128\n\ttimestamp\x18\x02 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x12K\n\ncomponents\x18\x03 \x03(\x0b2+.ironflow.v1.HealthResponse.ComponentsEntryR\ncomponents\x1a[\n\x0fComponentsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x122\n\x05value\x18\x02 \x01(\x0b2\x1c.ironflow.v1.ComponentHealthR\x05value:\x028\x01"C\n\x0fComponentHealth\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n\x07message\x18\x02 \x01(\tR\x07message"\r\n\x0bInfoRequest"\xf7\x01\n\x0cInfoResponse\x12\x18\n\x07version\x18\x01 \x01(\tR\x07version\x12\x1d\n\ngo_version\x18\x02 \x01(\tR\tgoVersion\x129\n\nstarted_at\x18\x03 \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x12%\n\x0efunction_count\x18\x04 \x01(\x05R\rfunctionCount\x12\x1f\n\x0bactive_runs\x18\x05 \x01(\x05R\nactiveRuns\x12+\n\x11connected_workers\x18\x06 \x01(\x05R\x10connectedWorkers"\xdb\x02\n\x14FunctionHistoryEntry\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12%\n\x0eentity_version\x18\x02 \x01(\x03R\rentityVersion\x12\x1f\n\x0bfunction_id\x18\x03 \x01(\tR\nfunctionId\x12B\n\x11function_snapshot\x18\x04 \x01(\x0b2\x15.ironflow.v1.FunctionR\x10functionSnapshot\x12\x19\n\x08actor_id\x18\x05 \x01(\tR\x07actorId\x12#\n\rchange_reason\x18\x06 \x01(\tR\x0cchangeReason\x12\x1f\n\x0bchange_type\x18\x07 \x01(\tR\nchangeType\x12;\n\x0brecorded_at\x18\x08 \x01(\x0b2\x1a.google.protobuf.TimestampR\nrecordedAt"v\n\x1aListFunctionHistoryRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12!\n\x0cfrom_version\x18\x03 \x01(\x03R\x0bfromVersion"u\n\x1bListFunctionHistoryResponse\x12;\n\x07entries\x18\x01 \x03(\x0b2!.ironflow.v1.FunctionHistoryEntryR\x07entries\x12\x19\n\x08has_more\x18\x02 \x01(\x08R\x07hasMore"X\n\x1bGetFunctionAtVersionRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x18\n\x07version\x18\x02 \x01(\x03R\x07version"W\n\x1cGetFunctionAtVersionResponse\x127\n\x05entry\x18\x01 \x01(\x0b2!.ironflow.v1.FunctionHistoryEntryR\x05entry"y\n\x17RollbackFunctionRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x18\n\x07version\x18\x02 \x01(\x03R\x07version\x12#\n\rchange_reason\x18\x03 \x01(\tR\x0cchangeReason"M\n\x18RollbackFunctionResponse\x121\n\x08function\x18\x01 \x01(\x0b2\x15.ironflow.v1.FunctionR\x08function2\xc2\x0f\n\x0fIronflowService\x12_\n\x10RegisterFunction\x12$.ironflow.v1.RegisterFunctionRequest\x1a%.ironflow.v1.RegisterFunctionResponse\x12J\n\x0bGetFunction\x12\x1f.ironflow.v1.GetFunctionRequest\x1a\x15.ironflow.v1.Function"\x03\x90\x02\x01\x12[\n\rListFunctions\x12!.ironflow.v1.ListFunctionsRequest\x1a".ironflow.v1.ListFunctionsResponse"\x03\x90\x02\x01\x12W\n\x14UpdateFunctionStatus\x12(.ironflow.v1.UpdateFunctionStatusRequest\x1a\x15.ironflow.v1.Function\x12L\n\x0eDeleteFunction\x12".ironflow.v1.DeleteFunctionRequest\x1a\x16.google.protobuf.Empty\x12m\n\x13ListFunctionHistory\x12\'.ironflow.v1.ListFunctionHistoryRequest\x1a(.ironflow.v1.ListFunctionHistoryResponse"\x03\x90\x02\x01\x12p\n\x14GetFunctionAtVersion\x12(.ironflow.v1.GetFunctionAtVersionRequest\x1a).ironflow.v1.GetFunctionAtVersionResponse"\x03\x90\x02\x01\x12_\n\x10RollbackFunction\x12$.ironflow.v1.RollbackFunctionRequest\x1a%.ironflow.v1.RollbackFunctionResponse\x12D\n\x07Trigger\x12\x1b.ironflow.v1.TriggerRequest\x1a\x1c.ironflow.v1.TriggerResponse\x12A\n\x04Emit\x12\x1b.ironflow.v1.TriggerRequest\x1a\x1c.ironflow.v1.TriggerResponse\x12P\n\x0bTriggerSync\x12\x1f.ironflow.v1.TriggerSyncRequest\x1a .ironflow.v1.TriggerSyncResponse\x12e\n\x12InvokeFunctionSync\x12&.ironflow.v1.InvokeFunctionSyncRequest\x1a\'.ironflow.v1.InvokeFunctionSyncResponse\x12S\n\x0cTriggerBatch\x12 .ironflow.v1.TriggerBatchRequest\x1a!.ironflow.v1.TriggerBatchResponse\x12;\n\x06GetRun\x12\x1a.ironflow.v1.GetRunRequest\x1a\x10.ironflow.v1.Run"\x03\x90\x02\x01\x12L\n\x08ListRuns\x12\x1c.ironflow.v1.ListRunsRequest\x1a\x1d.ironflow.v1.ListRunsResponse"\x03\x90\x02\x01\x12U\n\x0bGetRunSteps\x12\x1f.ironflow.v1.GetRunStepsRequest\x1a .ironflow.v1.GetRunStepsResponse"\x03\x90\x02\x01\x12<\n\tCancelRun\x12\x1d.ironflow.v1.CancelRunRequest\x1a\x10.ironflow.v1.Run\x12=\n\tPatchStep\x12\x1d.ironflow.v1.PatchStepRequest\x1a\x11.ironflow.v1.Step\x12<\n\tResumeRun\x12\x1d.ironflow.v1.ResumeRunRequest\x1a\x10.ironflow.v1.Run\x12G\n\x08PauseRun\x12\x1c.ironflow.v1.PauseRunRequest\x1a\x1d.ironflow.v1.PauseRunResponse\x12^\n\x0eGetPausedState\x12".ironflow.v1.GetPausedStateRequest\x1a#.ironflow.v1.GetPausedStateResponse"\x03\x90\x02\x01\x12_\n\x10InjectStepOutput\x12$.ironflow.v1.InjectStepOutputRequest\x1a%.ironflow.v1.InjectStepOutputResponse\x12A\n\x06Health\x12\x1a.ironflow.v1.HealthRequest\x1a\x1b.ironflow.v1.HealthResponse\x12;\n\x04Info\x12\x18.ironflow.v1.InfoRequest\x1a\x19.ironflow.v1.InfoResponseB:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         types_pb.desc(),
         empty_pb.desc(),
@@ -1738,6 +1921,8 @@ _DESC = file_desc(
         "TriggerSyncRequest": TriggerSyncRequest,
         "TriggerSyncResponse": TriggerSyncResponse,
         "RunResult": RunResult,
+        "InvokeFunctionSyncRequest": InvokeFunctionSyncRequest,
+        "InvokeFunctionSyncResponse": InvokeFunctionSyncResponse,
         "TriggerBatchRequest": TriggerBatchRequest,
         "TriggerBatchResponse": TriggerBatchResponse,
         "GetRunRequest": GetRunRequest,

@@ -14,10 +14,10 @@ from protobuf.wkt import struct_pb, timestamp_pb
 
 if TYPE_CHECKING:
     from protobuf import DescFile
-    from protobuf.wkt import Struct, Timestamp
+    from protobuf.wkt import Struct, Timestamp, Value
 
 
-_AppendEventRequestFields: TypeAlias = Literal["entity_id", "entity_type", "event_name", "data", "expected_version", "idempotency_key", "version", "metadata"]
+_AppendEventRequestFields: TypeAlias = Literal["entity_id", "entity_type", "event_name", "data", "data_value", "expected_version", "idempotency_key", "version", "metadata"]
 
 class AppendEventRequest(Message[_AppendEventRequestFields]):
     """
@@ -41,6 +41,15 @@ class AppendEventRequest(Message[_AppendEventRequestFields]):
         data:
             ```proto
             optional google.protobuf.Struct data = 4;
+            ```
+        data_value:
+            Set ONLY when the payload is not a JSON object, which data cannot
+            represent (#1963). Readers take this when present and fall back to
+            data, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value data_value = 9;
             ```
         expected_version:
             -1 = skip check, 0 = new stream
@@ -66,7 +75,7 @@ class AppendEventRequest(Message[_AppendEventRequestFields]):
             ```
     """
 
-    __slots__ = ("entity_id", "entity_type", "event_name", "data", "expected_version", "idempotency_key", "version", "metadata")
+    __slots__ = ("entity_id", "entity_type", "event_name", "data", "data_value", "expected_version", "idempotency_key", "version", "metadata")
 
     if TYPE_CHECKING:
 
@@ -77,6 +86,7 @@ class AppendEventRequest(Message[_AppendEventRequestFields]):
             entity_type: str = "",
             event_name: str = "",
             data: Struct | None = None,
+            data_value: Value | None = None,
             expected_version: int = 0,
             idempotency_key: str = "",
             version: int = 0,
@@ -88,6 +98,7 @@ class AppendEventRequest(Message[_AppendEventRequestFields]):
         entity_type: str
         event_name: str
         data: Struct | None
+        data_value: Value | None
         expected_version: int
         idempotency_key: str
         version: int
@@ -222,7 +233,7 @@ class ReadStreamResponse(Message[_ReadStreamResponseFields]):
         events: list[StreamEvent]
         total_count: int
 
-_StreamEventFields: TypeAlias = Literal["id", "name", "data", "entity_version", "version", "timestamp", "source", "metadata"]
+_StreamEventFields: TypeAlias = Literal["id", "name", "data", "data_value", "entity_version", "version", "timestamp", "source", "metadata"]
 
 class StreamEvent(Message[_StreamEventFields]):
     """
@@ -242,6 +253,15 @@ class StreamEvent(Message[_StreamEventFields]):
         data:
             ```proto
             optional google.protobuf.Struct data = 3;
+            ```
+        data_value:
+            Set ONLY when the payload is not a JSON object, which data cannot
+            represent (#1963). Readers take this when present and fall back to
+            data, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value data_value = 9;
             ```
         entity_version:
             ```proto
@@ -265,7 +285,7 @@ class StreamEvent(Message[_StreamEventFields]):
             ```
     """
 
-    __slots__ = ("id", "name", "data", "entity_version", "version", "timestamp", "source", "metadata")
+    __slots__ = ("id", "name", "data", "data_value", "entity_version", "version", "timestamp", "source", "metadata")
 
     if TYPE_CHECKING:
 
@@ -275,6 +295,7 @@ class StreamEvent(Message[_StreamEventFields]):
             id: str = "",
             name: str = "",
             data: Struct | None = None,
+            data_value: Value | None = None,
             entity_version: int = 0,
             version: int = 0,
             timestamp: Timestamp | None = None,
@@ -286,6 +307,7 @@ class StreamEvent(Message[_StreamEventFields]):
         id: str
         name: str
         data: Struct | None
+        data_value: Value | None
         entity_version: int
         version: int
         timestamp: Timestamp | None
@@ -616,7 +638,7 @@ class EntityHistoryInfo(Message[_EntityHistoryInfoFields]):
         created_at: Timestamp | None
         updated_at: Timestamp | None
 
-_EntityHistoryEntryFields: TypeAlias = Literal["event_id", "event_name", "event_data", "entity_version", "schema_version", "source", "timestamp", "runs"]
+_EntityHistoryEntryFields: TypeAlias = Literal["event_id", "event_name", "event_data", "event_data_value", "entity_version", "schema_version", "source", "timestamp", "runs"]
 
 class EntityHistoryEntry(Message[_EntityHistoryEntryFields]):
     """
@@ -636,6 +658,15 @@ class EntityHistoryEntry(Message[_EntityHistoryEntryFields]):
         event_data:
             ```proto
             optional google.protobuf.Struct event_data = 3;
+            ```
+        event_data_value:
+            Set ONLY when the payload is not a JSON object, which event_data cannot
+            represent (#1963). Readers take this when present and fall back to
+            event_data, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value event_data_value = 9;
             ```
         entity_version:
             ```proto
@@ -659,7 +690,7 @@ class EntityHistoryEntry(Message[_EntityHistoryEntryFields]):
             ```
     """
 
-    __slots__ = ("event_id", "event_name", "event_data", "entity_version", "schema_version", "source", "timestamp", "runs")
+    __slots__ = ("event_id", "event_name", "event_data", "event_data_value", "entity_version", "schema_version", "source", "timestamp", "runs")
 
     if TYPE_CHECKING:
 
@@ -669,6 +700,7 @@ class EntityHistoryEntry(Message[_EntityHistoryEntryFields]):
             event_id: str = "",
             event_name: str = "",
             event_data: Struct | None = None,
+            event_data_value: Value | None = None,
             entity_version: int = 0,
             schema_version: int = 0,
             source: str = "",
@@ -680,6 +712,7 @@ class EntityHistoryEntry(Message[_EntityHistoryEntryFields]):
         event_id: str
         event_name: str
         event_data: Struct | None
+        event_data_value: Value | None
         entity_version: int
         schema_version: int
         source: str
@@ -808,7 +841,7 @@ class EntityHistoryStep(Message[_EntityHistoryStepFields]):
         duration_ms: int
         error_message: str
 
-_CreateSnapshotRequestFields: TypeAlias = Literal["entity_id", "entity_type", "entity_version", "state"]
+_CreateSnapshotRequestFields: TypeAlias = Literal["entity_id", "entity_type", "entity_version", "state", "state_value"]
 
 class CreateSnapshotRequest(Message[_CreateSnapshotRequestFields]):
     """
@@ -837,9 +870,18 @@ class CreateSnapshotRequest(Message[_CreateSnapshotRequestFields]):
             ```proto
             optional google.protobuf.Struct state = 4;
             ```
+        state_value:
+            Set ONLY when the payload is not a JSON object, which state cannot
+            represent (#1963). Readers take this when present and fall back to
+            state, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value state_value = 5;
+            ```
     """
 
-    __slots__ = ("entity_id", "entity_type", "entity_version", "state")
+    __slots__ = ("entity_id", "entity_type", "entity_version", "state", "state_value")
 
     if TYPE_CHECKING:
 
@@ -850,6 +892,7 @@ class CreateSnapshotRequest(Message[_CreateSnapshotRequestFields]):
             entity_type: str = "",
             entity_version: int = 0,
             state: Struct | None = None,
+            state_value: Value | None = None,
         ) -> None:
             pass
 
@@ -857,6 +900,7 @@ class CreateSnapshotRequest(Message[_CreateSnapshotRequestFields]):
         entity_type: str
         entity_version: int
         state: Struct | None
+        state_value: Value | None
 
 _CreateSnapshotResponseFields: TypeAlias = Literal["snapshot_id"]
 
@@ -922,7 +966,7 @@ class GetSnapshotRequest(Message[_GetSnapshotRequestFields]):
         entity_id: str
         before_version: int
 
-_GetSnapshotResponseFields: TypeAlias = Literal["snapshot_id", "entity_id", "entity_type", "entity_version", "state", "created_at"]
+_GetSnapshotResponseFields: TypeAlias = Literal["snapshot_id", "entity_id", "entity_type", "entity_version", "state", "state_value", "created_at"]
 
 class GetSnapshotResponse(Message[_GetSnapshotResponseFields]):
     """
@@ -951,13 +995,22 @@ class GetSnapshotResponse(Message[_GetSnapshotResponseFields]):
             ```proto
             optional google.protobuf.Struct state = 5;
             ```
+        state_value:
+            Set ONLY when the payload is not a JSON object, which state cannot
+            represent (#1963). Readers take this when present and fall back to
+            state, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value state_value = 7;
+            ```
         created_at:
             ```proto
             optional google.protobuf.Timestamp created_at = 6;
             ```
     """
 
-    __slots__ = ("snapshot_id", "entity_id", "entity_type", "entity_version", "state", "created_at")
+    __slots__ = ("snapshot_id", "entity_id", "entity_type", "entity_version", "state", "state_value", "created_at")
 
     if TYPE_CHECKING:
 
@@ -969,6 +1022,7 @@ class GetSnapshotResponse(Message[_GetSnapshotResponseFields]):
             entity_type: str = "",
             entity_version: int = 0,
             state: Struct | None = None,
+            state_value: Value | None = None,
             created_at: Timestamp | None = None,
         ) -> None:
             pass
@@ -978,11 +1032,12 @@ class GetSnapshotResponse(Message[_GetSnapshotResponseFields]):
         entity_type: str
         entity_version: int
         state: Struct | None
+        state_value: Value | None
         created_at: Timestamp | None
 
 
 _DESC = file_desc(
-    b'\n\x1fironflow/v1/entity_stream.proto\x12\x0bironflow.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xc1\x02\n\x12AppendEventRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\x02 \x01(\tR\nentityType\x12\x1d\n\nevent_name\x18\x03 \x01(\tR\teventName\x12+\n\x04data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x12)\n\x10expected_version\x18\x05 \x01(\x03R\x0fexpectedVersion\x12\'\n\x0fidempotency_key\x18\x06 \x01(\tR\x0eidempotencyKey\x12\x18\n\x07version\x18\x07 \x01(\x05R\x07version\x123\n\x08metadata\x18\x08 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata"s\n\x13AppendEventResponse\x12%\n\x0eentity_version\x18\x01 \x01(\x03R\rentityVersion\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId\x12\x1a\n\x08sequence\x18\x03 \x01(\x04R\x08sequence"\x87\x01\n\x11ReadStreamRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12!\n\x0cfrom_version\x18\x02 \x01(\x03R\x0bfromVersion\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x1c\n\tdirection\x18\x04 \x01(\tR\tdirection"g\n\x12ReadStreamResponse\x120\n\x06events\x18\x01 \x03(\x0b2\x18.ironflow.v1.StreamEventR\x06events\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\xa6\x02\n\x0bStreamEvent\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12+\n\x04data\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x12%\n\x0eentity_version\x18\x04 \x01(\x03R\rentityVersion\x12\x18\n\x07version\x18\x05 \x01(\x05R\x07version\x128\n\ttimestamp\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x16\n\x06source\x18\x07 \x01(\tR\x06source\x123\n\x08metadata\x18\x08 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata"3\n\x14GetStreamInfoRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId"\x86\x02\n\x15GetStreamInfoResponse\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\x02 \x01(\tR\nentityType\x12\x18\n\x07version\x18\x03 \x01(\x03R\x07version\x12\x1f\n\x0bevent_count\x18\x04 \x01(\x03R\neventCount\x129\n\ncreated_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt"c\n\x12ListStreamsRequest\x12\x1f\n\x0bentity_type\x18\x01 \x01(\tR\nentityType\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x03 \x01(\x05R\x06offset"t\n\x13ListStreamsResponse\x12<\n\x07streams\x18\x01 \x03(\x0b2".ironflow.v1.GetStreamInfoResponseR\x07streams\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\x8d\x01\n\x17GetEntityHistoryRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12!\n\x0cfrom_version\x18\x02 \x01(\x03R\x0bfromVersion\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x1c\n\tdirection\x18\x04 \x01(\tR\tdirection"\xcd\x01\n\x18GetEntityHistoryResponse\x129\n\x07entries\x18\x01 \x03(\x0b2\x1f.ironflow.v1.EntityHistoryEntryR\x07entries\x12\x1f\n\x0bnext_cursor\x18\x02 \x01(\x03R\nnextCursor\x12!\n\x0ctotal_events\x18\x03 \x01(\x03R\x0btotalEvents\x122\n\x04info\x18\x04 \x01(\x0b2\x1e.ironflow.v1.EntityHistoryInfoR\x04info"\x9c\x02\n\x11EntityHistoryInfo\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\x02 \x01(\tR\nentityType\x12\'\n\x0fcurrent_version\x18\x03 \x01(\x03R\x0ecurrentVersion\x12*\n\x11total_event_count\x18\x04 \x01(\x03R\x0ftotalEventCount\x129\n\ncreated_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt"\xd9\x02\n\x12EntityHistoryEntry\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12\x1d\n\nevent_name\x18\x02 \x01(\tR\teventName\x126\n\nevent_data\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\teventData\x12%\n\x0eentity_version\x18\x04 \x01(\x03R\rentityVersion\x12%\n\x0eschema_version\x18\x05 \x01(\x05R\rschemaVersion\x12\x16\n\x06source\x18\x06 \x01(\tR\x06source\x128\n\ttimestamp\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x121\n\x04runs\x18\x08 \x03(\x0b2\x1d.ironflow.v1.EntityHistoryRunR\x04runs"\xab\x02\n\x10EntityHistoryRun\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1f\n\x0bfunction_id\x18\x02 \x01(\tR\nfunctionId\x12\x16\n\x06status\x18\x03 \x01(\tR\x06status\x12\x1f\n\x0bduration_ms\x18\x04 \x01(\x05R\ndurationMs\x129\n\nstarted_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x125\n\x08ended_at\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\x07endedAt\x124\n\x05steps\x18\x07 \x03(\x0b2\x1e.ironflow.v1.EntityHistoryStepR\x05steps"\xbb\x01\n\x11EntityHistoryStep\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n\tstep_type\x18\x03 \x01(\tR\x08stepType\x12\x16\n\x06status\x18\x04 \x01(\tR\x06status\x12\x1f\n\x0bduration_ms\x18\x05 \x01(\x05R\ndurationMs\x12#\n\rerror_message\x18\x06 \x01(\tR\x0cerrorMessage"\xab\x01\n\x15CreateSnapshotRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\x02 \x01(\tR\nentityType\x12%\n\x0eentity_version\x18\x03 \x01(\x03R\rentityVersion\x12-\n\x05state\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x05state"9\n\x16CreateSnapshotResponse\x12\x1f\n\x0bsnapshot_id\x18\x01 \x01(\tR\nsnapshotId"X\n\x12GetSnapshotRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12%\n\x0ebefore_version\x18\x02 \x01(\x03R\rbeforeVersion"\x85\x02\n\x13GetSnapshotResponse\x12\x1f\n\x0bsnapshot_id\x18\x01 \x01(\tR\nsnapshotId\x12\x1b\n\tentity_id\x18\x02 \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\x03 \x01(\tR\nentityType\x12%\n\x0eentity_version\x18\x04 \x01(\x03R\rentityVersion\x12-\n\x05state\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x05state\x129\n\ncreated_at\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt2\x87\x05\n\x13EntityStreamService\x12P\n\x0bAppendEvent\x12\x1f.ironflow.v1.AppendEventRequest\x1a .ironflow.v1.AppendEventResponse\x12R\n\nReadStream\x12\x1e.ironflow.v1.ReadStreamRequest\x1a\x1f.ironflow.v1.ReadStreamResponse"\x03\x90\x02\x01\x12[\n\rGetStreamInfo\x12!.ironflow.v1.GetStreamInfoRequest\x1a".ironflow.v1.GetStreamInfoResponse"\x03\x90\x02\x01\x12U\n\x0bListStreams\x12\x1f.ironflow.v1.ListStreamsRequest\x1a .ironflow.v1.ListStreamsResponse"\x03\x90\x02\x01\x12d\n\x10GetEntityHistory\x12$.ironflow.v1.GetEntityHistoryRequest\x1a%.ironflow.v1.GetEntityHistoryResponse"\x03\x90\x02\x01\x12Y\n\x0eCreateSnapshot\x12".ironflow.v1.CreateSnapshotRequest\x1a#.ironflow.v1.CreateSnapshotResponse\x12U\n\x0bGetSnapshot\x12\x1f.ironflow.v1.GetSnapshotRequest\x1a .ironflow.v1.GetSnapshotResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x1fironflow/v1/entity_stream.proto\x12\x0bironflow.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xf8\x02\n\x12AppendEventRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\x02 \x01(\tR\nentityType\x12\x1d\n\nevent_name\x18\x03 \x01(\tR\teventName\x12+\n\x04data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\t \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12)\n\x10expected_version\x18\x05 \x01(\x03R\x0fexpectedVersion\x12\'\n\x0fidempotency_key\x18\x06 \x01(\tR\x0eidempotencyKey\x12\x18\n\x07version\x18\x07 \x01(\x05R\x07version\x123\n\x08metadata\x18\x08 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata"s\n\x13AppendEventResponse\x12%\n\x0eentity_version\x18\x01 \x01(\x03R\rentityVersion\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId\x12\x1a\n\x08sequence\x18\x03 \x01(\x04R\x08sequence"\x87\x01\n\x11ReadStreamRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12!\n\x0cfrom_version\x18\x02 \x01(\x03R\x0bfromVersion\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x1c\n\tdirection\x18\x04 \x01(\tR\tdirection"g\n\x12ReadStreamResponse\x120\n\x06events\x18\x01 \x03(\x0b2\x18.ironflow.v1.StreamEventR\x06events\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\xdd\x02\n\x0bStreamEvent\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12+\n\x04data\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\t \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12%\n\x0eentity_version\x18\x04 \x01(\x03R\rentityVersion\x12\x18\n\x07version\x18\x05 \x01(\x05R\x07version\x128\n\ttimestamp\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x16\n\x06source\x18\x07 \x01(\tR\x06source\x123\n\x08metadata\x18\x08 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata"3\n\x14GetStreamInfoRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId"\x86\x02\n\x15GetStreamInfoResponse\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\x02 \x01(\tR\nentityType\x12\x18\n\x07version\x18\x03 \x01(\x03R\x07version\x12\x1f\n\x0bevent_count\x18\x04 \x01(\x03R\neventCount\x129\n\ncreated_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt"c\n\x12ListStreamsRequest\x12\x1f\n\x0bentity_type\x18\x01 \x01(\tR\nentityType\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x03 \x01(\x05R\x06offset"t\n\x13ListStreamsResponse\x12<\n\x07streams\x18\x01 \x03(\x0b2".ironflow.v1.GetStreamInfoResponseR\x07streams\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\x8d\x01\n\x17GetEntityHistoryRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12!\n\x0cfrom_version\x18\x02 \x01(\x03R\x0bfromVersion\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x1c\n\tdirection\x18\x04 \x01(\tR\tdirection"\xcd\x01\n\x18GetEntityHistoryResponse\x129\n\x07entries\x18\x01 \x03(\x0b2\x1f.ironflow.v1.EntityHistoryEntryR\x07entries\x12\x1f\n\x0bnext_cursor\x18\x02 \x01(\x03R\nnextCursor\x12!\n\x0ctotal_events\x18\x03 \x01(\x03R\x0btotalEvents\x122\n\x04info\x18\x04 \x01(\x0b2\x1e.ironflow.v1.EntityHistoryInfoR\x04info"\x9c\x02\n\x11EntityHistoryInfo\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\x02 \x01(\tR\nentityType\x12\'\n\x0fcurrent_version\x18\x03 \x01(\x03R\x0ecurrentVersion\x12*\n\x11total_event_count\x18\x04 \x01(\x03R\x0ftotalEventCount\x129\n\ncreated_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt"\x9b\x03\n\x12EntityHistoryEntry\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12\x1d\n\nevent_name\x18\x02 \x01(\tR\teventName\x126\n\nevent_data\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\teventData\x12@\n\x10event_data_value\x18\t \x01(\x0b2\x16.google.protobuf.ValueR\x0eeventDataValue\x12%\n\x0eentity_version\x18\x04 \x01(\x03R\rentityVersion\x12%\n\x0eschema_version\x18\x05 \x01(\x05R\rschemaVersion\x12\x16\n\x06source\x18\x06 \x01(\tR\x06source\x128\n\ttimestamp\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x121\n\x04runs\x18\x08 \x03(\x0b2\x1d.ironflow.v1.EntityHistoryRunR\x04runs"\xab\x02\n\x10EntityHistoryRun\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1f\n\x0bfunction_id\x18\x02 \x01(\tR\nfunctionId\x12\x16\n\x06status\x18\x03 \x01(\tR\x06status\x12\x1f\n\x0bduration_ms\x18\x04 \x01(\x05R\ndurationMs\x129\n\nstarted_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x125\n\x08ended_at\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\x07endedAt\x124\n\x05steps\x18\x07 \x03(\x0b2\x1e.ironflow.v1.EntityHistoryStepR\x05steps"\xbb\x01\n\x11EntityHistoryStep\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n\tstep_type\x18\x03 \x01(\tR\x08stepType\x12\x16\n\x06status\x18\x04 \x01(\tR\x06status\x12\x1f\n\x0bduration_ms\x18\x05 \x01(\x05R\ndurationMs\x12#\n\rerror_message\x18\x06 \x01(\tR\x0cerrorMessage"\xe4\x01\n\x15CreateSnapshotRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\x02 \x01(\tR\nentityType\x12%\n\x0eentity_version\x18\x03 \x01(\x03R\rentityVersion\x12-\n\x05state\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x05state\x127\n\x0bstate_value\x18\x05 \x01(\x0b2\x16.google.protobuf.ValueR\nstateValue"9\n\x16CreateSnapshotResponse\x12\x1f\n\x0bsnapshot_id\x18\x01 \x01(\tR\nsnapshotId"X\n\x12GetSnapshotRequest\x12\x1b\n\tentity_id\x18\x01 \x01(\tR\x08entityId\x12%\n\x0ebefore_version\x18\x02 \x01(\x03R\rbeforeVersion"\xbe\x02\n\x13GetSnapshotResponse\x12\x1f\n\x0bsnapshot_id\x18\x01 \x01(\tR\nsnapshotId\x12\x1b\n\tentity_id\x18\x02 \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\x03 \x01(\tR\nentityType\x12%\n\x0eentity_version\x18\x04 \x01(\x03R\rentityVersion\x12-\n\x05state\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x05state\x127\n\x0bstate_value\x18\x07 \x01(\x0b2\x16.google.protobuf.ValueR\nstateValue\x129\n\ncreated_at\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt2\x87\x05\n\x13EntityStreamService\x12P\n\x0bAppendEvent\x12\x1f.ironflow.v1.AppendEventRequest\x1a .ironflow.v1.AppendEventResponse\x12R\n\nReadStream\x12\x1e.ironflow.v1.ReadStreamRequest\x1a\x1f.ironflow.v1.ReadStreamResponse"\x03\x90\x02\x01\x12[\n\rGetStreamInfo\x12!.ironflow.v1.GetStreamInfoRequest\x1a".ironflow.v1.GetStreamInfoResponse"\x03\x90\x02\x01\x12U\n\x0bListStreams\x12\x1f.ironflow.v1.ListStreamsRequest\x1a .ironflow.v1.ListStreamsResponse"\x03\x90\x02\x01\x12d\n\x10GetEntityHistory\x12$.ironflow.v1.GetEntityHistoryRequest\x1a%.ironflow.v1.GetEntityHistoryResponse"\x03\x90\x02\x01\x12Y\n\x0eCreateSnapshot\x12".ironflow.v1.CreateSnapshotRequest\x1a#.ironflow.v1.CreateSnapshotResponse\x12U\n\x0bGetSnapshot\x12\x1f.ironflow.v1.GetSnapshotRequest\x1a .ironflow.v1.GetSnapshotResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         struct_pb.desc(),
         timestamp_pb.desc(),

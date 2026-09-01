@@ -14,7 +14,7 @@ from protobuf.wkt import struct_pb, timestamp_pb
 
 if TYPE_CHECKING:
     from protobuf import DescFile
-    from protobuf.wkt import Struct, Timestamp
+    from protobuf.wkt import Struct, Timestamp, Value
 
 
 _RegisterSchemaRequestFields: TypeAlias = Literal["event_name", "version", "schema_json", "description"]
@@ -75,7 +75,10 @@ class RegisterSchemaResponse(Message[_RegisterSchemaResponseFields]):
 
     Attributes:
         status:
-            "created" or "updated"
+            "created" or "updated". Advisory only: the server reads before the upsert
+            rather than deriving this from it, so concurrent registrations of the same
+            (event_name, version) can both report "created". The write is still
+            correct — last one wins. Display it; do not branch on it. (#1958)
 
             ```proto
             string status = 1;
@@ -357,7 +360,7 @@ class DeleteSchemaResponse(Message[_DeleteSchemaResponseFields]):
         ) -> None:
             pass
 
-_TestUpcastRequestFields: TypeAlias = Literal["event_name", "from_version", "to_version", "data"]
+_TestUpcastRequestFields: TypeAlias = Literal["event_name", "from_version", "to_version", "data", "data_value"]
 
 class TestUpcastRequest(Message[_TestUpcastRequestFields]):
     """
@@ -382,9 +385,18 @@ class TestUpcastRequest(Message[_TestUpcastRequestFields]):
             ```proto
             optional google.protobuf.Struct data = 4;
             ```
+        data_value:
+            Set ONLY when the payload is not a JSON object, which data cannot
+            represent (#1963). Readers take this when present and fall back to
+            data, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value data_value = 5;
+            ```
     """
 
-    __slots__ = ("event_name", "from_version", "to_version", "data")
+    __slots__ = ("event_name", "from_version", "to_version", "data", "data_value")
 
     if TYPE_CHECKING:
 
@@ -395,6 +407,7 @@ class TestUpcastRequest(Message[_TestUpcastRequestFields]):
             from_version: int = 0,
             to_version: int = 0,
             data: Struct | None = None,
+            data_value: Value | None = None,
         ) -> None:
             pass
 
@@ -402,8 +415,9 @@ class TestUpcastRequest(Message[_TestUpcastRequestFields]):
         from_version: int
         to_version: int
         data: Struct | None
+        data_value: Value | None
 
-_TestUpcastResponseFields: TypeAlias = Literal["data", "steps_applied"]
+_TestUpcastResponseFields: TypeAlias = Literal["data", "data_value", "steps_applied"]
 
 class TestUpcastResponse(Message[_TestUpcastResponseFields]):
     """
@@ -416,13 +430,22 @@ class TestUpcastResponse(Message[_TestUpcastResponseFields]):
             ```proto
             optional google.protobuf.Struct data = 1;
             ```
+        data_value:
+            Set ONLY when the payload is not a JSON object, which data cannot
+            represent (#1963). Readers take this when present and fall back to
+            data, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value data_value = 3;
+            ```
         steps_applied:
             ```proto
             repeated ironflow.v1.UpcastStep steps_applied = 2;
             ```
     """
 
-    __slots__ = ("data", "steps_applied")
+    __slots__ = ("data", "data_value", "steps_applied")
 
     if TYPE_CHECKING:
 
@@ -430,11 +453,13 @@ class TestUpcastResponse(Message[_TestUpcastResponseFields]):
             self,
             *,
             data: Struct | None = None,
+            data_value: Value | None = None,
             steps_applied: list[UpcastStep] | None = None,
         ) -> None:
             pass
 
         data: Struct | None
+        data_value: Value | None
         steps_applied: list[UpcastStep]
 
 _UpcastStepFields: TypeAlias = Literal["from_version", "to_version", "description"]
@@ -477,9 +502,231 @@ class UpcastStep(Message[_UpcastStepFields]):
         to_version: int
         description: str
 
+_CheckEnforcementRequestFields: TypeAlias = Literal["event_name", "traffic_window_hours"]
+
+class CheckEnforcementRequest(Message[_CheckEnforcementRequestFields]):
+    """
+    ```proto
+    message ironflow.v1.CheckEnforcementRequest
+    ```
+
+    Attributes:
+        event_name:
+            Restrict the report to one event name. Empty reports every registered
+            schema in the environment.
+
+            ```proto
+            string event_name = 1;
+            ```
+        traffic_window_hours:
+            Traffic sample window, in hours. 0 means the server default (24).
+
+            ```proto
+            int32 traffic_window_hours = 2;
+            ```
+    """
+
+    __slots__ = ("event_name", "traffic_window_hours")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            event_name: str = "",
+            traffic_window_hours: int = 0,
+        ) -> None:
+            pass
+
+        event_name: str
+        traffic_window_hours: int
+
+_CheckEnforcementResponseFields: TypeAlias = Literal["mode", "schemas", "traffic_window_hours", "total_schemas"]
+
+class CheckEnforcementResponse(Message[_CheckEnforcementResponseFields]):
+    """
+    ```proto
+    message ironflow.v1.CheckEnforcementResponse
+    ```
+
+    Attributes:
+        mode:
+            Server enforcement mode: "off", "warn" or "reject". Read from
+            IRONFLOW_EVENT_SCHEMA_ENFORCEMENT at startup. "off" is the default and is
+            silent no-op #1 — with it set, nothing below is being enforced at all.
+
+            ```proto
+            string mode = 1;
+            ```
+        schemas:
+            ```proto
+            repeated ironflow.v1.SchemaCheck schemas = 2;
+            ```
+        traffic_window_hours:
+            Hours actually sampled, so a client renders the window it got rather than
+            the one it asked for.
+
+            ```proto
+            int32 traffic_window_hours = 3;
+            ```
+        total_schemas:
+            Total registered schemas matching the request. Greater than the length of
+            `schemas` when the report hit its per-request cap — a command whose whole
+            job is "you cannot tell what enforcement is not covering" must not itself
+            silently omit schemas. Narrow with event_name when it does.
+
+            ```proto
+            int32 total_schemas = 4;
+            ```
+    """
+
+    __slots__ = ("mode", "schemas", "traffic_window_hours", "total_schemas")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            mode: str = "",
+            schemas: list[SchemaCheck] | None = None,
+            traffic_window_hours: int = 0,
+            total_schemas: int = 0,
+        ) -> None:
+            pass
+
+        mode: str
+        schemas: list[SchemaCheck]
+        traffic_window_hours: int
+        total_schemas: int
+
+_SchemaCheckFields: TypeAlias = Literal["event_name", "schema_hash", "version", "asserts", "compile_error", "traffic", "traffic_truncated"]
+
+class SchemaCheck(Message[_SchemaCheckFields]):
+    """
+    ```proto
+    message ironflow.v1.SchemaCheck
+    ```
+
+    Attributes:
+        event_name:
+            ```proto
+            string event_name = 1;
+            ```
+        schema_hash:
+            ```proto
+            string schema_hash = 3;
+            ```
+        version:
+            ```proto
+            int32 version = 2;
+            ```
+        asserts:
+            False when the schema accepts every payload — silent no-op #5. A document
+            that compiles is not necessarily one that constrains: Draft 2020-12 reads
+            an unrecognized keyword as an annotation, so a sample payload registered
+            by mistake is a valid schema that enforces nothing. Heuristic; see
+            eventschema.AssertsAnything for what it can and cannot claim.
+
+            ```proto
+            bool asserts = 4;
+            ```
+        compile_error:
+            Set when the stored document will not compile — silent no-op #4.
+            Enforcement fails open on these, so the schema is inert. Registration has
+            compiled documents since #1951; rows predating that were never parsed.
+
+            ```proto
+            string compile_error = 5;
+            ```
+        traffic:
+            Observed traffic for this event NAME, grouped by the version and schema
+            hash the events carry. A version with no matching row means nothing is
+            arriving at the version this schema governs; a row whose schema_hash is
+            empty means those events were never validated.
+
+            ```proto
+            repeated ironflow.v1.SchemaTraffic traffic = 6;
+            ```
+        traffic_truncated:
+            True when the sample hit its scan cap, so counts are a recency window
+            rather than totals.
+
+            ```proto
+            bool traffic_truncated = 7;
+            ```
+    """
+
+    __slots__ = ("event_name", "schema_hash", "version", "asserts", "compile_error", "traffic", "traffic_truncated")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            event_name: str = "",
+            schema_hash: str = "",
+            version: int = 0,
+            asserts: bool = False,
+            compile_error: str = "",
+            traffic: list[SchemaTraffic] | None = None,
+            traffic_truncated: bool = False,
+        ) -> None:
+            pass
+
+        event_name: str
+        schema_hash: str
+        version: int
+        asserts: bool
+        compile_error: str
+        traffic: list[SchemaTraffic]
+        traffic_truncated: bool
+
+_SchemaTrafficFields: TypeAlias = Literal["version", "schema_hash", "count"]
+
+class SchemaTraffic(Message[_SchemaTrafficFields]):
+    """
+    ```proto
+    message ironflow.v1.SchemaTraffic
+    ```
+
+    Attributes:
+        version:
+            ```proto
+            int32 version = 1;
+            ```
+        schema_hash:
+            Empty for events that carry no hash: everything emitted while enforcement
+            skipped, and everything written before the column existed.
+
+            ```proto
+            string schema_hash = 2;
+            ```
+        count:
+            ```proto
+            int64 count = 3;
+            ```
+    """
+
+    __slots__ = ("version", "schema_hash", "count")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            version: int = 0,
+            schema_hash: str = "",
+            count: int = 0,
+        ) -> None:
+            pass
+
+        version: int
+        schema_hash: str
+        count: int
+
 
 _DESC = file_desc(
-    b'\n\x1eironflow/v1/event_schema.proto\x12\x0bironflow.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\x93\x01\n\x15RegisterSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x1f\n\x0bschema_json\x18\x03 \x01(\tR\nschemaJson\x12 \n\x0bdescription\x18\x04 \x01(\tR\x0bdescription"0\n\x16RegisterSchemaResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status"K\n\x10GetSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version"\xca\x01\n\x11GetSchemaResponse\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x1f\n\x0bschema_json\x18\x03 \x01(\tR\nschemaJson\x12 \n\x0bdescription\x18\x04 \x01(\tR\x0bdescription\x129\n\ncreated_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt"a\n\x12ListSchemasRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x03 \x01(\x05R\x06offset"i\n\x13ListSchemasResponse\x121\n\x07schemas\x18\x01 \x03(\x0b2\x17.ironflow.v1.SchemaInfoR\x07schemas\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\xa2\x01\n\nSchemaInfo\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription\x129\n\ncreated_at\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt"N\n\x13DeleteSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version"\x16\n\x14DeleteSchemaResponse"\xa1\x01\n\x11TestUpcastRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12!\n\x0cfrom_version\x18\x02 \x01(\x05R\x0bfromVersion\x12\x1d\n\nto_version\x18\x03 \x01(\x05R\ttoVersion\x12+\n\x04data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x04data"\x7f\n\x12TestUpcastResponse\x12+\n\x04data\x18\x01 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x12<\n\rsteps_applied\x18\x02 \x03(\x0b2\x17.ironflow.v1.UpcastStepR\x0cstepsApplied"p\n\nUpcastStep\x12!\n\x0cfrom_version\x18\x01 \x01(\x05R\x0bfromVersion\x12\x1d\n\nto_version\x18\x02 \x01(\x05R\ttoVersion\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription2\xc0\x03\n\x12EventSchemaService\x12Y\n\x0eRegisterSchema\x12".ironflow.v1.RegisterSchemaRequest\x1a#.ironflow.v1.RegisterSchemaResponse\x12O\n\tGetSchema\x12\x1d.ironflow.v1.GetSchemaRequest\x1a\x1e.ironflow.v1.GetSchemaResponse"\x03\x90\x02\x01\x12U\n\x0bListSchemas\x12\x1f.ironflow.v1.ListSchemasRequest\x1a .ironflow.v1.ListSchemasResponse"\x03\x90\x02\x01\x12S\n\x0cDeleteSchema\x12 .ironflow.v1.DeleteSchemaRequest\x1a!.ironflow.v1.DeleteSchemaResponse\x12R\n\nTestUpcast\x12\x1e.ironflow.v1.TestUpcastRequest\x1a\x1f.ironflow.v1.TestUpcastResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x1eironflow/v1/event_schema.proto\x12\x0bironflow.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\x93\x01\n\x15RegisterSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x1f\n\x0bschema_json\x18\x03 \x01(\tR\nschemaJson\x12 \n\x0bdescription\x18\x04 \x01(\tR\x0bdescription"0\n\x16RegisterSchemaResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status"K\n\x10GetSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version"\xca\x01\n\x11GetSchemaResponse\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x1f\n\x0bschema_json\x18\x03 \x01(\tR\nschemaJson\x12 \n\x0bdescription\x18\x04 \x01(\tR\x0bdescription\x129\n\ncreated_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt"a\n\x12ListSchemasRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x03 \x01(\x05R\x06offset"i\n\x13ListSchemasResponse\x121\n\x07schemas\x18\x01 \x03(\x0b2\x17.ironflow.v1.SchemaInfoR\x07schemas\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\xa2\x01\n\nSchemaInfo\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription\x129\n\ncreated_at\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt"N\n\x13DeleteSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version"\x16\n\x14DeleteSchemaResponse"\xd8\x01\n\x11TestUpcastRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12!\n\x0cfrom_version\x18\x02 \x01(\x05R\x0bfromVersion\x12\x1d\n\nto_version\x18\x03 \x01(\x05R\ttoVersion\x12+\n\x04data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x05 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue"\xb6\x01\n\x12TestUpcastResponse\x12+\n\x04data\x18\x01 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x03 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12<\n\rsteps_applied\x18\x02 \x03(\x0b2\x17.ironflow.v1.UpcastStepR\x0cstepsApplied"p\n\nUpcastStep\x12!\n\x0cfrom_version\x18\x01 \x01(\x05R\x0bfromVersion\x12\x1d\n\nto_version\x18\x02 \x01(\x05R\ttoVersion\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription"j\n\x17CheckEnforcementRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x120\n\x14traffic_window_hours\x18\x02 \x01(\x05R\x12trafficWindowHours"\xb9\x01\n\x18CheckEnforcementResponse\x12\x12\n\x04mode\x18\x01 \x01(\tR\x04mode\x122\n\x07schemas\x18\x02 \x03(\x0b2\x18.ironflow.v1.SchemaCheckR\x07schemas\x120\n\x14traffic_window_hours\x18\x03 \x01(\x05R\x12trafficWindowHours\x12#\n\rtotal_schemas\x18\x04 \x01(\x05R\x0ctotalSchemas"\x89\x02\n\x0bSchemaCheck\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x1f\n\x0bschema_hash\x18\x03 \x01(\tR\nschemaHash\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x18\n\x07asserts\x18\x04 \x01(\x08R\x07asserts\x12#\n\rcompile_error\x18\x05 \x01(\tR\x0ccompileError\x124\n\x07traffic\x18\x06 \x03(\x0b2\x1a.ironflow.v1.SchemaTrafficR\x07traffic\x12+\n\x11traffic_truncated\x18\x07 \x01(\x08R\x10trafficTruncated"`\n\rSchemaTraffic\x12\x18\n\x07version\x18\x01 \x01(\x05R\x07version\x12\x1f\n\x0bschema_hash\x18\x02 \x01(\tR\nschemaHash\x12\x14\n\x05count\x18\x03 \x01(\x03R\x05count2\xa6\x04\n\x12EventSchemaService\x12Y\n\x0eRegisterSchema\x12".ironflow.v1.RegisterSchemaRequest\x1a#.ironflow.v1.RegisterSchemaResponse\x12O\n\tGetSchema\x12\x1d.ironflow.v1.GetSchemaRequest\x1a\x1e.ironflow.v1.GetSchemaResponse"\x03\x90\x02\x01\x12U\n\x0bListSchemas\x12\x1f.ironflow.v1.ListSchemasRequest\x1a .ironflow.v1.ListSchemasResponse"\x03\x90\x02\x01\x12S\n\x0cDeleteSchema\x12 .ironflow.v1.DeleteSchemaRequest\x1a!.ironflow.v1.DeleteSchemaResponse\x12R\n\nTestUpcast\x12\x1e.ironflow.v1.TestUpcastRequest\x1a\x1f.ironflow.v1.TestUpcastResponse"\x03\x90\x02\x01\x12d\n\x10CheckEnforcement\x12$.ironflow.v1.CheckEnforcementRequest\x1a%.ironflow.v1.CheckEnforcementResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         struct_pb.desc(),
         timestamp_pb.desc(),
@@ -497,6 +744,10 @@ _DESC = file_desc(
         "TestUpcastRequest": TestUpcastRequest,
         "TestUpcastResponse": TestUpcastResponse,
         "UpcastStep": UpcastStep,
+        "CheckEnforcementRequest": CheckEnforcementRequest,
+        "CheckEnforcementResponse": CheckEnforcementResponse,
+        "SchemaCheck": SchemaCheck,
+        "SchemaTraffic": SchemaTraffic,
     },
 )
 

@@ -16,7 +16,7 @@ from . import types_pb
 
 if TYPE_CHECKING:
     from protobuf import DescFile, Oneof
-    from protobuf.wkt import Struct, Timestamp
+    from protobuf.wkt import Struct, Timestamp, Value
 
     from .types_pb import Error, Event, StepType
 
@@ -354,7 +354,7 @@ class StepStarted(Message[_StepStartedFields]):
         execution_seq: int
         lease_token: str
 
-_StepCompletedFields: TypeAlias = Literal["job_id", "step_id", "output", "duration_ms", "execution_seq", "lease_token"]
+_StepCompletedFields: TypeAlias = Literal["job_id", "step_id", "output", "output_value", "duration_ms", "execution_seq", "lease_token"]
 
 class StepCompleted(Message[_StepCompletedFields]):
     """
@@ -375,6 +375,15 @@ class StepCompleted(Message[_StepCompletedFields]):
             ```proto
             optional google.protobuf.Struct output = 3;
             ```
+        output_value:
+            Set ONLY when the payload is not a JSON object, which output cannot
+            represent (#1963). Readers take this when present and fall back to
+            output, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value output_value = 7;
+            ```
         duration_ms:
             ```proto
             int32 duration_ms = 4;
@@ -389,7 +398,7 @@ class StepCompleted(Message[_StepCompletedFields]):
             ```
     """
 
-    __slots__ = ("job_id", "step_id", "output", "duration_ms", "execution_seq", "lease_token")
+    __slots__ = ("job_id", "step_id", "output", "output_value", "duration_ms", "execution_seq", "lease_token")
 
     if TYPE_CHECKING:
 
@@ -399,6 +408,7 @@ class StepCompleted(Message[_StepCompletedFields]):
             job_id: str = "",
             step_id: str = "",
             output: Struct | None = None,
+            output_value: Value | None = None,
             duration_ms: int = 0,
             execution_seq: int = 0,
             lease_token: str = "",
@@ -408,6 +418,7 @@ class StepCompleted(Message[_StepCompletedFields]):
         job_id: str
         step_id: str
         output: Struct | None
+        output_value: Value | None
         duration_ms: int
         execution_seq: int
         lease_token: str
@@ -596,7 +607,7 @@ class WaitEventYield(Message[_WaitEventYieldFields]):
         match_value: str
         timeout: Timestamp | None
 
-_JobCompletedFields: TypeAlias = Literal["job_id", "output", "duration_ms", "execution_seq", "lease_token"]
+_JobCompletedFields: TypeAlias = Literal["job_id", "output", "output_value", "duration_ms", "execution_seq", "lease_token"]
 
 class JobCompleted(Message[_JobCompletedFields]):
     """
@@ -613,6 +624,15 @@ class JobCompleted(Message[_JobCompletedFields]):
             ```proto
             optional google.protobuf.Struct output = 2;
             ```
+        output_value:
+            Set ONLY when the payload is not a JSON object, which output cannot
+            represent (#1963). Readers take this when present and fall back to
+            output, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value output_value = 6;
+            ```
         duration_ms:
             ```proto
             int32 duration_ms = 3;
@@ -627,7 +647,7 @@ class JobCompleted(Message[_JobCompletedFields]):
             ```
     """
 
-    __slots__ = ("job_id", "output", "duration_ms", "execution_seq", "lease_token")
+    __slots__ = ("job_id", "output", "output_value", "duration_ms", "execution_seq", "lease_token")
 
     if TYPE_CHECKING:
 
@@ -636,6 +656,7 @@ class JobCompleted(Message[_JobCompletedFields]):
             *,
             job_id: str = "",
             output: Struct | None = None,
+            output_value: Value | None = None,
             duration_ms: int = 0,
             execution_seq: int = 0,
             lease_token: str = "",
@@ -644,6 +665,7 @@ class JobCompleted(Message[_JobCompletedFields]):
 
         job_id: str
         output: Struct | None
+        output_value: Value | None
         duration_ms: int
         execution_seq: int
         lease_token: str
@@ -709,7 +731,7 @@ class JobFailed(Message[_JobFailedFields]):
         execution_seq: int
         lease_token: str
 
-_ExecutedStepFields: TypeAlias = Literal["id", "name", "type", "status", "output", "error", "compensation_for", "duration_ms"]
+_ExecutedStepFields: TypeAlias = Literal["id", "name", "type", "status", "output", "output_value", "error", "compensation_for", "duration_ms"]
 
 class ExecutedStep(Message[_ExecutedStepFields]):
     """
@@ -745,6 +767,15 @@ class ExecutedStep(Message[_ExecutedStepFields]):
             ```proto
             optional google.protobuf.Struct output = 5;
             ```
+        output_value:
+            Set ONLY when the payload is not a JSON object, which output cannot
+            represent (#1963). Readers take this when present and fall back to
+            output, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value output_value = 9;
+            ```
         error:
             ```proto
             optional ironflow.v1.Error error = 6;
@@ -761,7 +792,7 @@ class ExecutedStep(Message[_ExecutedStepFields]):
             ```
     """
 
-    __slots__ = ("id", "name", "type", "status", "output", "error", "compensation_for", "duration_ms")
+    __slots__ = ("id", "name", "type", "status", "output", "output_value", "error", "compensation_for", "duration_ms")
 
     if TYPE_CHECKING:
 
@@ -773,6 +804,7 @@ class ExecutedStep(Message[_ExecutedStepFields]):
             type: str = "",
             status: str = "",
             output: Struct | None = None,
+            output_value: Value | None = None,
             error: Error | None = None,
             compensation_for: str = "",
             duration_ms: int = 0,
@@ -784,6 +816,7 @@ class ExecutedStep(Message[_ExecutedStepFields]):
         type: str
         status: str
         output: Struct | None
+        output_value: Value | None
         error: Error | None
         compensation_for: str
         duration_ms: int
@@ -1069,7 +1102,7 @@ class JobAssignment(Message[_JobAssignmentFields]):
         lease_token: str
         lease_expires_at: Timestamp | None
 
-_CompletedStepFields: TypeAlias = Literal["step_id", "name", "output"]
+_CompletedStepFields: TypeAlias = Literal["step_id", "name", "output", "output_value"]
 
 class CompletedStep(Message[_CompletedStepFields]):
     """
@@ -1090,9 +1123,18 @@ class CompletedStep(Message[_CompletedStepFields]):
             ```proto
             optional google.protobuf.Struct output = 3;
             ```
+        output_value:
+            Set ONLY when the payload is not a JSON object, which output cannot
+            represent (#1963). Readers take this when present and fall back to
+            output, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value output_value = 4;
+            ```
     """
 
-    __slots__ = ("step_id", "name", "output")
+    __slots__ = ("step_id", "name", "output", "output_value")
 
     if TYPE_CHECKING:
 
@@ -1102,12 +1144,14 @@ class CompletedStep(Message[_CompletedStepFields]):
             step_id: str = "",
             name: str = "",
             output: Struct | None = None,
+            output_value: Value | None = None,
         ) -> None:
             pass
 
         step_id: str
         name: str
         output: Struct | None
+        output_value: Value | None
 
 _JobContextFields: TypeAlias = Literal["trace_id", "metadata", "secrets"]
 
@@ -1189,7 +1233,7 @@ class StepAck(Message[_StepAckFields]):
         accepted: bool
         error: str
 
-_ResumeJobFields: TypeAlias = Literal["job_id", "step_id", "resume_type", "resume_data"]
+_ResumeJobFields: TypeAlias = Literal["job_id", "step_id", "resume_type", "resume_data", "resume_data_value"]
 
 class ResumeJob(Message[_ResumeJobFields]):
     """
@@ -1218,9 +1262,18 @@ class ResumeJob(Message[_ResumeJobFields]):
             ```proto
             optional google.protobuf.Struct resume_data = 4;
             ```
+        resume_data_value:
+            Set ONLY when the payload is not a JSON object, which resume_data cannot
+            represent (#1963). Readers take this when present and fall back to
+            resume_data, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value resume_data_value = 5;
+            ```
     """
 
-    __slots__ = ("job_id", "step_id", "resume_type", "resume_data")
+    __slots__ = ("job_id", "step_id", "resume_type", "resume_data", "resume_data_value")
 
     if TYPE_CHECKING:
 
@@ -1231,6 +1284,7 @@ class ResumeJob(Message[_ResumeJobFields]):
             step_id: str = "",
             resume_type: str = "",
             resume_data: Struct | None = None,
+            resume_data_value: Value | None = None,
         ) -> None:
             pass
 
@@ -1238,6 +1292,7 @@ class ResumeJob(Message[_ResumeJobFields]):
         step_id: str
         resume_type: str
         resume_data: Struct | None
+        resume_data_value: Value | None
 
 _CancelJobFields: TypeAlias = Literal["job_id", "reason"]
 
@@ -1347,7 +1402,7 @@ class LeaseState(Enum):
 
 
 _DESC = file_desc(
-    b'\n\x18ironflow/v1/worker.proto\x12\x0bironflow.v1\x1a\x17ironflow/v1/types.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xbd\x04\n\rWorkerMessage\x129\n\x08register\x18\x01 \x01(\x0b2\x1b.ironflow.v1.WorkerRegisterH\x00R\x08register\x12<\n\theartbeat\x18\x02 \x01(\x0b2\x1c.ironflow.v1.WorkerHeartbeatH\x00R\theartbeat\x12=\n\x0cstep_started\x18\x03 \x01(\x0b2\x18.ironflow.v1.StepStartedH\x00R\x0bstepStarted\x12C\n\x0estep_completed\x18\x04 \x01(\x0b2\x1a.ironflow.v1.StepCompletedH\x00R\rstepCompleted\x12:\n\x0bstep_failed\x18\x05 \x01(\x0b2\x17.ironflow.v1.StepFailedH\x00R\nstepFailed\x12=\n\x0cstep_yielded\x18\x06 \x01(\x0b2\x18.ironflow.v1.StepYieldedH\x00R\x0bstepYielded\x12@\n\rjob_completed\x18\x07 \x01(\x0b2\x19.ironflow.v1.JobCompletedH\x00R\x0cjobCompleted\x127\n\njob_failed\x18\x08 \x01(\x0b2\x16.ironflow.v1.JobFailedH\x00R\tjobFailed\x12.\n\x07job_ack\x18\t \x01(\x0b2\x13.ironflow.v1.JobAckH\x00R\x06jobAckB\t\n\x07payload"\xce\x02\n\x0eWorkerRegister\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x12\x1a\n\x08hostname\x18\x02 \x01(\tR\x08hostname\x12!\n\x0cfunction_ids\x18\x03 \x03(\tR\x0bfunctionIds\x12.\n\x13max_concurrent_jobs\x18\x04 \x01(\x05R\x11maxConcurrentJobs\x12?\n\x06labels\x18\x05 \x03(\x0b2\'.ironflow.v1.WorkerRegister.LabelsEntryR\x06labels\x124\n\x07version\x18\x06 \x01(\x0b2\x1a.ironflow.v1.WorkerVersionR\x07version\x1a9\n\x0bLabelsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01";\n\rWorkerVersion\x12\x10\n\x03sdk\x18\x01 \x01(\tR\x03sdk\x12\x18\n\x07runtime\x18\x02 \x01(\tR\x07runtime"\xb1\x01\n\x0fWorkerHeartbeat\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x12\x1f\n\x0bactive_jobs\x18\x02 \x01(\x05R\nactiveJobs\x12*\n\x04jobs\x18\x03 \x03(\x0b2\x16.ironflow.v1.ActiveJobR\x04jobs\x124\n\x07metrics\x18\x04 \x01(\x0b2\x1a.ironflow.v1.WorkerMetricsR\x07metrics"\xba\x01\n\tActiveJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x129\n\nstarted_at\x18\x02 \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x12\x15\n\x06run_id\x18\x03 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x04 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x05 \x01(\tR\nleaseToken"\x9f\x01\n\rWorkerMetrics\x12\x1f\n\x0bcpu_percent\x18\x01 \x01(\x01R\ncpuPercent\x12%\n\x0ememory_percent\x18\x02 \x01(\x01R\rmemoryPercent\x12%\n\x0ejobs_completed\x18\x03 \x01(\x03R\rjobsCompleted\x12\x1f\n\x0bjobs_failed\x18\x04 \x01(\x03R\njobsFailed"\xcb\x01\n\x0bStepStarted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x122\n\tstep_type\x18\x04 \x01(\x0e2\x15.ironflow.v1.StepTypeR\x08stepType\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\xd7\x01\n\rStepCompleted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12/\n\x06output\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x12\x1f\n\x0bduration_ms\x18\x04 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\xcd\x01\n\nStepFailed\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12(\n\x05error\x18\x03 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x1f\n\x0bduration_ms\x18\x04 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\x80\x02\n\x0bStepYielded\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12/\n\x05sleep\x18\x03 \x01(\x0b2\x17.ironflow.v1.SleepYieldH\x00R\x05sleep\x12<\n\nwait_event\x18\x04 \x01(\x0b2\x1b.ironflow.v1.WaitEventYieldH\x00R\twaitEvent\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseTokenB\x0c\n\nyield_info">\n\nSleepYield\x120\n\x05until\x18\x01 \x01(\x0b2\x1a.google.protobuf.TimestampR\x05until"\xb1\x01\n\x0eWaitEventYield\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12)\n\x10match_expression\x18\x02 \x01(\tR\x0fmatchExpression\x12\x1f\n\x0bmatch_value\x18\x03 \x01(\tR\nmatchValue\x124\n\x07timeout\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\x07timeout"\xbd\x01\n\x0cJobCompleted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12/\n\x06output\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x12\x1f\n\x0bduration_ms\x18\x03 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x04 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x05 \x01(\tR\nleaseToken"\xe4\x01\n\tJobFailed\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12(\n\x05error\x18\x02 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x1f\n\x0bduration_ms\x18\x03 \x01(\x05R\ndurationMs\x12/\n\x05steps\x18\x04 \x03(\x0b2\x19.ironflow.v1.ExecutedStepR\x05steps\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\x85\x02\n\x0cExecutedStep\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n\x04type\x18\x03 \x01(\tR\x04type\x12\x16\n\x06status\x18\x04 \x01(\tR\x06status\x12/\n\x06output\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x12(\n\x05error\x18\x06 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12)\n\x10compensation_for\x18\x07 \x01(\tR\x0fcompensationFor\x12\x1f\n\x0bduration_ms\x18\x08 \x01(\x05R\ndurationMs"|\n\x06JobAck\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x03 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x04 \x01(\tR\nleaseToken"\x9f\x03\n\rEngineMessage\x12?\n\nregistered\x18\x01 \x01(\x0b2\x1d.ironflow.v1.WorkerRegisteredH\x00R\nregistered\x12.\n\x03job\x18\x02 \x01(\x0b2\x1a.ironflow.v1.JobAssignmentH\x00R\x03job\x121\n\x08step_ack\x18\x03 \x01(\x0b2\x14.ironflow.v1.StepAckH\x00R\x07stepAck\x120\n\x06resume\x18\x04 \x01(\x0b2\x16.ironflow.v1.ResumeJobH\x00R\x06resume\x120\n\x06cancel\x18\x05 \x01(\x0b2\x16.ironflow.v1.CancelJobH\x00R\x06cancel\x123\n\x08shutdown\x18\x06 \x01(\x0b2\x15.ironflow.v1.ShutdownH\x00R\x08shutdown\x12F\n\rlease_refresh\x18\x07 \x01(\x0b2\x1f.ironflow.v1.LeaseRefreshResultH\x00R\x0cleaseRefreshB\t\n\x07payload"Q\n\x12LeaseRefreshResult\x12;\n\x08segments\x18\x01 \x03(\x0b2\x1f.ironflow.v1.SegmentLeaseStatusR\x08segments"\x7f\n\x12SegmentLeaseStatus\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x02 \x01(\x03R\x0cexecutionSeq\x12-\n\x05state\x18\x03 \x01(\x0e2\x17.ironflow.v1.LeaseStateR\x05state"c\n\x10WorkerRegistered\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x122\n\x15heartbeat_interval_ms\x18\x02 \x01(\x05R\x13heartbeatIntervalMs"\xc1\x03\n\rJobAssignment\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n\x0bfunction_id\x18\x03 \x01(\tR\nfunctionId\x12(\n\x05event\x18\x04 \x01(\x0b2\x12.ironflow.v1.EventR\x05event\x12C\n\x0fcompleted_steps\x18\x05 \x03(\x0b2\x1a.ironflow.v1.CompletedStepR\x0ecompletedSteps\x12\x19\n\x08actor_id\x18\x06 \x01(\tR\x07actorId\x12\x18\n\x07attempt\x18\x07 \x01(\x05R\x07attempt\x121\n\x07context\x18\x08 \x01(\x0b2\x17.ironflow.v1.JobContextR\x07context\x12#\n\rexecution_seq\x18\t \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\n \x01(\tR\nleaseToken\x12D\n\x10lease_expires_at\x18\x0b \x01(\x0b2\x1a.google.protobuf.TimestampR\x0eleaseExpiresAt"m\n\rCompletedStep\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12/\n\x06output\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x06output"\xa3\x02\n\nJobContext\x12\x19\n\x08trace_id\x18\x01 \x01(\tR\x07traceId\x12A\n\x08metadata\x18\x02 \x03(\x0b2%.ironflow.v1.JobContext.MetadataEntryR\x08metadata\x12>\n\x07secrets\x18\x03 \x03(\x0b2$.ironflow.v1.JobContext.SecretsEntryR\x07secrets\x1a;\n\rMetadataEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a:\n\x0cSecretsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01"T\n\x07StepAck\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\x1a\n\x08accepted\x18\x02 \x01(\x08R\x08accepted\x12\x14\n\x05error\x18\x03 \x01(\tR\x05error"\x96\x01\n\tResumeJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12\x1f\n\x0bresume_type\x18\x03 \x01(\tR\nresumeType\x128\n\x0bresume_data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\nresumeData":\n\tCancelJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n\x06reason\x18\x02 \x01(\tR\x06reason"L\n\x08Shutdown\x12\x16\n\x06reason\x18\x01 \x01(\tR\x06reason\x12(\n\x10drain_timeout_ms\x18\x02 \x01(\x05R\x0edrainTimeoutMs*t\n\nLeaseState\x12\x1b\n\x17LEASE_STATE_UNSPECIFIED\x10\x00\x12\x19\n\x15LEASE_STATE_REFRESHED\x10\x01\x12\x15\n\x11LEASE_STATE_STALE\x10\x02\x12\x17\n\x13LEASE_STATE_UNKNOWN\x10\x032V\n\rWorkerService\x12E\n\x07Connect\x12\x1a.ironflow.v1.WorkerMessage\x1a\x1a.ironflow.v1.EngineMessage(\x010\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x18ironflow/v1/worker.proto\x12\x0bironflow.v1\x1a\x17ironflow/v1/types.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xbd\x04\n\rWorkerMessage\x129\n\x08register\x18\x01 \x01(\x0b2\x1b.ironflow.v1.WorkerRegisterH\x00R\x08register\x12<\n\theartbeat\x18\x02 \x01(\x0b2\x1c.ironflow.v1.WorkerHeartbeatH\x00R\theartbeat\x12=\n\x0cstep_started\x18\x03 \x01(\x0b2\x18.ironflow.v1.StepStartedH\x00R\x0bstepStarted\x12C\n\x0estep_completed\x18\x04 \x01(\x0b2\x1a.ironflow.v1.StepCompletedH\x00R\rstepCompleted\x12:\n\x0bstep_failed\x18\x05 \x01(\x0b2\x17.ironflow.v1.StepFailedH\x00R\nstepFailed\x12=\n\x0cstep_yielded\x18\x06 \x01(\x0b2\x18.ironflow.v1.StepYieldedH\x00R\x0bstepYielded\x12@\n\rjob_completed\x18\x07 \x01(\x0b2\x19.ironflow.v1.JobCompletedH\x00R\x0cjobCompleted\x127\n\njob_failed\x18\x08 \x01(\x0b2\x16.ironflow.v1.JobFailedH\x00R\tjobFailed\x12.\n\x07job_ack\x18\t \x01(\x0b2\x13.ironflow.v1.JobAckH\x00R\x06jobAckB\t\n\x07payload"\xce\x02\n\x0eWorkerRegister\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x12\x1a\n\x08hostname\x18\x02 \x01(\tR\x08hostname\x12!\n\x0cfunction_ids\x18\x03 \x03(\tR\x0bfunctionIds\x12.\n\x13max_concurrent_jobs\x18\x04 \x01(\x05R\x11maxConcurrentJobs\x12?\n\x06labels\x18\x05 \x03(\x0b2\'.ironflow.v1.WorkerRegister.LabelsEntryR\x06labels\x124\n\x07version\x18\x06 \x01(\x0b2\x1a.ironflow.v1.WorkerVersionR\x07version\x1a9\n\x0bLabelsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01";\n\rWorkerVersion\x12\x10\n\x03sdk\x18\x01 \x01(\tR\x03sdk\x12\x18\n\x07runtime\x18\x02 \x01(\tR\x07runtime"\xb1\x01\n\x0fWorkerHeartbeat\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x12\x1f\n\x0bactive_jobs\x18\x02 \x01(\x05R\nactiveJobs\x12*\n\x04jobs\x18\x03 \x03(\x0b2\x16.ironflow.v1.ActiveJobR\x04jobs\x124\n\x07metrics\x18\x04 \x01(\x0b2\x1a.ironflow.v1.WorkerMetricsR\x07metrics"\xba\x01\n\tActiveJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x129\n\nstarted_at\x18\x02 \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x12\x15\n\x06run_id\x18\x03 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x04 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x05 \x01(\tR\nleaseToken"\x9f\x01\n\rWorkerMetrics\x12\x1f\n\x0bcpu_percent\x18\x01 \x01(\x01R\ncpuPercent\x12%\n\x0ememory_percent\x18\x02 \x01(\x01R\rmemoryPercent\x12%\n\x0ejobs_completed\x18\x03 \x01(\x03R\rjobsCompleted\x12\x1f\n\x0bjobs_failed\x18\x04 \x01(\x03R\njobsFailed"\xcb\x01\n\x0bStepStarted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x122\n\tstep_type\x18\x04 \x01(\x0e2\x15.ironflow.v1.StepTypeR\x08stepType\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\x92\x02\n\rStepCompleted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12/\n\x06output\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x07 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12\x1f\n\x0bduration_ms\x18\x04 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\xcd\x01\n\nStepFailed\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12(\n\x05error\x18\x03 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x1f\n\x0bduration_ms\x18\x04 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\x80\x02\n\x0bStepYielded\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12/\n\x05sleep\x18\x03 \x01(\x0b2\x17.ironflow.v1.SleepYieldH\x00R\x05sleep\x12<\n\nwait_event\x18\x04 \x01(\x0b2\x1b.ironflow.v1.WaitEventYieldH\x00R\twaitEvent\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseTokenB\x0c\n\nyield_info">\n\nSleepYield\x120\n\x05until\x18\x01 \x01(\x0b2\x1a.google.protobuf.TimestampR\x05until"\xb1\x01\n\x0eWaitEventYield\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12)\n\x10match_expression\x18\x02 \x01(\tR\x0fmatchExpression\x12\x1f\n\x0bmatch_value\x18\x03 \x01(\tR\nmatchValue\x124\n\x07timeout\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\x07timeout"\xf8\x01\n\x0cJobCompleted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12/\n\x06output\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x06 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12\x1f\n\x0bduration_ms\x18\x03 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x04 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x05 \x01(\tR\nleaseToken"\xe4\x01\n\tJobFailed\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12(\n\x05error\x18\x02 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x1f\n\x0bduration_ms\x18\x03 \x01(\x05R\ndurationMs\x12/\n\x05steps\x18\x04 \x03(\x0b2\x19.ironflow.v1.ExecutedStepR\x05steps\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\xc0\x02\n\x0cExecutedStep\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n\x04type\x18\x03 \x01(\tR\x04type\x12\x16\n\x06status\x18\x04 \x01(\tR\x06status\x12/\n\x06output\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\t \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12(\n\x05error\x18\x06 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12)\n\x10compensation_for\x18\x07 \x01(\tR\x0fcompensationFor\x12\x1f\n\x0bduration_ms\x18\x08 \x01(\x05R\ndurationMs"|\n\x06JobAck\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x03 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x04 \x01(\tR\nleaseToken"\x9f\x03\n\rEngineMessage\x12?\n\nregistered\x18\x01 \x01(\x0b2\x1d.ironflow.v1.WorkerRegisteredH\x00R\nregistered\x12.\n\x03job\x18\x02 \x01(\x0b2\x1a.ironflow.v1.JobAssignmentH\x00R\x03job\x121\n\x08step_ack\x18\x03 \x01(\x0b2\x14.ironflow.v1.StepAckH\x00R\x07stepAck\x120\n\x06resume\x18\x04 \x01(\x0b2\x16.ironflow.v1.ResumeJobH\x00R\x06resume\x120\n\x06cancel\x18\x05 \x01(\x0b2\x16.ironflow.v1.CancelJobH\x00R\x06cancel\x123\n\x08shutdown\x18\x06 \x01(\x0b2\x15.ironflow.v1.ShutdownH\x00R\x08shutdown\x12F\n\rlease_refresh\x18\x07 \x01(\x0b2\x1f.ironflow.v1.LeaseRefreshResultH\x00R\x0cleaseRefreshB\t\n\x07payload"Q\n\x12LeaseRefreshResult\x12;\n\x08segments\x18\x01 \x03(\x0b2\x1f.ironflow.v1.SegmentLeaseStatusR\x08segments"\x7f\n\x12SegmentLeaseStatus\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x02 \x01(\x03R\x0cexecutionSeq\x12-\n\x05state\x18\x03 \x01(\x0e2\x17.ironflow.v1.LeaseStateR\x05state"c\n\x10WorkerRegistered\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x122\n\x15heartbeat_interval_ms\x18\x02 \x01(\x05R\x13heartbeatIntervalMs"\xc1\x03\n\rJobAssignment\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n\x0bfunction_id\x18\x03 \x01(\tR\nfunctionId\x12(\n\x05event\x18\x04 \x01(\x0b2\x12.ironflow.v1.EventR\x05event\x12C\n\x0fcompleted_steps\x18\x05 \x03(\x0b2\x1a.ironflow.v1.CompletedStepR\x0ecompletedSteps\x12\x19\n\x08actor_id\x18\x06 \x01(\tR\x07actorId\x12\x18\n\x07attempt\x18\x07 \x01(\x05R\x07attempt\x121\n\x07context\x18\x08 \x01(\x0b2\x17.ironflow.v1.JobContextR\x07context\x12#\n\rexecution_seq\x18\t \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\n \x01(\tR\nleaseToken\x12D\n\x10lease_expires_at\x18\x0b \x01(\x0b2\x1a.google.protobuf.TimestampR\x0eleaseExpiresAt"\xa8\x01\n\rCompletedStep\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12/\n\x06output\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x04 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue"\xa3\x02\n\nJobContext\x12\x19\n\x08trace_id\x18\x01 \x01(\tR\x07traceId\x12A\n\x08metadata\x18\x02 \x03(\x0b2%.ironflow.v1.JobContext.MetadataEntryR\x08metadata\x12>\n\x07secrets\x18\x03 \x03(\x0b2$.ironflow.v1.JobContext.SecretsEntryR\x07secrets\x1a;\n\rMetadataEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a:\n\x0cSecretsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01"T\n\x07StepAck\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\x1a\n\x08accepted\x18\x02 \x01(\x08R\x08accepted\x12\x14\n\x05error\x18\x03 \x01(\tR\x05error"\xda\x01\n\tResumeJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12\x1f\n\x0bresume_type\x18\x03 \x01(\tR\nresumeType\x128\n\x0bresume_data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\nresumeData\x12B\n\x11resume_data_value\x18\x05 \x01(\x0b2\x16.google.protobuf.ValueR\x0fresumeDataValue":\n\tCancelJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n\x06reason\x18\x02 \x01(\tR\x06reason"L\n\x08Shutdown\x12\x16\n\x06reason\x18\x01 \x01(\tR\x06reason\x12(\n\x10drain_timeout_ms\x18\x02 \x01(\x05R\x0edrainTimeoutMs*t\n\nLeaseState\x12\x1b\n\x17LEASE_STATE_UNSPECIFIED\x10\x00\x12\x19\n\x15LEASE_STATE_REFRESHED\x10\x01\x12\x15\n\x11LEASE_STATE_STALE\x10\x02\x12\x17\n\x13LEASE_STATE_UNKNOWN\x10\x032V\n\rWorkerService\x12E\n\x07Connect\x12\x1a.ironflow.v1.WorkerMessage\x1a\x1a.ironflow.v1.EngineMessage(\x010\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         types_pb.desc(),
         struct_pb.desc(),

@@ -193,7 +193,7 @@ class PollProjectionEventsRequest(Message[_PollProjectionEventsRequestFields]):
         batch_size: int
         partition: str
 
-_ProjectionEventFields: TypeAlias = Literal["id", "name", "data", "seq", "timestamp", "source", "metadata", "kind"]
+_ProjectionEventFields: TypeAlias = Literal["id", "name", "data", "data_value", "seq", "timestamp", "source", "metadata", "kind"]
 
 class ProjectionEvent(Message[_ProjectionEventFields]):
     """
@@ -213,6 +213,15 @@ class ProjectionEvent(Message[_ProjectionEventFields]):
         data:
             ```proto
             optional google.protobuf.Struct data = 3;
+            ```
+        data_value:
+            Set ONLY when the payload is not a JSON object, which data cannot
+            represent (#1963). Readers take this when present and fall back to
+            data, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value data_value = 9;
             ```
         seq:
             ```proto
@@ -239,7 +248,7 @@ class ProjectionEvent(Message[_ProjectionEventFields]):
             ```
     """
 
-    __slots__ = ("id", "name", "data", "seq", "timestamp", "source", "metadata", "kind")
+    __slots__ = ("id", "name", "data", "data_value", "seq", "timestamp", "source", "metadata", "kind")
 
     if TYPE_CHECKING:
 
@@ -249,6 +258,7 @@ class ProjectionEvent(Message[_ProjectionEventFields]):
             id: str = "",
             name: str = "",
             data: Struct | None = None,
+            data_value: Value | None = None,
             seq: int = 0,
             timestamp: Timestamp | None = None,
             source: str = "",
@@ -260,13 +270,14 @@ class ProjectionEvent(Message[_ProjectionEventFields]):
         id: str
         name: str
         data: Struct | None
+        data_value: Value | None
         seq: int
         timestamp: Timestamp | None
         source: str
         metadata: Struct | None
         kind: ProjectionEventKind
 
-_PollProjectionEventsResponseFields: TypeAlias = Literal["events", "current_state", "last_event_seq"]
+_PollProjectionEventsResponseFields: TypeAlias = Literal["events", "current_state", "current_state_value", "last_event_seq"]
 
 class PollProjectionEventsResponse(Message[_PollProjectionEventsResponseFields]):
     """
@@ -285,13 +296,22 @@ class PollProjectionEventsResponse(Message[_PollProjectionEventsResponseFields])
             ```proto
             optional google.protobuf.Struct current_state = 2;
             ```
+        current_state_value:
+            Set ONLY when the payload is not a JSON object, which current_state cannot
+            represent (#1963). Readers take this when present and fall back to
+            current_state, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value current_state_value = 4;
+            ```
         last_event_seq:
             ```proto
             int64 last_event_seq = 3;
             ```
     """
 
-    __slots__ = ("events", "current_state", "last_event_seq")
+    __slots__ = ("events", "current_state", "current_state_value", "last_event_seq")
 
     if TYPE_CHECKING:
 
@@ -300,12 +320,14 @@ class PollProjectionEventsResponse(Message[_PollProjectionEventsResponseFields])
             *,
             events: list[ProjectionEvent] | None = None,
             current_state: Struct | None = None,
+            current_state_value: Value | None = None,
             last_event_seq: int = 0,
         ) -> None:
             pass
 
         events: list[ProjectionEvent]
         current_state: Struct | None
+        current_state_value: Value | None
         last_event_seq: int
 
 _StreamProjectionEventsRequestFields: TypeAlias = Literal["name", "batch_size", "partition", "accept_heartbeats"]
@@ -365,7 +387,7 @@ class StreamProjectionEventsRequest(Message[_StreamProjectionEventsRequestFields
         partition: str
         accept_heartbeats: bool
 
-_SaveProjectionStateRequestFields: TypeAlias = Literal["name", "partition_key", "state", "last_event_id", "last_event_seq", "last_event_time"]
+_SaveProjectionStateRequestFields: TypeAlias = Literal["name", "partition_key", "state", "state_value", "last_event_id", "last_event_seq", "last_event_time"]
 
 class SaveProjectionStateRequest(Message[_SaveProjectionStateRequestFields]):
     """
@@ -386,6 +408,15 @@ class SaveProjectionStateRequest(Message[_SaveProjectionStateRequestFields]):
             ```proto
             optional google.protobuf.Struct state = 3;
             ```
+        state_value:
+            Set ONLY when the payload is not a JSON object, which state cannot
+            represent (#1963). Readers take this when present and fall back to
+            state, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value state_value = 7;
+            ```
         last_event_id:
             ```proto
             string last_event_id = 4;
@@ -400,7 +431,7 @@ class SaveProjectionStateRequest(Message[_SaveProjectionStateRequestFields]):
             ```
     """
 
-    __slots__ = ("name", "partition_key", "state", "last_event_id", "last_event_seq", "last_event_time")
+    __slots__ = ("name", "partition_key", "state", "state_value", "last_event_id", "last_event_seq", "last_event_time")
 
     if TYPE_CHECKING:
 
@@ -410,6 +441,7 @@ class SaveProjectionStateRequest(Message[_SaveProjectionStateRequestFields]):
             name: str = "",
             partition_key: str = "",
             state: Struct | None = None,
+            state_value: Value | None = None,
             last_event_id: str = "",
             last_event_seq: int = 0,
             last_event_time: Timestamp | None = None,
@@ -419,6 +451,7 @@ class SaveProjectionStateRequest(Message[_SaveProjectionStateRequestFields]):
         name: str
         partition_key: str
         state: Struct | None
+        state_value: Value | None
         last_event_id: str
         last_event_seq: int
         last_event_time: Timestamp | None
@@ -561,7 +594,7 @@ class GetProjectionRequest(Message[_GetProjectionRequestFields]):
         partition: str
         as_of: Timestamp | None
 
-_GetProjectionResponseFields: TypeAlias = Literal["name", "partition", "state", "last_event_id", "last_event_time", "version", "mode"]
+_GetProjectionResponseFields: TypeAlias = Literal["name", "partition", "state", "state_value", "last_event_id", "last_event_time", "version", "mode"]
 
 class GetProjectionResponse(Message[_GetProjectionResponseFields]):
     """
@@ -582,6 +615,15 @@ class GetProjectionResponse(Message[_GetProjectionResponseFields]):
             ```proto
             optional google.protobuf.Struct state = 3;
             ```
+        state_value:
+            Set ONLY when the payload is not a JSON object, which state cannot
+            represent (#1963). Readers take this when present and fall back to
+            state, so an object costs no extra bytes and old clients are
+            unaffected.
+
+            ```proto
+            optional google.protobuf.Value state_value = 8;
+            ```
         last_event_id:
             ```proto
             string last_event_id = 4;
@@ -600,7 +642,7 @@ class GetProjectionResponse(Message[_GetProjectionResponseFields]):
             ```
     """
 
-    __slots__ = ("name", "partition", "state", "last_event_id", "last_event_time", "version", "mode")
+    __slots__ = ("name", "partition", "state", "state_value", "last_event_id", "last_event_time", "version", "mode")
 
     if TYPE_CHECKING:
 
@@ -610,6 +652,7 @@ class GetProjectionResponse(Message[_GetProjectionResponseFields]):
             name: str = "",
             partition: str = "",
             state: Struct | None = None,
+            state_value: Value | None = None,
             last_event_id: str = "",
             last_event_time: Timestamp | None = None,
             version: int = 0,
@@ -620,6 +663,7 @@ class GetProjectionResponse(Message[_GetProjectionResponseFields]):
         name: str
         partition: str
         state: Struct | None
+        state_value: Value | None
         last_event_id: str
         last_event_time: Timestamp | None
         version: int
@@ -2080,7 +2124,7 @@ class WaitStreamFrameKind(Enum):
 
 
 _DESC = file_desc(
-    b'\n\x1cironflow/v1/projection.proto\x12\x0bironflow.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\x9a\x01\n\x19RegisterProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n\x06events\x18\x02 \x03(\tR\x06events\x12#\n\rpartition_key\x18\x03 \x01(\tR\x0cpartitionKey\x12\x18\n\x07version\x18\x04 \x01(\x05R\x07version\x12\x12\n\x04mode\x18\x05 \x01(\tR\x04mode"Z\n\x1aRegisterProjectionResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\x12$\n\x0elast_event_seq\x18\x02 \x01(\x03R\x0clastEventSeq"1\n\x1bUnregisterProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"\x1e\n\x1cUnregisterProjectionResponse"n\n\x1bPollProjectionEventsRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n\nbatch_size\x18\x02 \x01(\x05R\tbatchSize\x12\x1c\n\tpartition\x18\x03 \x01(\tR\tpartition"\xb1\x02\n\x0fProjectionEvent\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12+\n\x04data\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x12\x10\n\x03seq\x18\x04 \x01(\x03R\x03seq\x128\n\ttimestamp\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x16\n\x06source\x18\x06 \x01(\tR\x06source\x123\n\x08metadata\x18\x07 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x124\n\x04kind\x18\x08 \x01(\x0e2 .ironflow.v1.ProjectionEventKindR\x04kind"\xb8\x01\n\x1cPollProjectionEventsResponse\x124\n\x06events\x18\x01 \x03(\x0b2\x1c.ironflow.v1.ProjectionEventR\x06events\x12<\n\rcurrent_state\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x0ccurrentState\x12$\n\x0elast_event_seq\x18\x03 \x01(\x03R\x0clastEventSeq"\x9d\x01\n\x1dStreamProjectionEventsRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n\nbatch_size\x18\x02 \x01(\x05R\tbatchSize\x12\x1c\n\tpartition\x18\x03 \x01(\tR\tpartition\x12+\n\x11accept_heartbeats\x18\x04 \x01(\x08R\x10acceptHeartbeats"\x92\x02\n\x1aSaveProjectionStateRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12#\n\rpartition_key\x18\x02 \x01(\tR\x0cpartitionKey\x12-\n\x05state\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x05state\x12"\n\rlast_event_id\x18\x04 \x01(\tR\x0blastEventId\x12$\n\x0elast_event_seq\x18\x05 \x01(\x03R\x0clastEventSeq\x12B\n\x0flast_event_time\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\rlastEventTime"-\n\x1bSaveProjectionStateResponse\x12\x0e\n\x02ok\x18\x01 \x01(\x08R\x02ok"z\n\x1aAckProjectionEventsRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12"\n\rlast_event_id\x18\x02 \x01(\tR\x0blastEventId\x12$\n\x0elast_event_seq\x18\x03 \x01(\x03R\x0clastEventSeq"-\n\x1bAckProjectionEventsResponse\x12\x0e\n\x02ok\x18\x01 \x01(\x08R\x02ok"y\n\x14GetProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n\tpartition\x18\x02 \x01(\tR\tpartition\x12/\n\x05as_of\x18\x03 \x01(\x0b2\x1a.google.protobuf.TimestampR\x04asOf"\x8e\x02\n\x15GetProjectionResponse\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n\tpartition\x18\x02 \x01(\tR\tpartition\x12-\n\x05state\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x05state\x12"\n\rlast_event_id\x18\x04 \x01(\tR\x0blastEventId\x12B\n\x0flast_event_time\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\rlastEventTime\x12\x18\n\x07version\x18\x06 \x01(\x03R\x07version\x12\x12\n\x04mode\x18\x07 \x01(\tR\x04mode"r\n\x16ListProjectionsRequest\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\x12\x12\n\x04mode\x18\x02 \x01(\tR\x04mode\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x04 \x01(\x05R\x06offset"\xc3\x02\n\x0eProjectionInfo\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n\x04mode\x18\x02 \x01(\tR\x04mode\x12\x16\n\x06status\x18\x03 \x01(\tR\x06status\x12\x16\n\x06events\x18\x04 \x03(\tR\x06events\x12#\n\rpartition_key\x18\x05 \x01(\tR\x0cpartitionKey\x12\x18\n\x07version\x18\x06 \x01(\x05R\x07version\x12$\n\x0elast_event_seq\x18\x07 \x01(\x03R\x0clastEventSeq\x129\n\ncreated_at\x18\x08 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\t \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt"y\n\x17ListProjectionsResponse\x12=\n\x0bprojections\x18\x01 \x03(\x0b2\x1b.ironflow.v1.ProjectionInfoR\x0bprojections\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"0\n\x1aGetProjectionStatusRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"\x9f\x03\n\x1bGetProjectionStatusResponse\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n\x04mode\x18\x03 \x01(\tR\x04mode\x12$\n\x0elast_event_seq\x18\x04 \x01(\x03R\x0clastEventSeq\x12\x10\n\x03lag\x18\x05 \x01(\x03R\x03lag\x12#\n\rerror_message\x18\x06 \x01(\tR\x0cerrorMessage\x129\n\nupdated_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt\x12,\n\x12rebuild_target_seq\x18\x08 \x01(\x03R\x10rebuildTargetSeq\x120\n\x14rebuild_start_cursor\x18\t \x01(\x03R\x12rebuildStartCursor\x12H\n\x12rebuild_started_at\x18\n \x01(\x0b2\x1a.google.protobuf.TimestampR\x10rebuildStartedAt"\xa9\x01\n\x18RebuildProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n\tpartition\x18\x02 \x01(\tR\tpartition\x12"\n\rfrom_event_id\x18\x03 \x01(\tR\x0bfromEventId\x12\x17\n\x07dry_run\x18\x04 \x01(\x08R\x06dryRun\x12\x1e\n\x0bto_event_id\x18\x05 \x01(\tR\ttoEventId"F\n\x19RebuildProjectionResponse\x12)\n\x03job\x18\x01 \x01(\x0b2\x17.ironflow.v1.RebuildJobR\x03job"\xe6\x03\n\nRebuildJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\'\n\x0fprojection_name\x18\x02 \x01(\tR\x0eprojectionName\x12\x16\n\x06status\x18\x03 \x01(\tR\x06status\x12)\n\x10events_processed\x18\x04 \x01(\x03R\x0feventsProcessed\x12!\n\x0ctotal_events\x18\x05 \x01(\x03R\x0btotalEvents\x12\x1a\n\x08progress\x18\x06 \x01(\x01R\x08progress\x129\n\nstarted_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x12J\n\x13estimated_remaining\x18\x08 \x01(\x0b2\x19.google.protobuf.DurationR\x12estimatedRemaining\x12\x14\n\x05error\x18\t \x01(\tR\x05error\x12"\n\rfrom_event_id\x18\n \x01(\tR\x0bfromEventId\x12\x1e\n\x0bto_event_id\x18\x0b \x01(\tR\ttoEventId\x12\x1c\n\tpartition\x18\x0c \x01(\tR\tpartition\x12\x17\n\x07dry_run\x18\r \x01(\x08R\x06dryRun"*\n\x14GetRebuildJobRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"B\n\x15GetRebuildJobResponse\x12)\n\x03job\x18\x01 \x01(\x0b2\x17.ironflow.v1.RebuildJobR\x03job"*\n\x14CancelRebuildRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"/\n\x15CancelRebuildResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status"\x9e\x01\n\x1cReportRebuildProgressRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12)\n\x10events_processed\x18\x02 \x01(\x03R\x0feventsProcessed\x12!\n\x0ctotal_events\x18\x03 \x01(\x03R\x0btotalEvents\x12\x1c\n\tcompleted\x18\x04 \x01(\x08R\tcompleted"\x1f\n\x1dReportRebuildProgressResponse",\n\x16PauseProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"1\n\x17PauseProjectionResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status"-\n\x17ResumeProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"2\n\x18ResumeProjectionResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status"\xac\x02\n\x1aCreateSQLProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n\ttable_sql\x18\x02 \x01(\tR\x08tableSql\x12a\n\x0eevent_handlers\x18\x03 \x03(\x0b2:.ironflow.v1.CreateSQLProjectionRequest.EventHandlersEntryR\reventHandlers\x12\x16\n\x06events\x18\x04 \x03(\tR\x06events\x12 \n\x0bdescription\x18\x05 \x01(\tR\x0bdescription\x1a@\n\x12EventHandlersEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01"I\n\x1bCreateSQLProjectionResponse\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status"\x8e\x01\n\x19QuerySQLProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n\x05where\x18\x02 \x01(\tR\x05where\x12\x19\n\x08order_by\x18\x03 \x01(\tR\x07orderBy\x12\x14\n\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x05 \x01(\x05R\x06offset"\x85\x01\n\x1aQuerySQLProjectionResponse\x12\x18\n\x07columns\x18\x01 \x03(\tR\x07columns\x12,\n\x04rows\x18\x02 \x03(\x0b2\x18.ironflow.v1.QuerySQLRowR\x04rows\x12\x1f\n\x0btotal_count\x18\x03 \x01(\x05R\ntotalCount"`\n\x0bQuerySQLRow\x12\x16\n\x06values\x18\x01 \x03(\tR\x06values\x129\n\x0ctyped_values\x18\x02 \x03(\x0b2\x16.google.protobuf.ValueR\x0btypedValues"\x9e\x01\n\x1cWaitProjectionCatchupRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n\x07min_seq\x18\x02 \x01(\x04R\x06minSeq\x123\n\x07timeout\x18\x03 \x01(\x0b2\x19.google.protobuf.DurationR\x07timeout\x12\x1c\n\tpartition\x18\x04 \x01(\tR\tpartition"\xf7\x01\n\x1dWaitProjectionCatchupResponse\x12\x1b\n\tcaught_up\x18\x01 \x01(\x08R\x08caughtUp\x12\x1b\n\ttimed_out\x18\x02 \x01(\x08R\x08timedOut\x12\x1f\n\x0bcurrent_seq\x18\x03 \x01(\x04R\ncurrentSeq\x12\x1d\n\ntarget_seq\x18\x04 \x01(\x04R\ttargetSeq\x12(\n\x10behind_by_events\x18\x05 \x01(\x03R\x0ebehindByEvents\x12\x1e\n\nrebuilding\x18\x06 \x01(\x08R\nrebuilding\x12\x12\n\x04mode\x18\x07 \x01(\tR\x04mode"U\n\x08WaitItem\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n\x07min_seq\x18\x02 \x01(\x04R\x06minSeq\x12\x1c\n\tpartition\x18\x03 \x01(\tR\tpartition"\x85\x01\n!WaitProjectionCatchupBatchRequest\x12+\n\x05items\x18\x01 \x03(\x0b2\x15.ironflow.v1.WaitItemR\x05items\x123\n\x07timeout\x18\x02 \x01(\x0b2\x19.google.protobuf.DurationR\x07timeout"j\n\x0eWaitItemResult\x12B\n\x06result\x18\x01 \x01(\x0b2*.ironflow.v1.WaitProjectionCatchupResponseR\x06result\x12\x14\n\x05error\x18\x02 \x01(\tR\x05error"[\n"WaitProjectionCatchupBatchResponse\x125\n\x07results\x18\x01 \x03(\x0b2\x1b.ironflow.v1.WaitItemResultR\x07results"\xa3\x01\n\x13WaitForEventRequest\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12\x1e\n\nprojection\x18\x02 \x01(\tR\nprojection\x12\x1c\n\tpartition\x18\x03 \x01(\tR\tpartition\x123\n\x07timeout\x18\x04 \x01(\x0b2\x19.google.protobuf.DurationR\x07timeout"\xa9\x02\n#WaitProjectionCatchupStreamResponse\x124\n\x04kind\x18\x01 \x01(\x0e2 .ironflow.v1.WaitStreamFrameKindR\x04kind\x12\x1f\n\x0bcurrent_seq\x18\x02 \x01(\x04R\ncurrentSeq\x12\x1d\n\ntarget_seq\x18\x03 \x01(\x04R\ttargetSeq\x12(\n\x10behind_by_events\x18\x04 \x01(\x03R\x0ebehindByEvents\x12\x1b\n\tcaught_up\x18\x05 \x01(\x08R\x08caughtUp\x12\x1b\n\ttimed_out\x18\x06 \x01(\x08R\x08timedOut\x12\x14\n\x05error\x18\x07 \x01(\tR\x05error\x12\x12\n\x04mode\x18\x08 \x01(\tR\x04mode*\x82\x01\n\x13ProjectionEventKind\x12%\n!PROJECTION_EVENT_KIND_UNSPECIFIED\x10\x00\x12\x1f\n\x1bPROJECTION_EVENT_KIND_EVENT\x10\x01\x12#\n\x1fPROJECTION_EVENT_KIND_HEARTBEAT\x10\x02*\xa9\x01\n\x13WaitStreamFrameKind\x12&\n"WAIT_STREAM_FRAME_KIND_UNSPECIFIED\x10\x00\x12#\n\x1fWAIT_STREAM_FRAME_KIND_PROGRESS\x10\x01\x12$\n WAIT_STREAM_FRAME_KIND_HEARTBEAT\x10\x02\x12\x1f\n\x1bWAIT_STREAM_FRAME_KIND_DONE\x10\x032\xa6\x11\n\x11ProjectionService\x12e\n\x12RegisterProjection\x12&.ironflow.v1.RegisterProjectionRequest\x1a\'.ironflow.v1.RegisterProjectionResponse\x12k\n\x14UnregisterProjection\x12(.ironflow.v1.UnregisterProjectionRequest\x1a).ironflow.v1.UnregisterProjectionResponse\x12k\n\x14PollProjectionEvents\x12(.ironflow.v1.PollProjectionEventsRequest\x1a).ironflow.v1.PollProjectionEventsResponse\x12d\n\x16StreamProjectionEvents\x12*.ironflow.v1.StreamProjectionEventsRequest\x1a\x1c.ironflow.v1.ProjectionEvent0\x01\x12h\n\x13SaveProjectionState\x12\'.ironflow.v1.SaveProjectionStateRequest\x1a(.ironflow.v1.SaveProjectionStateResponse\x12h\n\x13AckProjectionEvents\x12\'.ironflow.v1.AckProjectionEventsRequest\x1a(.ironflow.v1.AckProjectionEventsResponse\x12[\n\rGetProjection\x12!.ironflow.v1.GetProjectionRequest\x1a".ironflow.v1.GetProjectionResponse"\x03\x90\x02\x01\x12a\n\x0fListProjections\x12#.ironflow.v1.ListProjectionsRequest\x1a$.ironflow.v1.ListProjectionsResponse"\x03\x90\x02\x01\x12m\n\x13GetProjectionStatus\x12\'.ironflow.v1.GetProjectionStatusRequest\x1a(.ironflow.v1.GetProjectionStatusResponse"\x03\x90\x02\x01\x12b\n\x11RebuildProjection\x12%.ironflow.v1.RebuildProjectionRequest\x1a&.ironflow.v1.RebuildProjectionResponse\x12[\n\rGetRebuildJob\x12!.ironflow.v1.GetRebuildJobRequest\x1a".ironflow.v1.GetRebuildJobResponse"\x03\x90\x02\x01\x12V\n\rCancelRebuild\x12!.ironflow.v1.CancelRebuildRequest\x1a".ironflow.v1.CancelRebuildResponse\x12n\n\x15ReportRebuildProgress\x12).ironflow.v1.ReportRebuildProgressRequest\x1a*.ironflow.v1.ReportRebuildProgressResponse\x12\\\n\x0fPauseProjection\x12#.ironflow.v1.PauseProjectionRequest\x1a$.ironflow.v1.PauseProjectionResponse\x12_\n\x10ResumeProjection\x12$.ironflow.v1.ResumeProjectionRequest\x1a%.ironflow.v1.ResumeProjectionResponse\x12h\n\x13CreateSQLProjection\x12\'.ironflow.v1.CreateSQLProjectionRequest\x1a(.ironflow.v1.CreateSQLProjectionResponse\x12j\n\x12QuerySQLProjection\x12&.ironflow.v1.QuerySQLProjectionRequest\x1a\'.ironflow.v1.QuerySQLProjectionResponse"\x03\x90\x02\x01\x12n\n\x15WaitProjectionCatchup\x12).ironflow.v1.WaitProjectionCatchupRequest\x1a*.ironflow.v1.WaitProjectionCatchupResponse\x12}\n\x1aWaitProjectionCatchupBatch\x12..ironflow.v1.WaitProjectionCatchupBatchRequest\x1a/.ironflow.v1.WaitProjectionCatchupBatchResponse\x12\\\n\x0cWaitForEvent\x12 .ironflow.v1.WaitForEventRequest\x1a*.ironflow.v1.WaitProjectionCatchupResponse\x12|\n\x1bWaitProjectionCatchupStream\x12).ironflow.v1.WaitProjectionCatchupRequest\x1a0.ironflow.v1.WaitProjectionCatchupStreamResponse0\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x1cironflow/v1/projection.proto\x12\x0bironflow.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\x9a\x01\n\x19RegisterProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n\x06events\x18\x02 \x03(\tR\x06events\x12#\n\rpartition_key\x18\x03 \x01(\tR\x0cpartitionKey\x12\x18\n\x07version\x18\x04 \x01(\x05R\x07version\x12\x12\n\x04mode\x18\x05 \x01(\tR\x04mode"Z\n\x1aRegisterProjectionResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\x12$\n\x0elast_event_seq\x18\x02 \x01(\x03R\x0clastEventSeq"1\n\x1bUnregisterProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"\x1e\n\x1cUnregisterProjectionResponse"n\n\x1bPollProjectionEventsRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n\nbatch_size\x18\x02 \x01(\x05R\tbatchSize\x12\x1c\n\tpartition\x18\x03 \x01(\tR\tpartition"\xe8\x02\n\x0fProjectionEvent\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12+\n\x04data\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\t \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12\x10\n\x03seq\x18\x04 \x01(\x03R\x03seq\x128\n\ttimestamp\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x16\n\x06source\x18\x06 \x01(\tR\x06source\x123\n\x08metadata\x18\x07 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x124\n\x04kind\x18\x08 \x01(\x0e2 .ironflow.v1.ProjectionEventKindR\x04kind"\x80\x02\n\x1cPollProjectionEventsResponse\x124\n\x06events\x18\x01 \x03(\x0b2\x1c.ironflow.v1.ProjectionEventR\x06events\x12<\n\rcurrent_state\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x0ccurrentState\x12F\n\x13current_state_value\x18\x04 \x01(\x0b2\x16.google.protobuf.ValueR\x11currentStateValue\x12$\n\x0elast_event_seq\x18\x03 \x01(\x03R\x0clastEventSeq"\x9d\x01\n\x1dStreamProjectionEventsRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n\nbatch_size\x18\x02 \x01(\x05R\tbatchSize\x12\x1c\n\tpartition\x18\x03 \x01(\tR\tpartition\x12+\n\x11accept_heartbeats\x18\x04 \x01(\x08R\x10acceptHeartbeats"\xcb\x02\n\x1aSaveProjectionStateRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12#\n\rpartition_key\x18\x02 \x01(\tR\x0cpartitionKey\x12-\n\x05state\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x05state\x127\n\x0bstate_value\x18\x07 \x01(\x0b2\x16.google.protobuf.ValueR\nstateValue\x12"\n\rlast_event_id\x18\x04 \x01(\tR\x0blastEventId\x12$\n\x0elast_event_seq\x18\x05 \x01(\x03R\x0clastEventSeq\x12B\n\x0flast_event_time\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\rlastEventTime"-\n\x1bSaveProjectionStateResponse\x12\x0e\n\x02ok\x18\x01 \x01(\x08R\x02ok"z\n\x1aAckProjectionEventsRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12"\n\rlast_event_id\x18\x02 \x01(\tR\x0blastEventId\x12$\n\x0elast_event_seq\x18\x03 \x01(\x03R\x0clastEventSeq"-\n\x1bAckProjectionEventsResponse\x12\x0e\n\x02ok\x18\x01 \x01(\x08R\x02ok"y\n\x14GetProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n\tpartition\x18\x02 \x01(\tR\tpartition\x12/\n\x05as_of\x18\x03 \x01(\x0b2\x1a.google.protobuf.TimestampR\x04asOf"\xc7\x02\n\x15GetProjectionResponse\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n\tpartition\x18\x02 \x01(\tR\tpartition\x12-\n\x05state\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x05state\x127\n\x0bstate_value\x18\x08 \x01(\x0b2\x16.google.protobuf.ValueR\nstateValue\x12"\n\rlast_event_id\x18\x04 \x01(\tR\x0blastEventId\x12B\n\x0flast_event_time\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\rlastEventTime\x12\x18\n\x07version\x18\x06 \x01(\x03R\x07version\x12\x12\n\x04mode\x18\x07 \x01(\tR\x04mode"r\n\x16ListProjectionsRequest\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status\x12\x12\n\x04mode\x18\x02 \x01(\tR\x04mode\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x04 \x01(\x05R\x06offset"\xc3\x02\n\x0eProjectionInfo\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n\x04mode\x18\x02 \x01(\tR\x04mode\x12\x16\n\x06status\x18\x03 \x01(\tR\x06status\x12\x16\n\x06events\x18\x04 \x03(\tR\x06events\x12#\n\rpartition_key\x18\x05 \x01(\tR\x0cpartitionKey\x12\x18\n\x07version\x18\x06 \x01(\x05R\x07version\x12$\n\x0elast_event_seq\x18\x07 \x01(\x03R\x0clastEventSeq\x129\n\ncreated_at\x18\x08 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\t \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt"y\n\x17ListProjectionsResponse\x12=\n\x0bprojections\x18\x01 \x03(\x0b2\x1b.ironflow.v1.ProjectionInfoR\x0bprojections\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"0\n\x1aGetProjectionStatusRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"\x9f\x03\n\x1bGetProjectionStatusResponse\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n\x04mode\x18\x03 \x01(\tR\x04mode\x12$\n\x0elast_event_seq\x18\x04 \x01(\x03R\x0clastEventSeq\x12\x10\n\x03lag\x18\x05 \x01(\x03R\x03lag\x12#\n\rerror_message\x18\x06 \x01(\tR\x0cerrorMessage\x129\n\nupdated_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt\x12,\n\x12rebuild_target_seq\x18\x08 \x01(\x03R\x10rebuildTargetSeq\x120\n\x14rebuild_start_cursor\x18\t \x01(\x03R\x12rebuildStartCursor\x12H\n\x12rebuild_started_at\x18\n \x01(\x0b2\x1a.google.protobuf.TimestampR\x10rebuildStartedAt"\xa9\x01\n\x18RebuildProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n\tpartition\x18\x02 \x01(\tR\tpartition\x12"\n\rfrom_event_id\x18\x03 \x01(\tR\x0bfromEventId\x12\x17\n\x07dry_run\x18\x04 \x01(\x08R\x06dryRun\x12\x1e\n\x0bto_event_id\x18\x05 \x01(\tR\ttoEventId"F\n\x19RebuildProjectionResponse\x12)\n\x03job\x18\x01 \x01(\x0b2\x17.ironflow.v1.RebuildJobR\x03job"\xe6\x03\n\nRebuildJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\'\n\x0fprojection_name\x18\x02 \x01(\tR\x0eprojectionName\x12\x16\n\x06status\x18\x03 \x01(\tR\x06status\x12)\n\x10events_processed\x18\x04 \x01(\x03R\x0feventsProcessed\x12!\n\x0ctotal_events\x18\x05 \x01(\x03R\x0btotalEvents\x12\x1a\n\x08progress\x18\x06 \x01(\x01R\x08progress\x129\n\nstarted_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x12J\n\x13estimated_remaining\x18\x08 \x01(\x0b2\x19.google.protobuf.DurationR\x12estimatedRemaining\x12\x14\n\x05error\x18\t \x01(\tR\x05error\x12"\n\rfrom_event_id\x18\n \x01(\tR\x0bfromEventId\x12\x1e\n\x0bto_event_id\x18\x0b \x01(\tR\ttoEventId\x12\x1c\n\tpartition\x18\x0c \x01(\tR\tpartition\x12\x17\n\x07dry_run\x18\r \x01(\x08R\x06dryRun"*\n\x14GetRebuildJobRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"B\n\x15GetRebuildJobResponse\x12)\n\x03job\x18\x01 \x01(\x0b2\x17.ironflow.v1.RebuildJobR\x03job"*\n\x14CancelRebuildRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"/\n\x15CancelRebuildResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status"\x9e\x01\n\x1cReportRebuildProgressRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12)\n\x10events_processed\x18\x02 \x01(\x03R\x0feventsProcessed\x12!\n\x0ctotal_events\x18\x03 \x01(\x03R\x0btotalEvents\x12\x1c\n\tcompleted\x18\x04 \x01(\x08R\tcompleted"\x1f\n\x1dReportRebuildProgressResponse",\n\x16PauseProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"1\n\x17PauseProjectionResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status"-\n\x17ResumeProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name"2\n\x18ResumeProjectionResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status"\xac\x02\n\x1aCreateSQLProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n\ttable_sql\x18\x02 \x01(\tR\x08tableSql\x12a\n\x0eevent_handlers\x18\x03 \x03(\x0b2:.ironflow.v1.CreateSQLProjectionRequest.EventHandlersEntryR\reventHandlers\x12\x16\n\x06events\x18\x04 \x03(\tR\x06events\x12 \n\x0bdescription\x18\x05 \x01(\tR\x0bdescription\x1a@\n\x12EventHandlersEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01"I\n\x1bCreateSQLProjectionResponse\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n\x06status\x18\x02 \x01(\tR\x06status"\x8e\x01\n\x19QuerySQLProjectionRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n\x05where\x18\x02 \x01(\tR\x05where\x12\x19\n\x08order_by\x18\x03 \x01(\tR\x07orderBy\x12\x14\n\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x05 \x01(\x05R\x06offset"\x85\x01\n\x1aQuerySQLProjectionResponse\x12\x18\n\x07columns\x18\x01 \x03(\tR\x07columns\x12,\n\x04rows\x18\x02 \x03(\x0b2\x18.ironflow.v1.QuerySQLRowR\x04rows\x12\x1f\n\x0btotal_count\x18\x03 \x01(\x05R\ntotalCount"`\n\x0bQuerySQLRow\x12\x16\n\x06values\x18\x01 \x03(\tR\x06values\x129\n\x0ctyped_values\x18\x02 \x03(\x0b2\x16.google.protobuf.ValueR\x0btypedValues"\x9e\x01\n\x1cWaitProjectionCatchupRequest\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n\x07min_seq\x18\x02 \x01(\x04R\x06minSeq\x123\n\x07timeout\x18\x03 \x01(\x0b2\x19.google.protobuf.DurationR\x07timeout\x12\x1c\n\tpartition\x18\x04 \x01(\tR\tpartition"\xf7\x01\n\x1dWaitProjectionCatchupResponse\x12\x1b\n\tcaught_up\x18\x01 \x01(\x08R\x08caughtUp\x12\x1b\n\ttimed_out\x18\x02 \x01(\x08R\x08timedOut\x12\x1f\n\x0bcurrent_seq\x18\x03 \x01(\x04R\ncurrentSeq\x12\x1d\n\ntarget_seq\x18\x04 \x01(\x04R\ttargetSeq\x12(\n\x10behind_by_events\x18\x05 \x01(\x03R\x0ebehindByEvents\x12\x1e\n\nrebuilding\x18\x06 \x01(\x08R\nrebuilding\x12\x12\n\x04mode\x18\x07 \x01(\tR\x04mode"U\n\x08WaitItem\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n\x07min_seq\x18\x02 \x01(\x04R\x06minSeq\x12\x1c\n\tpartition\x18\x03 \x01(\tR\tpartition"\x85\x01\n!WaitProjectionCatchupBatchRequest\x12+\n\x05items\x18\x01 \x03(\x0b2\x15.ironflow.v1.WaitItemR\x05items\x123\n\x07timeout\x18\x02 \x01(\x0b2\x19.google.protobuf.DurationR\x07timeout"j\n\x0eWaitItemResult\x12B\n\x06result\x18\x01 \x01(\x0b2*.ironflow.v1.WaitProjectionCatchupResponseR\x06result\x12\x14\n\x05error\x18\x02 \x01(\tR\x05error"[\n"WaitProjectionCatchupBatchResponse\x125\n\x07results\x18\x01 \x03(\x0b2\x1b.ironflow.v1.WaitItemResultR\x07results"\xa3\x01\n\x13WaitForEventRequest\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12\x1e\n\nprojection\x18\x02 \x01(\tR\nprojection\x12\x1c\n\tpartition\x18\x03 \x01(\tR\tpartition\x123\n\x07timeout\x18\x04 \x01(\x0b2\x19.google.protobuf.DurationR\x07timeout"\xa9\x02\n#WaitProjectionCatchupStreamResponse\x124\n\x04kind\x18\x01 \x01(\x0e2 .ironflow.v1.WaitStreamFrameKindR\x04kind\x12\x1f\n\x0bcurrent_seq\x18\x02 \x01(\x04R\ncurrentSeq\x12\x1d\n\ntarget_seq\x18\x03 \x01(\x04R\ttargetSeq\x12(\n\x10behind_by_events\x18\x04 \x01(\x03R\x0ebehindByEvents\x12\x1b\n\tcaught_up\x18\x05 \x01(\x08R\x08caughtUp\x12\x1b\n\ttimed_out\x18\x06 \x01(\x08R\x08timedOut\x12\x14\n\x05error\x18\x07 \x01(\tR\x05error\x12\x12\n\x04mode\x18\x08 \x01(\tR\x04mode*\x82\x01\n\x13ProjectionEventKind\x12%\n!PROJECTION_EVENT_KIND_UNSPECIFIED\x10\x00\x12\x1f\n\x1bPROJECTION_EVENT_KIND_EVENT\x10\x01\x12#\n\x1fPROJECTION_EVENT_KIND_HEARTBEAT\x10\x02*\xa9\x01\n\x13WaitStreamFrameKind\x12&\n"WAIT_STREAM_FRAME_KIND_UNSPECIFIED\x10\x00\x12#\n\x1fWAIT_STREAM_FRAME_KIND_PROGRESS\x10\x01\x12$\n WAIT_STREAM_FRAME_KIND_HEARTBEAT\x10\x02\x12\x1f\n\x1bWAIT_STREAM_FRAME_KIND_DONE\x10\x032\xa6\x11\n\x11ProjectionService\x12e\n\x12RegisterProjection\x12&.ironflow.v1.RegisterProjectionRequest\x1a\'.ironflow.v1.RegisterProjectionResponse\x12k\n\x14UnregisterProjection\x12(.ironflow.v1.UnregisterProjectionRequest\x1a).ironflow.v1.UnregisterProjectionResponse\x12k\n\x14PollProjectionEvents\x12(.ironflow.v1.PollProjectionEventsRequest\x1a).ironflow.v1.PollProjectionEventsResponse\x12d\n\x16StreamProjectionEvents\x12*.ironflow.v1.StreamProjectionEventsRequest\x1a\x1c.ironflow.v1.ProjectionEvent0\x01\x12h\n\x13SaveProjectionState\x12\'.ironflow.v1.SaveProjectionStateRequest\x1a(.ironflow.v1.SaveProjectionStateResponse\x12h\n\x13AckProjectionEvents\x12\'.ironflow.v1.AckProjectionEventsRequest\x1a(.ironflow.v1.AckProjectionEventsResponse\x12[\n\rGetProjection\x12!.ironflow.v1.GetProjectionRequest\x1a".ironflow.v1.GetProjectionResponse"\x03\x90\x02\x01\x12a\n\x0fListProjections\x12#.ironflow.v1.ListProjectionsRequest\x1a$.ironflow.v1.ListProjectionsResponse"\x03\x90\x02\x01\x12m\n\x13GetProjectionStatus\x12\'.ironflow.v1.GetProjectionStatusRequest\x1a(.ironflow.v1.GetProjectionStatusResponse"\x03\x90\x02\x01\x12b\n\x11RebuildProjection\x12%.ironflow.v1.RebuildProjectionRequest\x1a&.ironflow.v1.RebuildProjectionResponse\x12[\n\rGetRebuildJob\x12!.ironflow.v1.GetRebuildJobRequest\x1a".ironflow.v1.GetRebuildJobResponse"\x03\x90\x02\x01\x12V\n\rCancelRebuild\x12!.ironflow.v1.CancelRebuildRequest\x1a".ironflow.v1.CancelRebuildResponse\x12n\n\x15ReportRebuildProgress\x12).ironflow.v1.ReportRebuildProgressRequest\x1a*.ironflow.v1.ReportRebuildProgressResponse\x12\\\n\x0fPauseProjection\x12#.ironflow.v1.PauseProjectionRequest\x1a$.ironflow.v1.PauseProjectionResponse\x12_\n\x10ResumeProjection\x12$.ironflow.v1.ResumeProjectionRequest\x1a%.ironflow.v1.ResumeProjectionResponse\x12h\n\x13CreateSQLProjection\x12\'.ironflow.v1.CreateSQLProjectionRequest\x1a(.ironflow.v1.CreateSQLProjectionResponse\x12j\n\x12QuerySQLProjection\x12&.ironflow.v1.QuerySQLProjectionRequest\x1a\'.ironflow.v1.QuerySQLProjectionResponse"\x03\x90\x02\x01\x12n\n\x15WaitProjectionCatchup\x12).ironflow.v1.WaitProjectionCatchupRequest\x1a*.ironflow.v1.WaitProjectionCatchupResponse\x12}\n\x1aWaitProjectionCatchupBatch\x12..ironflow.v1.WaitProjectionCatchupBatchRequest\x1a/.ironflow.v1.WaitProjectionCatchupBatchResponse\x12\\\n\x0cWaitForEvent\x12 .ironflow.v1.WaitForEventRequest\x1a*.ironflow.v1.WaitProjectionCatchupResponse\x12|\n\x1bWaitProjectionCatchupStream\x12).ironflow.v1.WaitProjectionCatchupRequest\x1a0.ironflow.v1.WaitProjectionCatchupStreamResponse0\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         duration_pb.desc(),
         struct_pb.desc(),

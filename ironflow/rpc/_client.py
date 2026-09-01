@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._gen import agent_tools_connect, audit_connect, environment_connect, ironflow_connect, projection_connect, pubsub_connect, timetravel_connect, webhook_connect
+from .._gen import agent_tools_connect, audit_connect, environment_connect, event_schema_connect, ironflow_connect, projection_connect, pubsub_connect, timetravel_connect, webhook_connect
 from ._runtime import (
     _AsyncCoordinator,
     _Coordinator,
@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
 
     from .v1 import (
+        CheckEnforcementRequest,
+        CheckEnforcementResponse,
         ConsumerGroup,
         CreateConsumerGroupRequest,
         CreateSQLProjectionRequest,
@@ -64,6 +66,8 @@ if TYPE_CHECKING:
         GetWebhookSourceRequest,
         InjectStepOutputRequest,
         InjectStepOutputResponse,
+        InvokeFunctionSyncRequest,
+        InvokeFunctionSyncResponse,
         InvokeToolRequest,
         InvokeToolResponse,
         JoinConsumerGroupRequest,
@@ -227,6 +231,26 @@ class _Environments:
     ) -> RotateAPIKeyResponse:
         self._owner._check_open("environments.rotate_api_key")
         return self._client.rotate_api_key(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+class _EventSchemas:
+    """Capability namespace `rpc.event_schemas`."""
+
+    def __init__(self, owner: IronflowRPC, client: event_schema_connect.EventSchemaServiceClientSync) -> None:
+        self._owner = owner
+        self._client = client
+
+    # rpc: ironflow.v1.EventSchemaService/CheckEnforcement
+    def check_enforcement(
+        self,
+        request: CheckEnforcementRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> CheckEnforcementResponse:
+        self._owner._check_open("event_schemas.check_enforcement")
+        return self._client.check_enforcement(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -587,6 +611,19 @@ class _Runs:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.IronflowService/InvokeFunctionSync
+    def invoke_function_sync(
+        self,
+        request: InvokeFunctionSyncRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> InvokeFunctionSyncResponse:
+        self._owner._check_open("runs.invoke_function_sync")
+        return self._client.invoke_function_sync(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.IronflowService/TriggerBatch
     def trigger_batch(
         self,
@@ -850,6 +887,7 @@ class IronflowRPC(_Coordinator):
         self._agent_tools_service = agent_tools_connect.AgentToolsServiceClientSync(self._server_url, **kw)
         self._audit_service = audit_connect.AuditServiceClientSync(self._server_url, **kw)
         self._environment_service = environment_connect.EnvironmentServiceClientSync(self._server_url, **kw)
+        self._event_schema_service = event_schema_connect.EventSchemaServiceClientSync(self._server_url, **kw)
         self._ironflow_service = ironflow_connect.IronflowServiceClientSync(self._server_url, **kw)
         self._projection_service = projection_connect.ProjectionServiceClientSync(self._server_url, **kw)
         self._pub_sub_service = pubsub_connect.PubSubServiceClientSync(self._server_url, **kw)
@@ -862,6 +900,8 @@ class IronflowRPC(_Coordinator):
         self.audit = _Audit(self, self._audit_service)
         #: `rpc.environments`
         self.environments = _Environments(self, self._environment_service)
+        #: `rpc.event_schemas`
+        self.event_schemas = _EventSchemas(self, self._event_schema_service)
         #: `rpc.functions`
         self.functions = _Functions(self, self._ironflow_service)
         #: `rpc.projections`
@@ -876,7 +916,7 @@ class IronflowRPC(_Coordinator):
         self.webhooks = _Webhooks(self, self._webhook_service)
 
     def _service_clients(self) -> tuple[Any, ...]:
-        return (self._agent_tools_service, self._audit_service, self._environment_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._time_travel_service, self._webhook_service,)
+        return (self._agent_tools_service, self._audit_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._time_travel_service, self._webhook_service,)
 
 class _AsyncAgentTools:
     """Capability namespace `rpc.agent_tools`."""
@@ -986,6 +1026,26 @@ class _AsyncEnvironments:
     ) -> RotateAPIKeyResponse:
         self._owner._check_open("environments.rotate_api_key")
         return await self._client.rotate_api_key(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+class _AsyncEventSchemas:
+    """Capability namespace `rpc.event_schemas`."""
+
+    def __init__(self, owner: AsyncIronflowRPC, client: event_schema_connect.EventSchemaServiceClient) -> None:
+        self._owner = owner
+        self._client = client
+
+    # rpc: ironflow.v1.EventSchemaService/CheckEnforcement
+    async def check_enforcement(
+        self,
+        request: CheckEnforcementRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> CheckEnforcementResponse:
+        self._owner._check_open("event_schemas.check_enforcement")
+        return await self._client.check_enforcement(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -1346,6 +1406,19 @@ class _AsyncRuns:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.IronflowService/InvokeFunctionSync
+    async def invoke_function_sync(
+        self,
+        request: InvokeFunctionSyncRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> InvokeFunctionSyncResponse:
+        self._owner._check_open("runs.invoke_function_sync")
+        return await self._client.invoke_function_sync(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.IronflowService/TriggerBatch
     async def trigger_batch(
         self,
@@ -1609,6 +1682,7 @@ class AsyncIronflowRPC(_AsyncCoordinator):
         self._agent_tools_service = agent_tools_connect.AgentToolsServiceClient(self._server_url, **kw)
         self._audit_service = audit_connect.AuditServiceClient(self._server_url, **kw)
         self._environment_service = environment_connect.EnvironmentServiceClient(self._server_url, **kw)
+        self._event_schema_service = event_schema_connect.EventSchemaServiceClient(self._server_url, **kw)
         self._ironflow_service = ironflow_connect.IronflowServiceClient(self._server_url, **kw)
         self._projection_service = projection_connect.ProjectionServiceClient(self._server_url, **kw)
         self._pub_sub_service = pubsub_connect.PubSubServiceClient(self._server_url, **kw)
@@ -1621,6 +1695,8 @@ class AsyncIronflowRPC(_AsyncCoordinator):
         self.audit = _AsyncAudit(self, self._audit_service)
         #: `rpc.environments`
         self.environments = _AsyncEnvironments(self, self._environment_service)
+        #: `rpc.event_schemas`
+        self.event_schemas = _AsyncEventSchemas(self, self._event_schema_service)
         #: `rpc.functions`
         self.functions = _AsyncFunctions(self, self._ironflow_service)
         #: `rpc.projections`
@@ -1635,4 +1711,4 @@ class AsyncIronflowRPC(_AsyncCoordinator):
         self.webhooks = _AsyncWebhooks(self, self._webhook_service)
 
     def _service_clients(self) -> tuple[Any, ...]:
-        return (self._agent_tools_service, self._audit_service, self._environment_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._time_travel_service, self._webhook_service,)
+        return (self._agent_tools_service, self._audit_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._time_travel_service, self._webhook_service,)

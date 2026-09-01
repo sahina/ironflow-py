@@ -64,7 +64,7 @@
 # edit, not two.
 expect:
   rest: 41
-  rpc: 42
+  rpc: 44
   stream: 4
   unsupported: 1
 
@@ -112,6 +112,13 @@ rpcs:
     classification: rpc
     capability: runs
     method: trigger_sync
+  - path: ironflow.v1.IronflowService/InvokeFunctionSync
+    classification: rpc
+    capability: runs
+    method: invoke_function_sync
+    note: >-
+      Function-id-keyed sync invoke (ADR 0067). No REST sibling: the REST
+      /functions/{id}/invoke route is async and returns {run_id, event_id}.
   - path: ironflow.v1.IronflowService/TriggerBatch
     classification: rpc
     capability: runs
@@ -273,6 +280,14 @@ rpcs:
   - path: ironflow.v1.EventSchemaService/TestUpcast
     classification: rest
     rest: "POST /api/v1/events/upcast"
+  # No REST sibling: this RPC was added for `ironflow event schema check`
+  # (#1958) and the CLI speaks Connect. Exposed rather than skipped because it
+  # is a real capability — "is enforcement actually enforcing" — that the REST
+  # client cannot answer at all.
+  - path: ironflow.v1.EventSchemaService/CheckEnforcement
+    classification: rpc
+    capability: event_schemas
+    method: check_enforcement
 
   # ── WebhookService ──
   - path: ironflow.v1.WebhookService/CreateWebhookSource
