@@ -33,7 +33,7 @@ class TestRetrySucceeds:
             Response(status=503),
             Response(status=200, body={"runs": ["r1"]}),
         )
-        result = client(server).runs_list()
+        result = client(server).events_list()
         assert result == {"runs": ["r1"]}
         assert len(server.requests) == 2
 
@@ -43,7 +43,7 @@ class TestRetrySucceeds:
             Response(status=500),
             Response(status=200, body={"ok": True}),
         )
-        assert client(server).runs_list() == {"ok": True}
+        assert client(server).events_list() == {"ok": True}
         assert len(server.requests) == 3
 
 
@@ -52,7 +52,7 @@ class TestRetryExhausted:
         server.script(*[Response(status=503) for _ in range(5)])
         c = client(server)
         with pytest.raises(IronflowError) as exc:
-            c.runs_list()
+            c.events_list()
         assert exc.value.retryable is True
         assert exc.value.status_code == 503
         # Default max_attempts is 3 — not 5.
@@ -72,7 +72,7 @@ class TestRetryExhausted:
         c = client(server, max_attempts=3)
 
         with pytest.raises(IronflowError):
-            c.runs_list()
+            c.events_list()
 
         assert len(server.requests) == 3, "expected 3 attempts"
         assert len(slept) == 2, f"3 attempts must sleep exactly twice, slept {slept}"
@@ -83,7 +83,7 @@ class TestRetryExhausted:
         server.script(Response(status=503))
         c = client(server, max_attempts=1)
         with pytest.raises(IronflowError):
-            c.runs_list()
+            c.events_list()
         assert slept == []
 
 
@@ -93,7 +93,7 @@ class TestNonRetryable:
             Response(status=404, body={"code": "NOT_FOUND", "message": "nope"})
         )
         with pytest.raises(IronflowError) as exc:
-            client(server).runs_get("missing")
+            client(server).events_get("missing")
         assert exc.value.retryable is False
         assert exc.value.status_code == 404
         assert exc.value.code == "NOT_FOUND"
@@ -103,14 +103,14 @@ class TestNonRetryable:
     def test_client_errors_not_retryable(self, server, status: int) -> None:
         server.script(Response(status=status))
         with pytest.raises(IronflowError) as exc:
-            client(server).runs_list()
+            client(server).events_list()
         assert exc.value.retryable is False
         assert len(server.requests) == 1
 
     @pytest.mark.parametrize("status", [408, 429, 500, 502, 503, 504])
     def test_retryable_statuses(self, server, status: int) -> None:
         server.script(Response(status=status), Response(status=200, body={"ok": 1}))
-        assert client(server).runs_list() == {"ok": 1}
+        assert client(server).events_list() == {"ok": 1}
         assert len(server.requests) == 2
 
 
@@ -123,13 +123,13 @@ class TestWriteMethodsNotRetried:
     def test_post_not_retried_by_default(self, server) -> None:
         server.script(Response(status=503), Response(status=200, body={"ok": 1}))
         with pytest.raises(IronflowError):
-            client(server).events_create(body={"name": "x"})
+            client(server).request("POST", "/api/v1/projects", body={"name":"x"})
         assert len(server.requests) == 1, "POST must not retry by default"
 
     def test_patch_not_retried_by_default(self, server) -> None:
         server.script(Response(status=503), Response(status=200, body={"ok": 1}))
         with pytest.raises(IronflowError):
-            client(server).steps_patch(body={})
+            client(server).request("PATCH", "/api/v1/projects/p1", body={})
         assert len(server.requests) == 1
 
     def test_put_is_retried(self, server) -> None:
@@ -144,7 +144,7 @@ class TestWriteMethodsNotRetried:
         c = client(server)
         result = c.request(
             "POST",
-            "/api/v1/events",
+            "/api/v1/projects",
             headers={"Idempotency-Key": "abc123"},
             body={"name": "x"},
             retry=True,
@@ -173,7 +173,7 @@ class TestRetryAfter:
             Response(status=200, body={"ok": 1}),
         )
         c = client(server, max_backoff=5.0)
-        assert c.runs_list() == {"ok": 1}
+        assert c.events_list() == {"ok": 1}
 
         assert slept == [1.0], f"Retry-After: 1 should request 1s, got {slept}"
 
@@ -192,7 +192,7 @@ class TestRetryAfter:
             Response(status=503, headers={"Retry-After": format_datetime(when)}),
             Response(status=200, body={"ok": 1}),
         )
-        assert client(server, max_backoff=60.0).runs_list() == {"ok": 1}
+        assert client(server, max_backoff=60.0).events_list() == {"ok": 1}
 
         assert len(slept) == 1
         # ~30s minus sub-second truncation, and emphatically not the 0.01s backoff.
@@ -204,7 +204,7 @@ class TestRetryAfter:
             Response(status=200, body={"ok": 1}),
         )
         # Must not raise, must still retry.
-        assert client(server).runs_list() == {"ok": 1}
+        assert client(server).events_list() == {"ok": 1}
 
 
 class TestTotalTimeout:
@@ -215,7 +215,7 @@ class TestTotalTimeout:
         c = client(server, total_timeout=0.5)
         started = time.monotonic()
         with pytest.raises(IronflowError):
-            c.runs_list()
+            c.events_list()
         elapsed = time.monotonic() - started
         # Retry-After asks for 5s; the deadline must refuse rather than obey.
         assert elapsed < 1.0, f"total_timeout ignored; took {elapsed:.2f}s"

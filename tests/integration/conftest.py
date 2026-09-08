@@ -42,7 +42,7 @@ from typing import Any
 
 import pytest
 
-from ironflow import AsyncIronflowRPC, IronflowClient, IronflowRPC
+from ironflow import AsyncIronflowRPC, IronflowRPC
 
 SERVER_URL = os.environ.get("IRONFLOW_TEST_SERVER")
 API_KEY = os.environ.get("IRONFLOW_TEST_API_KEY")
@@ -104,9 +104,10 @@ def rpc(server_url: str, api_key: str) -> Any:
 
 
 @pytest.fixture
-def rest(server_url: str, api_key: str) -> Any:
-    """The REST client, for arranging state the RPC surface cannot reach."""
-    return IronflowClient(server_url=server_url, api_key=api_key)
+def publish_rpc(server_url: str, api_key: str) -> Any:
+    """A separate client can publish while the subscriber blocks."""
+    with IronflowRPC(server_url=server_url, api_key=api_key) as client:
+        yield client
 
 
 @pytest.fixture

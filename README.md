@@ -34,7 +34,7 @@ KV, and config, but it ships **no worker runtime** — there is no `step.run`, n
 
 **Two clients, two protocols, neither a superset of the other.** `IronflowClient`
 speaks REST and retries idempotent methods. `IronflowRPC` / `AsyncIronflowRPC`
-speak ConnectRPC and reach 46 capabilities REST does not serve — webhook
+speak ConnectRPC and reach 48 capabilities REST does not serve — webhook
 management, agent tools, time travel, pub/sub consumer groups, function
 versioning, and environment lookup/key rotation — including four server
 streams. `IronflowRPC` retries only the unary methods the protos annotate
@@ -56,6 +56,9 @@ For durable step execution, use the Go or JavaScript SDK.
 ## Quick Start
 
 ```python
+from protobuf.wkt import Struct
+from ironflow.rpc import v1
+from ironflow import IronflowRPC
 from ironflow import IronflowClient
 
 client = IronflowClient(
@@ -64,10 +67,8 @@ client = IronflowClient(
 )
 
 # Emit an event
-client.events_create(body={
-    "name": "user.created",
-    "data": {"user_id": "123", "email": "user@example.com"},
-})
+with IronflowRPC(server_url=client.server_url, api_key=client.api_key) as rpc:
+    rpc.events.emit(v1.TriggerRequest(event='user.created', data=Struct.from_python({'user_id': '123', 'email': 'user@example.com'})))
 
 # List runs
 runs = client.runs_list()

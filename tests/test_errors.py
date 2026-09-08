@@ -30,7 +30,7 @@ class TestTransportErrorsAreWrapped:
         c = IronflowClient(server_url=f"http://127.0.0.1:{_closed_port()}")
         c.initial_backoff = 0.01
         with pytest.raises(IronflowError) as exc:
-            c.runs_list()
+            c.events_list()
         assert exc.value.retryable is True
         assert "cannot reach" in str(exc.value)
 
@@ -38,7 +38,7 @@ class TestTransportErrorsAreWrapped:
         c = IronflowClient(server_url="http://ironflow-nonexistent.invalid")
         c.initial_backoff = 0.01
         with pytest.raises(IronflowError) as exc:
-            c.runs_list()
+            c.events_list()
         assert exc.value.retryable is True
 
     def test_connection_refused_is_not_a_urllib_error(self) -> None:
@@ -48,7 +48,7 @@ class TestTransportErrorsAreWrapped:
         c = IronflowClient(server_url=f"http://127.0.0.1:{_closed_port()}")
         c.initial_backoff = 0.01
         try:
-            c.runs_list()
+            c.events_list()
         except IronflowError:
             pass
         except urllib.error.URLError:  # pragma: no cover
@@ -61,19 +61,19 @@ class TestMalformedResponses:
         server.script(Response(status=200, raw=b"<html>gateway</html>"))
         c = IronflowClient(server_url=server.url)
         with pytest.raises(IronflowError) as exc:
-            c.runs_list()
+            c.events_list()
         assert "expected JSON" in str(exc.value)
         assert exc.value.retryable is False
 
     def test_empty_body_returns_none(self, server) -> None:
         server.script(Response(status=200, raw=b""))
-        assert IronflowClient(server_url=server.url).runs_list() is None
+        assert IronflowClient(server_url=server.url).events_list() is None
 
     def test_non_json_error_body_uses_text(self, server) -> None:
         server.script(Response(status=500, raw=b"upstream exploded"))
         c = IronflowClient(server_url=server.url, max_attempts=1)
         with pytest.raises(IronflowError) as exc:
-            c.runs_list()
+            c.events_list()
         assert "upstream exploded" in str(exc.value)
 
 
@@ -83,7 +83,7 @@ class TestErrorFields:
             Response(status=409, body={"code": "CONFLICT", "message": "version mismatch"})
         )
         with pytest.raises(IronflowError) as exc:
-            IronflowClient(server_url=server.url).runs_list()
+            IronflowClient(server_url=server.url).events_list()
         assert exc.value.status_code == 409
         assert exc.value.code == "CONFLICT"
         assert str(exc.value) == "version mismatch"
@@ -93,7 +93,7 @@ class TestErrorFields:
         server.script(*[Response(status=429, headers={"Retry-After": "7"}) for _ in range(3)])
         c = IronflowClient(server_url=server.url, max_attempts=1)
         with pytest.raises(IronflowError) as exc:
-            c.runs_list()
+            c.events_list()
         assert exc.value.retry_after == 7.0
 
     def test_importable_from_both_paths(self) -> None:

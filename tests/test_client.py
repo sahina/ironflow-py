@@ -104,32 +104,32 @@ class TestClientInit:
 class TestRequestMechanics:
     def test_get_sends_correct_method(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = {"runs": []}
-        mock_server.runs_list()
+        mock_server.events_list()
         assert len(MockHandler.requests) == 1
         assert MockHandler.requests[0]["method"] == "GET"
-        assert MockHandler.requests[0]["path"] == "/api/v1/runs"
+        assert MockHandler.requests[0]["path"] == "/api/v1/events"
 
     def test_post_sends_body(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = {"run_ids": ["r1"]}
-        mock_server.events_create(body={"event": "test", "data": {}})
+        mock_server.secrets_create(body={"name": "test", "value": "value"}, x_ironflow_environment="default")
         assert MockHandler.requests[0]["method"] == "POST"
-        assert MockHandler.requests[0]["body"]["event"] == "test"
+        assert MockHandler.requests[0]["body"]["name"] == "test"
 
     def test_auth_header(self, mock_server: IronflowClient) -> None:
-        mock_server.runs_list()
+        mock_server.events_list()
         assert "Bearer test_key" in MockHandler.requests[0]["headers"].get(
             "Authorization", ""
         )
 
     def test_path_params_escaped(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = {"id": "r1"}
-        mock_server.runs_get("run/with/slashes")
-        assert "/api/v1/runs/run%2Fwith%2Fslashes" == MockHandler.requests[0]["path"]
+        mock_server.events_get("run/with/slashes")
+        assert "/api/v1/events/run%2Fwith%2Fslashes" == MockHandler.requests[0]["path"]
 
     def test_error_response(self, mock_server: IronflowClient) -> None:
         MockHandler.response_status = 404
         with pytest.raises(IronflowError) as exc_info:
-            mock_server.runs_get("nonexistent")
+            mock_server.events_get("nonexistent")
         assert exc_info.value.status_code == 404
         assert exc_info.value.code == "ERROR"
 
@@ -137,37 +137,9 @@ class TestRequestMechanics:
 class TestEndpointCoverage:
     """Verify key endpoints are callable."""
 
-    def test_events_create(self, mock_server: IronflowClient) -> None:
-        mock_server.events_create(body={"event": "test"})
-        assert MockHandler.requests[0]["path"] == "/api/v1/events"
-
     def test_events_list(self, mock_server: IronflowClient) -> None:
         mock_server.events_list()
         assert MockHandler.requests[0]["path"] == "/api/v1/events"
-
-    def test_runs_list(self, mock_server: IronflowClient) -> None:
-        mock_server.runs_list()
-        assert MockHandler.requests[0]["path"] == "/api/v1/runs"
-
-    def test_runs_get(self, mock_server: IronflowClient) -> None:
-        mock_server.runs_get("r1")
-        assert MockHandler.requests[0]["path"] == "/api/v1/runs/r1"
-
-    def test_runs_cancel(self, mock_server: IronflowClient) -> None:
-        mock_server.runs_cancel("r1", body={"reason": "test"})
-        assert MockHandler.requests[0]["path"] == "/api/v1/runs/r1/cancel"
-
-    def test_projections_list(self, mock_server: IronflowClient) -> None:
-        mock_server.projections_list()
-        assert MockHandler.requests[0]["path"] == "/api/v1/projections"
-
-    def test_projections_get(self, mock_server: IronflowClient) -> None:
-        mock_server.projections_get("my-proj")
-        assert MockHandler.requests[0]["path"] == "/api/v1/projections/my-proj"
-
-    def test_projections_rebuild(self, mock_server: IronflowClient) -> None:
-        mock_server.projections_rebuild("my-proj")
-        assert MockHandler.requests[0]["path"] == "/api/v1/projections/my-proj/rebuild"
 
     def test_kv_list_buckets(self, mock_server: IronflowClient) -> None:
         mock_server.kv_list_buckets()
@@ -202,20 +174,6 @@ class TestAnnotatedGroupRoundTrips:
     `cast`, so nothing is checked at runtime.
     """
 
-    def test_runs_list(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = {
-            "runs": [{"id": "run_1", "function_id": "fn_1", "status": "completed"}],
-            "count": 1,
-            "total_count": 1,
-        }
-        result = mock_server.runs_list(status="completed", limit=1)
-        assert MockHandler.requests[0]["path"].startswith("/api/v1/runs?")
-        query = parse_qs(urlparse(MockHandler.requests[0]["path"]).query)
-        assert query["status"] == ["completed"]
-        assert query["limit"] == ["1"]
-        assert result["total_count"] == 1
-        assert result["runs"][0]["id"] == "run_1"
-
     def test_events_list(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = {
             "events": [{"id": "evt_1", "name": "user.created", "source": "api"}],
@@ -229,35 +187,6 @@ class TestAnnotatedGroupRoundTrips:
         assert query["name"] == ["user.created"]
         assert result["events"][0]["name"] == "user.created"
         assert result["has_next"] is False
-
-    def test_streams_list_events(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = {
-            "events": [{"id": "evt_1", "name": "order.placed"}],
-            "total_count": 1,
-        }
-        result = mock_server.streams_list_events("order-42", from_version=3)
-        assert MockHandler.requests[0]["path"].startswith(
-            "/api/v1/streams/order-42/events?"
-        )
-        query = parse_qs(urlparse(MockHandler.requests[0]["path"]).query)
-        assert query["from_version"] == ["3"]
-        assert result["total_count"] == 1
-        assert result["events"][0]["name"] == "order.placed"
-
-    def test_projections_list(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = {
-            "projections": [
-                {"name": "order_totals", "mode": "managed", "status": "active"}
-            ],
-            "count": 1,
-        }
-        result = mock_server.projections_list(status="active", limit=1)
-        assert MockHandler.requests[0]["path"].startswith("/api/v1/projections?")
-        query = parse_qs(urlparse(MockHandler.requests[0]["path"]).query)
-        assert query["status"] == ["active"]
-        assert query["limit"] == ["1"]
-        assert result["count"] == 1
-        assert result["projections"][0]["name"] == "order_totals"
 
     def test_workers_list_jobs(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = {
@@ -339,22 +268,6 @@ class TestAnnotatedGroupRoundTrips:
         assert result["name"] == "STRIPE_KEY"
         assert result["revision"] == 3
 
-    def test_schemas_list(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = {
-            "schemas": [
-                {"event_name": "order.placed", "version": 2, "schema_json": "{}"}
-            ],
-            "total_count": 1,
-            "count": 1,
-        }
-        result = mock_server.schemas_list(event_name="order.placed", limit=1)
-        assert MockHandler.requests[0]["path"].startswith("/api/v1/events/schemas?")
-        query = parse_qs(urlparse(MockHandler.requests[0]["path"]).query)
-        assert query["event_name"] == ["order.placed"]
-        assert query["limit"] == ["1"]
-        assert result["total_count"] == 1
-        assert result["schemas"][0]["version"] == 2
-
     def test_policies_list(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = [
             {"id": "pol_1", "name": "deny-prod", "effect": "deny", "role_count": 2}
@@ -410,29 +323,6 @@ class TestAnnotatedGroupRoundTrips:
         assert MockHandler.requests[0]["path"] == "/api/v1/environments/env_acme_prod"
         assert result["status"] == "deleted"
 
-    def test_functions_list(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = {
-            "functions": [{"id": "fn_1", "slug": "send-email", "status": "active"}],
-            "count": 1,
-            "total_count": 1,
-        }
-        result = mock_server.functions_list(status="active", limit=1, offset=0)
-        assert MockHandler.requests[0]["path"].startswith("/api/v1/functions?")
-        query = parse_qs(urlparse(MockHandler.requests[0]["path"]).query)
-        assert query["status"] == ["active"]
-        assert query["limit"] == ["1"]
-        assert query["offset"] == ["0"]
-        assert result["total_count"] == 1
-        assert result["functions"][0]["slug"] == "send-email"
-
-    def test_functions_invoke(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = {"run_id": "run_1", "event_id": "evt_1"}
-        result = mock_server.functions_invoke("fn_1", {"data": {"to": "a@b.com"}})
-        assert MockHandler.requests[0]["method"] == "POST"
-        assert MockHandler.requests[0]["path"] == "/api/v1/functions/fn_1/invoke"
-        assert MockHandler.requests[0]["body"] == {"data": {"to": "a@b.com"}}
-        assert result["run_id"] == "run_1"
-
     def test_audit_list(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = {
             "events": [{"id": "aud_1", "run_id": "run_1", "event_type": "run.created"}],
@@ -448,22 +338,6 @@ class TestAnnotatedGroupRoundTrips:
         # while the wire parameter stays `from`.
         assert query["from"] == ["2026-08-01"]
         assert result["events"][0]["id"] == "aud_1"
-
-    def test_publish(self, mock_server: IronflowClient) -> None:
-        # Pins the method NAME, not just the payload. The generator builds a
-        # method suffix by locating the group inside the path, and "pubsub"
-        # does not appear in "/api/v1/publish" — which is the shape of the
-        # #1551 bug, where an absent group collapsed a name and the collision
-        # was resolved by silently renaming the incumbent. This name predates
-        # the schema sweep and must not move under anyone's feet.
-        MockHandler.response_body = {"event_id": "evt_1", "sequence": 42}
-        result = mock_server.pub_sub_create(
-            {"topic": "orders", "data": {"id": 1}, "idempotency_key": "k1"}
-        )
-        assert MockHandler.requests[0]["method"] == "POST"
-        assert MockHandler.requests[0]["path"] == "/api/v1/publish"
-        assert MockHandler.requests[0]["body"]["topic"] == "orders"
-        assert result["sequence"] == 42
 
     # ── groups added by the 25-route registration sweep ──────────────────
 
@@ -547,87 +421,6 @@ class TestAnnotatedGroupRoundTrips:
         discarded = mock_server.outbox_delete_dead_letter("evt_1", env="env_default")
         assert MockHandler.requests[2]["method"] == "DELETE"
         assert discarded["result"] == "discarded"
-
-    def test_projections_catchup_round_trip(self, mock_server: IronflowClient) -> None:
-        # The catch-up routes block server-side but are ordinary
-        # request/response JSON — registered with addT, not addStreaming.
-        # Keys are lowerCamelCase: waitResponseToMap names them explicitly and
-        # does not use the proto's snake_case JSON tags.
-        MockHandler.response_body = {
-            "caughtUp": True,
-            "timedOut": False,
-            "currentSeq": 42,
-            "targetSeq": 42,
-            "behindByEvents": 0,
-            "rebuilding": False,
-            "mode": "managed",
-        }
-        result = mock_server.projections_list_catchup(
-            "order_totals", min_seq=42, timeout=5000
-        )
-        assert MockHandler.requests[0]["path"].startswith(
-            "/api/v1/projections/order_totals/catchup?"
-        )
-        query = parse_qs(urlparse(MockHandler.requests[0]["path"]).query)
-        assert query["minSeq"] == ["42"]
-        assert query["timeout"] == ["5000"]
-        assert result["caughtUp"] is True
-        assert result["behindByEvents"] == 0
-
-    def test_projections_wait_for_event(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = {
-            "caughtUp": True,
-            "timedOut": False,
-            "currentSeq": 7,
-            "targetSeq": 7,
-            "behindByEvents": 0,
-            "rebuilding": False,
-            "mode": "managed",
-        }
-        result = mock_server.projections_wait_for_event(
-            {"eventId": "evt_1", "projection": "order_totals", "timeoutMs": 5000}
-        )
-        assert MockHandler.requests[0]["method"] == "POST"
-        assert MockHandler.requests[0]["path"] == "/api/v1/projections/wait-for-event"
-        assert MockHandler.requests[0]["body"]["eventId"] == "evt_1"
-        assert result["mode"] == "managed"
-
-    def test_projections_catchup_batch(self, mock_server: IronflowClient) -> None:
-        # minSeq goes on the wire as a STRING. The handler decodes with
-        # UseNumber and ParseUints it, so a string survives values above 2^53
-        # that a JSON number would round.
-        MockHandler.response_body = {
-            "results": [
-                {
-                    "result": {
-                        "caughtUp": True,
-                        "timedOut": False,
-                        "currentSeq": 9007199254740993,
-                        "targetSeq": 9007199254740993,
-                        "behindByEvents": 0,
-                        "rebuilding": False,
-                        "mode": "managed",
-                    }
-                },
-                {"error": "projection not found"},
-            ]
-        }
-        result = mock_server.projections_catchup_batch(
-            {
-                "items": [
-                    {"name": "order_totals", "minSeq": "9007199254740993"},
-                    {"name": "missing", "minSeq": "1"},
-                ],
-                "timeoutMs": 5000,
-            }
-        )
-        assert MockHandler.requests[0]["path"] == "/api/v1/projections/catchup/batch"
-        assert MockHandler.requests[0]["body"]["items"][0]["minSeq"] == (
-            "9007199254740993"
-        )
-        # Each result carries error or result, never both.
-        assert result["results"][0]["result"]["caughtUp"] is True
-        assert result["results"][1]["error"] == "projection not found"
 
     def test_policies_versions_and_dry_run(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = [

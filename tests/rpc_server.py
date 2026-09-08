@@ -42,6 +42,24 @@ from connectrpc.code import Code
 from connectrpc.errors import ConnectError
 from typing_extensions import Self  # 3.10 has no typing.Self
 
+from ironflow._gen import entity_stream_pb as stream_pb
+from ironflow._gen.audit_connect import AuditService, AuditServiceASGIApplication
+from ironflow._gen.entity_stream_connect import (
+    EntityStreamService,
+    EntityStreamServiceASGIApplication,
+)
+from ironflow._gen.event_schema_connect import (
+    EventSchemaService,
+    EventSchemaServiceASGIApplication,
+)
+from ironflow._gen.ironflow_connect import (
+    IronflowService,
+    IronflowServiceASGIApplication,
+)
+from ironflow._gen.projection_connect import (
+    ProjectionService,
+    ProjectionServiceASGIApplication,
+)
 from ironflow._gen.pubsub_connect import PubSubService, PubSubServiceASGIApplication
 from ironflow._gen.webhook_connect import WebhookService, WebhookServiceASGIApplication
 
@@ -126,6 +144,371 @@ class Recorder:
             raise ConnectError(code, self.raise_message)
 
 
+class StubEntityStreamService(EntityStreamService):  # type: ignore[misc]
+    async def append_event(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        assert request.entity_id == "order-1"
+        assert request.expected_version == 9007199254740993
+        return stream_pb.AppendEventResponse(
+            event_id="event-1", entity_version=9007199254740994
+        )
+
+    async def read_stream(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        assert request.from_version == 9007199254740993
+        return stream_pb.ReadStreamResponse(
+            events=[
+                stream_pb.StreamEvent(id="event-1", entity_version=request.from_version)
+            ],
+            total_count=1,
+        )
+
+    async def get_stream_info(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        if request.entity_id == "missing":
+            raise ConnectError(Code.NOT_FOUND, "stream not found")
+        return stream_pb.GetStreamInfoResponse(
+            entity_id=request.entity_id, version=9007199254740993
+        )
+
+    async def list_streams(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        assert request.search == "order"
+        return stream_pb.ListStreamsResponse(
+            streams=[
+                stream_pb.GetStreamInfoResponse(
+                    entity_id="order-1", version=9007199254740993
+                )
+            ],
+            total_count=1,
+        )
+
+    async def get_entity_history(
+        self, request: Any, ctx: RequestContext[Any, Any]
+    ) -> Any:
+        assert request.from_timestamp.seconds == 123
+        return stream_pb.GetEntityHistoryResponse(
+            entries=[
+                stream_pb.EntityHistoryEntry(
+                    event_id="event-1", entity_version=9007199254740993
+                )
+            ],
+            total_events=1,
+        )
+
+    async def create_snapshot(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        assert request.entity_version == 9007199254740993
+        assert request.state_value.to_python() == "state"
+        return stream_pb.CreateSnapshotResponse(snapshot_id="snapshot-1")
+
+    async def get_snapshot(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        assert request.before_version == 9007199254740993
+        return stream_pb.GetSnapshotResponse(
+            snapshot_id="snapshot-1", entity_version=request.before_version
+        )
+
+
+class StubEventSchemaService(EventSchemaService):  # type: ignore[misc]
+    def __init__(self) -> None:
+        self.schema: Any = None
+
+    async def register_schema(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import GetSchemaResponse, RegisterSchemaResponse
+
+        self.schema = GetSchemaResponse(
+            event_name=request.event_name,
+            version=request.version,
+            schema_json=request.schema_json,
+            environment_id="env_default",
+        )
+        return RegisterSchemaResponse(status="created")
+
+    async def get_schema(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        if self.schema is None or request.event_name != self.schema.event_name:
+            raise ConnectError(Code.NOT_FOUND, "schema not found")
+        assert request.version in (0, self.schema.version)
+        return self.schema
+
+    async def list_schemas(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import ListSchemasResponse, SchemaInfo
+
+        assert request.event_name == "order.placed"
+        assert request.limit == 1
+        rows = (
+            []
+            if self.schema is None
+            else [
+                SchemaInfo(
+                    event_name=self.schema.event_name,
+                    version=self.schema.version,
+                    schema_json=self.schema.schema_json,
+                    environment_id="env_default",
+                )
+            ]
+        )
+        return ListSchemasResponse(schemas=rows, total_count=len(rows))
+
+    async def delete_schema(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import DeleteSchemaResponse
+
+        assert request.event_name == self.schema.event_name
+        assert request.version == self.schema.version
+        self.schema = None
+        return DeleteSchemaResponse()
+
+
+class StubIronflowService(IronflowService):  # type: ignore[misc]
+    async def emit(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import TriggerResponse
+
+        assert request.event == "order.placed"
+        assert request.version == 2
+        assert request.idempotency_key == "once"
+        assert request.data_value.to_python() is False
+        assert request.metadata.to_python() == {"trace_id": "trace"}
+        return TriggerResponse(event_id="event", run_ids=["run"])
+
+    async def get_run(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from protobuf.wkt import Value
+
+        from ironflow.rpc.v1 import Run, RunStatus
+
+        if request.id == "missing":
+            raise ConnectError(Code.NOT_FOUND, "run not found")
+        return Run(
+            id=request.id,
+            status=RunStatus.RUNNING,
+            event_name="order.created",
+            input_value=Value.from_python(False),
+        )
+
+    async def list_runs(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import GetRunRequest, ListRunsResponse
+
+        assert request.offset == 2 and request.search == "run"
+        return ListRunsResponse(
+            runs=[await self.get_run(GetRunRequest(id="run"), ctx)], total_count=3
+        )
+
+    async def get_run_steps(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from protobuf.wkt import Value
+
+        from ironflow.rpc.v1 import GetRunStepsResponse, Step, StepType
+
+        return GetRunStepsResponse(
+            steps=[
+                Step(
+                    id="step",
+                    run_id=request.run_id,
+                    step_type=StepType.COMPENSATE,
+                    duration_ms_full=9007199254740993,
+                    compensation_for="charge",
+                    wait_event_name="wake",
+                    output_value=Value.from_python("output"),
+                )
+            ]
+        )
+
+    async def cancel_run(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import Run, RunStatus
+
+        assert request.reason == "requested"
+        return Run(id=request.id, status=RunStatus.CANCELLED)
+
+    async def get_function(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import (
+            ConcurrencyConfig,
+            DebounceConfig,
+            Function,
+            FunctionStatus,
+        )
+
+        if request.id == "missing":
+            raise ConnectError(Code.NOT_FOUND, "function not found")
+        return Function(
+            id=request.id,
+            name="Process",
+            status=FunctionStatus.ACTIVE,
+            concurrency=ConcurrencyConfig(limit=5),
+            debounce=DebounceConfig(period_ms=100, max_wait_ms=9007199254740993),
+        )
+
+    async def list_functions(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import GetFunctionRequest, ListFunctionsResponse
+
+        assert (
+            request.name == "Process" and request.mode == "pull" and request.offset == 2
+        )
+        fn = await self.get_function(GetFunctionRequest(id="fn-1"), ctx)
+        return ListFunctionsResponse(functions=[fn], total_count=3)
+
+    async def invoke_function(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import InvokeFunctionResponse
+
+        assert request.function_id == "fn-1"
+        assert request.data_value.to_python() == ["input", 42]
+        assert request.idempotency_key == "same"
+        return InvokeFunctionResponse(run_id="run-1", event_id="event-1")
+
+    async def resume_run(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import Run, RunStatus
+
+        return Run(
+            id=request.run_id,
+            status=RunStatus.RUNNING,
+            resume_from_step=request.from_step,
+            parent_run_id="parent",
+        )
+
+    async def patch_step(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import Step, StepStatus
+
+        if request.step_id == "missing":
+            raise ConnectError(Code.NOT_FOUND, "step not found")
+        return Step(
+            id=request.step_id,
+            status=StepStatus.COMPLETED,
+            output=request.output,
+            patched_by=request.reason,
+        )
+
+
+class StubAuditService(AuditService):  # type: ignore[misc]
+    async def get_audit_trail(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from protobuf.wkt import Value
+
+        from ironflow.rpc.v1 import AuditEvent, GetAuditTrailResponse
+
+        assert request.run_id == "run" and request.event_type == "run.created"
+        return GetAuditTrailResponse(
+            events=[
+                AuditEvent(
+                    id="audit",
+                    run_id="run",
+                    environment_id="env",
+                    payload_value=Value.from_python(["payload"]),
+                    metadata_value=Value.from_python({"attempt": 2}),
+                )
+            ],
+            total_count=1,
+        )
+
+
+class StubProjectionService(ProjectionService):  # type: ignore[misc]
+    """Wait responses retain sequence precision through the generated codec."""
+
+    async def get_projection(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from protobuf.wkt import Value
+
+        from ironflow.rpc.v1 import GetProjectionResponse, ProjectionInfo
+
+        return GetProjectionResponse(
+            name=request.name,
+            state_value=Value.from_python(False),
+            registry=ProjectionInfo(
+                version_full=9007199254740993, description="Order view"
+            ),
+        )
+
+    async def list_projections(
+        self, request: Any, ctx: RequestContext[Any, Any]
+    ) -> Any:
+        from ironflow.rpc.v1 import ListProjectionsResponse, ProjectionInfo
+
+        assert request.offset == 1000000
+        return ListProjectionsResponse(
+            projections=[ProjectionInfo(name="orders", description="Order view")]
+        )
+
+    async def get_projection_status(
+        self, request: Any, ctx: RequestContext[Any, Any]
+    ) -> Any:
+        from ironflow.rpc.v1 import GetProjectionStatusResponse
+
+        return GetProjectionStatusResponse(
+            name=request.name, status="active", last_event_seq=9007199254740993
+        )
+
+    async def rebuild_projection(
+        self, request: Any, ctx: RequestContext[Any, Any]
+    ) -> Any:
+        from ironflow.rpc.v1 import RebuildJob, RebuildProjectionResponse
+
+        return RebuildProjectionResponse(
+            job=RebuildJob(
+                projection_name=request.name, events_processed=9007199254740993
+            )
+        )
+
+    async def get_rebuild_job(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import GetRebuildJobResponse, RebuildJob
+
+        return GetRebuildJobResponse(
+            job=RebuildJob(
+                projection_name=request.name, events_processed=9007199254740993
+            )
+        )
+
+    async def cancel_rebuild(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import CancelRebuildResponse
+
+        return CancelRebuildResponse(status="ok")
+
+    async def pause_projection(
+        self, request: Any, ctx: RequestContext[Any, Any]
+    ) -> Any:
+        from ironflow.rpc.v1 import PauseProjectionResponse
+
+        return PauseProjectionResponse(status="ok")
+
+    async def resume_projection(
+        self, request: Any, ctx: RequestContext[Any, Any]
+    ) -> Any:
+        from ironflow.rpc.v1 import ResumeProjectionResponse
+
+        return ResumeProjectionResponse(status="ok")
+
+    async def wait_projection_catchup(
+        self, request: Any, ctx: RequestContext[Any, Any]
+    ) -> Any:
+        from ironflow.rpc.v1 import WaitProjectionCatchupResponse
+
+        assert request.min_seq == 9007199254740993
+        return WaitProjectionCatchupResponse(
+            caught_up=True, current_seq=request.min_seq
+        )
+
+    async def wait_for_event(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import WaitProjectionCatchupResponse
+
+        assert request.event_id == "evt_1"
+        assert request.timeout.seconds == 5
+        return WaitProjectionCatchupResponse(
+            caught_up=True, current_seq=7, target_seq=7, mode="managed"
+        )
+
+    async def wait_projection_catchup_batch(
+        self, request: Any, ctx: RequestContext[Any, Any]
+    ) -> Any:
+        from ironflow.rpc.v1 import (
+            WaitItemResult,
+            WaitProjectionCatchupBatchResponse,
+            WaitProjectionCatchupResponse,
+        )
+
+        assert request.items[0].min_seq == 9007199254740993
+        assert request.timeout.seconds == 5
+        return WaitProjectionCatchupBatchResponse(
+            results=[
+                WaitItemResult(
+                    result=WaitProjectionCatchupResponse(
+                        caught_up=True,
+                        current_seq=9007199254740993,
+                        target_seq=9007199254740993,
+                        mode="managed",
+                    )
+                ),
+                WaitItemResult(error="projection not found"),
+            ]
+        )
+
+
 class StubWebhookService(WebhookService):  # type: ignore[misc]
     """Unary handlers. `async def` because these run under ASGI."""
 
@@ -141,7 +524,9 @@ class StubWebhookService(WebhookService):  # type: ignore[misc]
         self.rec.finish()
         return WebhookSource(id="whs_stub", name=request.name)
 
-    async def get_webhook_source(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+    async def get_webhook_source(
+        self, request: Any, ctx: RequestContext[Any, Any]
+    ) -> Any:
         from ironflow.rpc.v1 import WebhookSource
 
         self.rec.record(ctx)
@@ -167,6 +552,25 @@ class StubPubSubService(PubSubService):  # type: ignore[misc]
 
     def __init__(self, rec: Recorder) -> None:
         self.rec = rec
+
+    async def emit(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import EmitResponse
+
+        assert request.event == "order.placed"
+        assert request.version == 2
+        assert request.idempotency_key == "once"
+        assert request.data_value.to_python() is False
+        assert request.metadata.to_python() == {"trace_id": "trace"}
+        return EmitResponse(event_id="event", run_ids=["run"])
+
+    async def publish(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import PublishResponse
+
+        self.rec.record(ctx)
+        assert request.topic == "orders"
+        assert request.idempotency_key == "key"
+        assert request.data.to_python() == {"id": 1}
+        return PublishResponse(event_id="evt_1", sequence=9007199254740993)
 
     async def subscribe(
         self, request: Any, ctx: RequestContext[Any, Any]
@@ -260,6 +664,19 @@ def serve() -> RunningServer:
     rec = Recorder()
     app = _Router(
         {
+            "ironflow.v1.EntityStreamService": EntityStreamServiceASGIApplication(
+                StubEntityStreamService()
+            ),
+            "ironflow.v1.EventSchemaService": EventSchemaServiceASGIApplication(
+                StubEventSchemaService()
+            ),
+            "ironflow.v1.AuditService": AuditServiceASGIApplication(StubAuditService()),
+            "ironflow.v1.IronflowService": IronflowServiceASGIApplication(
+                StubIronflowService()
+            ),
+            "ironflow.v1.ProjectionService": ProjectionServiceASGIApplication(
+                StubProjectionService()
+            ),
             "ironflow.v1.WebhookService": WebhookServiceASGIApplication(
                 StubWebhookService(rec)
             ),

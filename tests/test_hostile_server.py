@@ -67,7 +67,7 @@ class TestRedirects:
                 max_attempts=1,
             )
             with pytest.raises(IronflowError) as exc:
-                c.runs_list()
+                c.events_list()
 
             assert captured.get("auth") is None, (
                 f"API key leaked to another origin: {captured['auth']}"
@@ -85,7 +85,7 @@ class TestRedirects:
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self) -> None:
-                if self.path == "/api/v1/runs":
+                if self.path == "/api/v1/events":
                     self.send_response(302)
                     self.send_header("Location", "/moved")
                     self.end_headers()
@@ -100,7 +100,7 @@ class TestRedirects:
         srv = _serve(Handler)
         try:
             c = IronflowClient(server_url=f"http://127.0.0.1:{srv.server_port}")
-            assert c.runs_list() == {"ok": True}
+            assert c.events_list() == {"ok": True}
         finally:
             srv.shutdown()
             srv.server_close()
@@ -134,7 +134,7 @@ class TestRedirects:
                 server_url=f"http://127.0.0.1:{srv.server_port}", max_attempts=1
             )
             with pytest.raises(IronflowError) as exc:
-                c.events_create(body={"name": "x"})
+                c.request("POST", "/api/v1/projects", body={"name":"x"})
             assert exc.value.status_code == 303
             assert seen == ["POST"], f"write was silently downgraded: {seen}"
         finally:
@@ -155,7 +155,7 @@ class TestRetryAfterIsClamped:
             Response(status=200, body={"ok": 1}),
         )
         c = IronflowClient(server_url=server.url)
-        assert c.runs_list() == {"ok": 1}
+        assert c.events_list() == {"ok": 1}
 
         assert slept and slept[0] <= c.max_backoff, (
             f"Retry-After bypassed max_backoff={c.max_backoff}: slept {slept}"
@@ -166,7 +166,7 @@ class TestRetryAfterIsClamped:
         server.script(*[Response(status=429, headers={"Retry-After": "3600"})] * 3)
         c = IronflowClient(server_url=server.url, max_attempts=1)
         with pytest.raises(IronflowError) as exc:
-            c.runs_list()
+            c.events_list()
         assert exc.value.retry_after == 3600.0
 
     @pytest.mark.parametrize("value", ["9" * 401, "not-a-date", "", "-5"])
@@ -184,7 +184,7 @@ class TestRetryAfterIsClamped:
         c = IronflowClient(server_url=server.url)
         c.initial_backoff = 0.01
         c.max_backoff = 0.02
-        assert c.runs_list() == {"ok": 1}
+        assert c.events_list() == {"ok": 1}
 
 
 class TestResponseSizeIsBounded:
@@ -209,7 +209,7 @@ class TestResponseSizeIsBounded:
                 server_url=f"http://127.0.0.1:{srv.server_port}", max_attempts=1
             )
             with pytest.raises(IronflowError) as exc:
-                c.runs_list()
+                c.events_list()
             assert "exceeds" in str(exc.value)
         finally:
             srv.shutdown()
@@ -219,7 +219,7 @@ class TestResponseSizeIsBounded:
         server.script(Response(status=500, raw=b"E" * (2 * 1024 * 1024)))
         c = IronflowClient(server_url=server.url, max_attempts=1)
         with pytest.raises(IronflowError) as exc:
-            c.runs_list()
+            c.events_list()
         assert len(str(exc.value)) < 64 * 1024, (
             f"error body became a {len(str(exc.value))}-byte exception message"
         )
@@ -229,7 +229,7 @@ class TestResponseSizeIsBounded:
         server.script(Response(status=200, raw=b"[" * 200_000 + b"]" * 200_000))
         c = IronflowClient(server_url=server.url, max_attempts=1)
         with pytest.raises(IronflowError):
-            c.runs_list()
+            c.events_list()
 
 
 class TestTotalTimeoutBoundsTheAttempt:
@@ -260,7 +260,7 @@ class TestTotalTimeoutBoundsTheAttempt:
             )
             started = _t.monotonic()
             with pytest.raises(IronflowError):
-                c.runs_list()
+                c.events_list()
             elapsed = _t.monotonic() - started
             assert elapsed < 3.0, (
                 f"total_timeout=0.5 with timeout=30 took {elapsed:.2f}s"
@@ -272,7 +272,7 @@ class TestTotalTimeoutBoundsTheAttempt:
     def test_exhausted_budget_refuses_before_dialling(self, server) -> None:
         c = IronflowClient(server_url=server.url, total_timeout=-1.0, max_attempts=1)
         with pytest.raises(IronflowError) as exc:
-            c.runs_list()
+            c.events_list()
         assert "total_timeout" in str(exc.value)
         assert len(server.requests) == 0, "should not have dialled at all"
 
@@ -281,5 +281,5 @@ def test_json_body_still_round_trips(server) -> None:
     """Guard against the hardening breaking the ordinary path."""
     server.script(Response(status=200, body={"runs": [{"id": "r1"}]}))
     c = IronflowClient(server_url=server.url)
-    assert c.runs_list() == {"runs": [{"id": "r1"}]}
+    assert c.events_list() == {"runs": [{"id": "r1"}]}
     assert json.loads(json.dumps({"ok": 1})) == {"ok": 1}

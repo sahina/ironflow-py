@@ -63,8 +63,8 @@
 # The numbers live here and not in check-sdk-parity.sh so there is one place to
 # edit, not two.
 expect:
-  rest: 41
-  rpc: 44
+  rest: 4
+  rpc: 82
   stream: 4
   unsupported: 1
 
@@ -75,11 +75,15 @@ rpcs:
     capability: functions
     method: register
   - path: ironflow.v1.IronflowService/GetFunction
-    classification: rest
-    rest: "GET /api/v1/functions/{id}"
+    classification: rpc
+    capability: functions
+    method: get
+
   - path: ironflow.v1.IronflowService/ListFunctions
-    classification: rest
-    rest: "GET /api/v1/functions"
+    classification: rpc
+    capability: functions
+    method: list
+
   - path: ironflow.v1.IronflowService/UpdateFunctionStatus
     classification: rpc
     capability: functions
@@ -101,13 +105,13 @@ rpcs:
     capability: functions
     method: rollback
   - path: ironflow.v1.IronflowService/Trigger
-    classification: rest
-    rest: "POST /api/v1/functions/{id}/invoke"
-    note: >-
-      InvokeFunctionResponse returns {run_id, event_id}: async, so this is Trigger. TriggerSync has no REST sibling.
+    classification: rpc
+    capability: runs
+    method: trigger
   - path: ironflow.v1.IronflowService/Emit
-    classification: rest
-    rest: "POST /api/v1/events"
+    classification: rpc
+    capability: events
+    method: emit
   - path: ironflow.v1.IronflowService/TriggerSync
     classification: rpc
     capability: runs
@@ -117,33 +121,35 @@ rpcs:
     capability: runs
     method: invoke_function_sync
     note: >-
-      Function-id-keyed sync invoke (ADR 0067). No REST sibling: the REST
-      /functions/{id}/invoke route is async and returns {run_id, event_id}.
+      Function-id-keyed sync invoke (ADR 0067). InvokeFunction is its async counterpart.
   - path: ironflow.v1.IronflowService/TriggerBatch
     classification: rpc
     capability: runs
     method: trigger_batch
   - path: ironflow.v1.IronflowService/GetRun
-    classification: rest
-    rest: "GET /api/v1/runs/{id}"
+    classification: rpc
+    capability: runs
+    method: get
   - path: ironflow.v1.IronflowService/ListRuns
-    classification: rest
-    rest: "GET /api/v1/runs"
+    classification: rpc
+    capability: runs
+    method: list
   - path: ironflow.v1.IronflowService/GetRunSteps
-    classification: rest
-    rest: "GET /api/v1/runs/{id}/steps"
+    classification: rpc
+    capability: runs
+    method: get_steps
   - path: ironflow.v1.IronflowService/CancelRun
-    classification: rest
-    rest: "POST /api/v1/runs/{id}/cancel"
+    classification: rpc
+    capability: runs
+    method: cancel
   - path: ironflow.v1.IronflowService/PatchStep
-    classification: rest
-    rest: "POST /api/v1/steps/patch"
-    note: >-
-      The route is grouped under steps, so the generated REST method is
-      steps_patch and matches the action it performs.
+    classification: rpc
+    capability: runs
+    method: patch_step
   - path: ironflow.v1.IronflowService/ResumeRun
-    classification: rest
-    rest: "POST /api/v1/runs/resume"
+    classification: rpc
+    capability: runs
+    method: resume
   - path: ironflow.v1.IronflowService/PauseRun
     classification: rpc
     capability: runs
@@ -178,26 +184,33 @@ rpcs:
 
   # ── EntityStreamService ──
   - path: ironflow.v1.EntityStreamService/AppendEvent
-    classification: rest
-    rest: "POST /api/v1/streams/{entityId}/events"
+    classification: rpc
+    capability: streams
+    method: append_event
   - path: ironflow.v1.EntityStreamService/ReadStream
-    classification: rest
-    rest: "GET /api/v1/streams/{entityId}/events"
+    classification: rpc
+    capability: streams
+    method: read_stream
   - path: ironflow.v1.EntityStreamService/GetStreamInfo
-    classification: rest
-    rest: "GET /api/v1/streams/{entityId}"
+    classification: rpc
+    capability: streams
+    method: get_info
   - path: ironflow.v1.EntityStreamService/ListStreams
-    classification: rest
-    rest: "GET /api/v1/streams"
+    classification: rpc
+    capability: streams
+    method: list_streams
   - path: ironflow.v1.EntityStreamService/GetEntityHistory
-    classification: rest
-    rest: "GET /api/v1/streams/{entityId}/history"
+    classification: rpc
+    capability: streams
+    method: get_history
   - path: ironflow.v1.EntityStreamService/CreateSnapshot
-    classification: rest
-    rest: "POST /api/v1/streams/{entityId}/snapshots"
+    classification: rpc
+    capability: streams
+    method: create_snapshot
   - path: ironflow.v1.EntityStreamService/GetSnapshot
-    classification: rest
-    rest: "GET /api/v1/streams/{entityId}/snapshots"
+    classification: rpc
+    capability: streams
+    method: get_snapshot
 
   # ── ProjectionService ──
   - path: ironflow.v1.ProjectionService/RegisterProjection
@@ -212,29 +225,37 @@ rpcs:
     capability: projections
     method: stream_events
   - path: ironflow.v1.ProjectionService/GetProjection
-    classification: rest
-    rest: "GET /api/v1/projections/{name}"
+    classification: rpc
+    capability: projections
+    method: get
   - path: ironflow.v1.ProjectionService/ListProjections
-    classification: rest
-    rest: "GET /api/v1/projections"
+    classification: rpc
+    capability: projections
+    method: list
   - path: ironflow.v1.ProjectionService/GetProjectionStatus
-    classification: rest
-    rest: "GET /api/v1/projections/{name}/status"
+    classification: rpc
+    capability: projections
+    method: get_status
   - path: ironflow.v1.ProjectionService/RebuildProjection
-    classification: rest
-    rest: "POST /api/v1/projections/{name}/rebuild"
+    classification: rpc
+    capability: projections
+    method: rebuild
   - path: ironflow.v1.ProjectionService/GetRebuildJob
-    classification: rest
-    rest: "GET /api/v1/projections/{name}/rebuild"
+    classification: rpc
+    capability: projections
+    method: get_rebuild_job
   - path: ironflow.v1.ProjectionService/CancelRebuild
-    classification: rest
-    rest: "POST /api/v1/projections/{name}/cancel"
+    classification: rpc
+    capability: projections
+    method: cancel_rebuild
   - path: ironflow.v1.ProjectionService/PauseProjection
-    classification: rest
-    rest: "POST /api/v1/projections/{name}/pause"
+    classification: rpc
+    capability: projections
+    method: pause
   - path: ironflow.v1.ProjectionService/ResumeProjection
-    classification: rest
-    rest: "POST /api/v1/projections/{name}/resume"
+    classification: rpc
+    capability: projections
+    method: resume
   - path: ironflow.v1.ProjectionService/CreateSQLProjection
     classification: rpc
     capability: projections
@@ -246,14 +267,17 @@ rpcs:
     note: >-
       POST /api/v1/sql is QueryService/ExecuteSQL (generic read-only SQL), not this. No REST sibling.
   - path: ironflow.v1.ProjectionService/WaitProjectionCatchup
-    classification: rest
-    rest: "GET /api/v1/projections/{name}/catchup"
+    classification: rpc
+    capability: projections
+    method: wait_catchup
   - path: ironflow.v1.ProjectionService/WaitProjectionCatchupBatch
-    classification: rest
-    rest: "POST /api/v1/projections/catchup/batch"
+    classification: rpc
+    capability: projections
+    method: wait_catchup_batch
   - path: ironflow.v1.ProjectionService/WaitForEvent
-    classification: rest
-    rest: "POST /api/v1/projections/wait-for-event"
+    classification: rpc
+    capability: projections
+    method: wait_for_event
   - path: ironflow.v1.ProjectionService/WaitProjectionCatchupStream
     classification: stream
     capability: projections
@@ -261,25 +285,37 @@ rpcs:
 
   # ── QueryService ──
   - path: ironflow.v1.QueryService/ExecuteSQL
-    classification: rest
-    rest: "POST /api/v1/sql"
+    classification: rpc
+    capability: query
+    method: execute_sql
+    note: >-
+      Was classification rest against POST /api/v1/sql. That route was removed in
+      #1972 step 10, so Connect is the only transport and the facade owns the
+      capability. Its own namespace rather than projections: the query is not
+      projection-scoped, and gen_python_rpc.py refuses a namespace that spans two
+      services.
 
   # ── EventSchemaService ──
   - path: ironflow.v1.EventSchemaService/RegisterSchema
-    classification: rest
-    rest: "POST /api/v1/events/schemas"
+    classification: rpc
+    capability: event_schemas
+    method: register
   - path: ironflow.v1.EventSchemaService/GetSchema
-    classification: rest
-    rest: "GET /api/v1/events/schemas/{name}"
+    classification: rpc
+    capability: event_schemas
+    method: get
   - path: ironflow.v1.EventSchemaService/ListSchemas
-    classification: rest
-    rest: "GET /api/v1/events/schemas"
+    classification: rpc
+    capability: event_schemas
+    method: list
   - path: ironflow.v1.EventSchemaService/DeleteSchema
-    classification: rest
-    rest: "DELETE /api/v1/events/schemas/{name}/{version}"
+    classification: rpc
+    capability: event_schemas
+    method: delete
   - path: ironflow.v1.EventSchemaService/TestUpcast
-    classification: rest
-    rest: "POST /api/v1/events/upcast"
+    classification: rpc
+    capability: event_schemas
+    method: test_upcast
   # No REST sibling: this RPC was added for `ironflow event schema check`
   # (#1958) and the CLI speaks Connect. Exposed rather than skipped because it
   # is a real capability — "is enforcement actually enforcing" — that the REST
@@ -337,8 +373,9 @@ rpcs:
 
   # ── AuditService ──
   - path: ironflow.v1.AuditService/GetAuditTrail
-    classification: rest
-    rest: "GET /api/v1/audit"
+    classification: rpc
+    capability: audit
+    method: get_trail
   - path: ironflow.v1.AuditService/GetAuthAuditTrail
     classification: rpc
     capability: audit
@@ -378,10 +415,11 @@ rpcs:
 
   # ── PubSubService ──
   - path: ironflow.v1.PubSubService/Emit
-    classification: rest
-    rest: "POST /api/v1/events"
+    classification: rpc
+    capability: pubsub
+    method: emit
     note: >-
-      Proto: 'alias for Trigger with emit semantics'. Same capability as IronflowService/Emit; both are delivered by POST /api/v1/events.
+      This service requires a configured PubSub bridge. Use events.emit for bridge-independent emission.
   - path: ironflow.v1.PubSubService/Subscribe
     classification: stream
     capability: pubsub
@@ -415,8 +453,9 @@ rpcs:
     capability: pubsub
     method: join_consumer_group
   - path: ironflow.v1.PubSubService/Publish
-    classification: rest
-    rest: "POST /api/v1/publish"
+    classification: rpc
+    capability: pubsub
+    method: publish
   - path: ironflow.v1.PubSubService/ListTopics
     classification: rpc
     capability: pubsub
@@ -425,3 +464,8 @@ rpcs:
     classification: rpc
     capability: pubsub
     method: get_topic_stats
+
+  - path: ironflow.v1.IronflowService/InvokeFunction
+    classification: rpc
+    capability: functions
+    method: invoke

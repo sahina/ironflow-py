@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from protobuf.wkt import Struct, Timestamp, Value
 
 
-_AuditEventFields: TypeAlias = Literal["id", "run_id", "function_id", "step_id", "event_type", "payload", "payload_value", "metadata", "created_at"]
+_AuditEventFields: TypeAlias = Literal["id", "run_id", "function_id", "step_id", "event_type", "payload", "payload_value", "metadata", "created_at", "environment_id", "metadata_value", "scope", "platform_key_id", "platform_user_id", "impersonated_org_id"]
 
 class AuditEvent(Message[_AuditEventFields]):
     """
@@ -67,9 +67,33 @@ class AuditEvent(Message[_AuditEventFields]):
             ```proto
             optional google.protobuf.Timestamp created_at = 8;
             ```
+        environment_id:
+            ```proto
+            string environment_id = 10;
+            ```
+        metadata_value:
+            ```proto
+            optional google.protobuf.Value metadata_value = 11;
+            ```
+        scope:
+            ```proto
+            string scope = 12;
+            ```
+        platform_key_id:
+            ```proto
+            string platform_key_id = 13;
+            ```
+        platform_user_id:
+            ```proto
+            string platform_user_id = 14;
+            ```
+        impersonated_org_id:
+            ```proto
+            string impersonated_org_id = 15;
+            ```
     """
 
-    __slots__ = ("id", "run_id", "function_id", "step_id", "event_type", "payload", "payload_value", "metadata", "created_at")
+    __slots__ = ("id", "run_id", "function_id", "step_id", "event_type", "payload", "payload_value", "metadata", "created_at", "environment_id", "metadata_value", "scope", "platform_key_id", "platform_user_id", "impersonated_org_id")
 
     if TYPE_CHECKING:
 
@@ -85,6 +109,12 @@ class AuditEvent(Message[_AuditEventFields]):
             payload_value: Value | None = None,
             metadata: dict[str, str] | None = None,
             created_at: Timestamp | None = None,
+            environment_id: str = "",
+            metadata_value: Value | None = None,
+            scope: str = "",
+            platform_key_id: str = "",
+            platform_user_id: str = "",
+            impersonated_org_id: str = "",
         ) -> None:
             pass
 
@@ -97,6 +127,12 @@ class AuditEvent(Message[_AuditEventFields]):
         payload_value: Value | None
         metadata: dict[str, str]
         created_at: Timestamp | None
+        environment_id: str
+        metadata_value: Value | None
+        scope: str
+        platform_key_id: str
+        platform_user_id: str
+        impersonated_org_id: str
 
 _GetAuditTrailRequestFields: TypeAlias = Literal["run_id", "event_type", "from_timestamp", "to_timestamp", "limit", "cursor"]
 
@@ -302,7 +338,7 @@ class GetAuthAuditTrailResponse(Message[_GetAuthAuditTrailResponseFields]):
 
 
 _DESC = file_desc(
-    b'\n\x17ironflow/v1/audit.proto\x12\x0bironflow.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto"\xb7\x03\n\nAuditEvent\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n\x0bfunction_id\x18\x03 \x01(\tR\nfunctionId\x12\x17\n\x07step_id\x18\x04 \x01(\tR\x06stepId\x12\x1d\n\nevent_type\x18\x05 \x01(\tR\teventType\x121\n\x07payload\x18\x06 \x01(\x0b2\x17.google.protobuf.StructR\x07payload\x12;\n\rpayload_value\x18\t \x01(\x0b2\x16.google.protobuf.ValueR\x0cpayloadValue\x12A\n\x08metadata\x18\x07 \x03(\x0b2%.ironflow.v1.AuditEvent.MetadataEntryR\x08metadata\x129\n\ncreated_at\x18\x08 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x1a;\n\rMetadataEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01"\xc4\x01\n\x14GetAuditTrailRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1d\n\nevent_type\x18\x02 \x01(\tR\teventType\x12%\n\x0efrom_timestamp\x18\x03 \x01(\tR\rfromTimestamp\x12!\n\x0cto_timestamp\x18\x04 \x01(\tR\x0btoTimestamp\x12\x14\n\x05limit\x18\x05 \x01(\x05R\x05limit\x12\x16\n\x06cursor\x18\x06 \x01(\tR\x06cursor"\x8a\x01\n\x15GetAuditTrailResponse\x12/\n\x06events\x18\x01 \x03(\x0b2\x17.ironflow.v1.AuditEventR\x06events\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount\x12\x1f\n\x0bnext_cursor\x18\x03 \x01(\tR\nnextCursor"\xdf\x01\n\x18GetAuthAuditTrailRequest\x12\x15\n\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x1c\n\napi_key_id\x18\x02 \x01(\tR\x08apiKeyId\x12\x16\n\x06action\x18\x03 \x01(\tR\x06action\x12%\n\x0efrom_timestamp\x18\x04 \x01(\tR\rfromTimestamp\x12!\n\x0cto_timestamp\x18\x05 \x01(\tR\x0btoTimestamp\x12\x14\n\x05limit\x18\x06 \x01(\x05R\x05limit\x12\x16\n\x06cursor\x18\x07 \x01(\tR\x06cursor"\x8e\x01\n\x19GetAuthAuditTrailResponse\x12/\n\x06events\x18\x01 \x03(\x0b2\x17.ironflow.v1.AuditEventR\x06events\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount\x12\x1f\n\x0bnext_cursor\x18\x03 \x01(\tR\nnextCursor2\xd4\x01\n\x0cAuditService\x12[\n\rGetAuditTrail\x12!.ironflow.v1.GetAuditTrailRequest\x1a".ironflow.v1.GetAuditTrailResponse"\x03\x90\x02\x01\x12g\n\x11GetAuthAuditTrail\x12%.ironflow.v1.GetAuthAuditTrailRequest\x1a&.ironflow.v1.GetAuthAuditTrailResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x17ironflow/v1/audit.proto\x12\x0bironflow.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto"\xb5\x05\n\nAuditEvent\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n\x0bfunction_id\x18\x03 \x01(\tR\nfunctionId\x12\x17\n\x07step_id\x18\x04 \x01(\tR\x06stepId\x12\x1d\n\nevent_type\x18\x05 \x01(\tR\teventType\x121\n\x07payload\x18\x06 \x01(\x0b2\x17.google.protobuf.StructR\x07payload\x12;\n\rpayload_value\x18\t \x01(\x0b2\x16.google.protobuf.ValueR\x0cpayloadValue\x12A\n\x08metadata\x18\x07 \x03(\x0b2%.ironflow.v1.AuditEvent.MetadataEntryR\x08metadata\x129\n\ncreated_at\x18\x08 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x12%\n\x0eenvironment_id\x18\n \x01(\tR\renvironmentId\x12=\n\x0emetadata_value\x18\x0b \x01(\x0b2\x16.google.protobuf.ValueR\rmetadataValue\x12\x14\n\x05scope\x18\x0c \x01(\tR\x05scope\x12&\n\x0fplatform_key_id\x18\r \x01(\tR\rplatformKeyId\x12(\n\x10platform_user_id\x18\x0e \x01(\tR\x0eplatformUserId\x12.\n\x13impersonated_org_id\x18\x0f \x01(\tR\x11impersonatedOrgId\x1a;\n\rMetadataEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01"\xc4\x01\n\x14GetAuditTrailRequest\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1d\n\nevent_type\x18\x02 \x01(\tR\teventType\x12%\n\x0efrom_timestamp\x18\x03 \x01(\tR\rfromTimestamp\x12!\n\x0cto_timestamp\x18\x04 \x01(\tR\x0btoTimestamp\x12\x14\n\x05limit\x18\x05 \x01(\x05R\x05limit\x12\x16\n\x06cursor\x18\x06 \x01(\tR\x06cursor"\x8a\x01\n\x15GetAuditTrailResponse\x12/\n\x06events\x18\x01 \x03(\x0b2\x17.ironflow.v1.AuditEventR\x06events\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount\x12\x1f\n\x0bnext_cursor\x18\x03 \x01(\tR\nnextCursor"\xdf\x01\n\x18GetAuthAuditTrailRequest\x12\x15\n\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x1c\n\napi_key_id\x18\x02 \x01(\tR\x08apiKeyId\x12\x16\n\x06action\x18\x03 \x01(\tR\x06action\x12%\n\x0efrom_timestamp\x18\x04 \x01(\tR\rfromTimestamp\x12!\n\x0cto_timestamp\x18\x05 \x01(\tR\x0btoTimestamp\x12\x14\n\x05limit\x18\x06 \x01(\x05R\x05limit\x12\x16\n\x06cursor\x18\x07 \x01(\tR\x06cursor"\x8e\x01\n\x19GetAuthAuditTrailResponse\x12/\n\x06events\x18\x01 \x03(\x0b2\x17.ironflow.v1.AuditEventR\x06events\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount\x12\x1f\n\x0bnext_cursor\x18\x03 \x01(\tR\nnextCursor2\xd4\x01\n\x0cAuditService\x12[\n\rGetAuditTrail\x12!.ironflow.v1.GetAuditTrailRequest\x1a".ironflow.v1.GetAuditTrailResponse"\x03\x90\x02\x01\x12g\n\x11GetAuthAuditTrail\x12%.ironflow.v1.GetAuthAuditTrailRequest\x1a&.ironflow.v1.GetAuthAuditTrailResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         timestamp_pb.desc(),
         struct_pb.desc(),

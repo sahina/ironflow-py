@@ -42,6 +42,7 @@ import uuid
 from typing import Any
 
 import pytest
+from protobuf.wkt import Value
 
 from ironflow import AsyncIronflowRPC, IronflowRPC, IronflowRPCError
 from ironflow.rpc.v1 import (
@@ -49,6 +50,7 @@ from ironflow.rpc.v1 import (
     DeleteWebhookSourceRequest,
     GetWebhookSourceRequest,
     ListTopicsRequest,
+    PublishRequest,
     SubscribeRequest,
 )
 
@@ -58,7 +60,9 @@ def unique(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
 
-def publish_after(rest: Any, topic: str, payload: str, delay: float = 1.0) -> threading.Thread:
+def publish_after(
+    publish_rpc: IronflowRPC, topic: str, payload: str, delay: float = 1.0
+) -> threading.Thread:
     """Publish to `topic` from a second thread, after `delay`.
 
     A subscription blocks the calling thread, so the publish that feeds it
@@ -67,14 +71,13 @@ def publish_after(rest: Any, topic: str, payload: str, delay: float = 1.0) -> th
     every caller must still tolerate receiving nothing and say so clearly
     rather than hanging.
 
-    Publishing goes through the REST client, NOT `rpc.pubsub`. PubSubService/
-    Publish is classified `rest` in rpc-capabilities.yaml, so the facade does
-    not expose it — reaching for `rpc.pubsub.publish` raises AttributeError,
-    which is the ledger doing its job.
     """
+
     def run() -> None:
         time.sleep(delay)
-        rest.pub_sub_create({"topic": topic, "data": payload})
+        publish_rpc.pubsub.publish(
+            PublishRequest(topic=topic, data_value=Value.from_python(payload))
+        )
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
@@ -116,13 +119,15 @@ def test_list_topics_reaches_a_real_handler(rpc: IronflowRPC) -> None:
 # ── 3. a real server stream ─────────────────────────────────────────────────
 
 
-def test_subscribe_receives_a_published_event(rpc: IronflowRPC, rest: Any) -> None:
+def test_subscribe_receives_a_published_event(
+    rpc: IronflowRPC, publish_rpc: IronflowRPC
+) -> None:
     """A genuine round trip: subscribe, publish, assert the event arrives.
 
     Subscribing to a quiet topic yields nothing and blocks, so a one-shot call
     could not tell "the stream works" from "the stream is empty". The publish
     runs on a second thread because the subscription blocks this one — see
-    `publish_after`, which also records why it goes through the REST client.
+    `publish_after`, using a separate Connect client for publication.
 
     The deadline is what turns a missing event into a failure rather than a
     hang: the stream ends with deadline_exceeded and the assertion reports an
@@ -135,9 +140,11 @@ def test_subscribe_receives_a_published_event(rpc: IronflowRPC, rest: Any) -> No
     payload = uuid.uuid4().hex
 
     received: list[Any] = []
-    publisher = publish_after(rest, topic, payload)
+    publisher = publish_after(publish_rpc, topic, payload)
     try:
-        for event in rpc.pubsub.subscribe(SubscribeRequest(pattern=f"topic:{topic}"), timeout=15.0):
+        for event in rpc.pubsub.subscribe(
+            SubscribeRequest(pattern=f"topic:{topic}"), timeout=15.0
+        ):
             received.append(event)
             break
     except IronflowRPCError as err:
@@ -263,7 +270,7 @@ def test_stream_deadline_ends_a_real_subscription(rpc: IronflowRPC) -> None:
 
 
 def test_abandoning_a_real_stream_leaves_the_client_usable(
-    rpc: IronflowRPC, rest: Any
+    rpc: IronflowRPC, publish_rpc: IronflowRPC
 ) -> None:
     """The property that would actually bite someone.
 
@@ -278,7 +285,7 @@ def test_abandoning_a_real_stream_leaves_the_client_usable(
     """
     topic = unique("pysdk.cancel")
     payload = uuid.uuid4().hex
-    publisher = publish_after(rest, topic, payload)
+    publisher = publish_after(publish_rpc, topic, payload)
 
     received: list[Any] = []
     try:
@@ -309,7 +316,7 @@ def test_abandoning_a_real_stream_leaves_the_client_usable(
 
 
 def test_failure_after_real_events_translates_during_iteration(
-    rpc: IronflowRPC, rest: Any
+    rpc: IronflowRPC, publish_rpc: IronflowRPC
 ) -> None:
     """The mid-iteration path, over a real connection, after real events.
 
@@ -330,7 +337,7 @@ def test_failure_after_real_events_translates_during_iteration(
     """
     topic = unique("pysdk.midfail")
     payload = uuid.uuid4().hex
-    publisher = publish_after(rest, topic, payload)
+    publisher = publish_after(publish_rpc, topic, payload)
 
     received: list[Any] = []
     try:

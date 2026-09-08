@@ -21,7 +21,7 @@ class TestQueryParams:
     def test_params_are_encoded(self, server) -> None:
         server.script(Response(body={"runs": []}))
         client(server).request(
-            "GET", "/api/v1/runs", params={"limit": 50, "status": "failed"}
+            "GET", "/api/v1/events", params={"limit": 50, "status": "failed"}
         )
 
         query = parse_qs(urlparse(server.requests[0]["path"]).query)
@@ -30,18 +30,18 @@ class TestQueryParams:
 
     def test_params_none_leaves_path_clean(self, server) -> None:
         server.script(Response(body={}))
-        client(server).request("GET", "/api/v1/runs")
-        assert server.requests[0]["path"] == "/api/v1/runs"
+        client(server).request("GET", "/api/v1/events")
+        assert server.requests[0]["path"] == "/api/v1/events"
 
     def test_empty_params_leaves_path_clean(self, server) -> None:
         server.script(Response(body={}))
-        client(server).request("GET", "/api/v1/runs", params={})
-        assert server.requests[0]["path"] == "/api/v1/runs"
+        client(server).request("GET", "/api/v1/events", params={})
+        assert server.requests[0]["path"] == "/api/v1/events"
 
     def test_none_valued_params_are_dropped(self, server) -> None:
         server.script(Response(body={}))
         client(server).request(
-            "GET", "/api/v1/runs", params={"limit": 10, "cursor": None}
+            "GET", "/api/v1/events", params={"limit": 10, "cursor": None}
         )
         query = parse_qs(urlparse(server.requests[0]["path"]).query)
         assert "cursor" not in query
@@ -51,7 +51,7 @@ class TestQueryParams:
         """Go and JS send `true`, not Python's `True`."""
         server.script(Response(body={}))
         client(server).request(
-            "GET", "/api/v1/runs", params={"active": True, "done": False}
+            "GET", "/api/v1/events", params={"active": True, "done": False}
         )
         query = parse_qs(urlparse(server.requests[0]["path"]).query)
         assert query["active"] == ["true"]
@@ -59,14 +59,14 @@ class TestQueryParams:
 
     def test_params_append_to_existing_query(self, server) -> None:
         server.script(Response(body={}))
-        client(server).request("GET", "/api/v1/runs?env=prod", params={"limit": 5})
+        client(server).request("GET", "/api/v1/events?env=prod", params={"limit": 5})
         query = parse_qs(urlparse(server.requests[0]["path"]).query)
         assert query["env"] == ["prod"]
         assert query["limit"] == ["5"]
 
     def test_values_are_url_escaped(self, server) -> None:
         server.script(Response(body={}))
-        client(server).request("GET", "/api/v1/runs", params={"q": "a b&c=d"})
+        client(server).request("GET", "/api/v1/events", params={"q": "a b&c=d"})
         query = parse_qs(urlparse(server.requests[0]["path"]).query)
         assert query["q"] == ["a b&c=d"]
 
@@ -104,26 +104,26 @@ class TestHeaders:
     def test_auth_header_still_applied(self, server) -> None:
         server.script(Response(body={}))
         c = IronflowClient(server_url=server.url, api_key="ifkey_test")
-        c.request("GET", "/api/v1/runs", headers={"X-Custom": "1"})
+        c.request("GET", "/api/v1/events", headers={"X-Custom": "1"})
         sent = server.requests[0]["headers"]
         assert sent.get("Authorization") == "Bearer ifkey_test"
         assert sent.get("X-Custom") == "1"
 
     def test_content_type_always_json(self, server) -> None:
         server.script(Response(body={}))
-        client(server).request("POST", "/api/v1/events", body={"name": "x"})
+        client(server).request("POST", "/api/v1/projects", body={"name": "x"})
         assert server.requests[0]["headers"].get("Content-Type") == "application/json"
 
 
 class TestBody:
     def test_body_is_json_encoded(self, server) -> None:
         server.script(Response(body={"ok": 1}))
-        client(server).request("POST", "/api/v1/events", body={"name": "order.placed"})
+        client(server).request("POST", "/api/v1/projects", body={"name": "order.placed"})
         assert server.requests[0]["body"] == {"name": "order.placed"}
 
     def test_no_body_sends_nothing(self, server) -> None:
         server.script(Response(body={}))
-        client(server).request("GET", "/api/v1/runs")
+        client(server).request("GET", "/api/v1/events")
         assert server.requests[0]["body"] is None
 
 

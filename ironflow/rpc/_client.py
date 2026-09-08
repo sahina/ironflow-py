@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._gen import agent_tools_connect, audit_connect, environment_connect, event_schema_connect, ironflow_connect, projection_connect, pubsub_connect, timetravel_connect, webhook_connect
+from .._gen import agent_tools_connect, audit_connect, entity_stream_connect, environment_connect, event_schema_connect, ironflow_connect, projection_connect, pubsub_connect, query_connect, timetravel_connect, webhook_connect
 from ._runtime import (
     _AsyncCoordinator,
     _Coordinator,
@@ -33,39 +33,74 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
 
     from .v1 import (
+        AppendEventRequest,
+        AppendEventResponse,
+        CancelRebuildRequest,
+        CancelRebuildResponse,
+        CancelRunRequest,
         CheckEnforcementRequest,
         CheckEnforcementResponse,
         ConsumerGroup,
         CreateConsumerGroupRequest,
         CreateSQLProjectionRequest,
         CreateSQLProjectionResponse,
+        CreateSnapshotRequest,
+        CreateSnapshotResponse,
         CreateWebhookSourceRequest,
         DeleteConsumerGroupRequest,
         DeleteFunctionRequest,
+        DeleteSchemaRequest,
+        DeleteSchemaResponse,
         DeleteWebhookSourceRequest,
         DisableWebhookSignatureVerificationRequest,
+        EmitRequest,
+        EmitResponse,
         EnvironmentInfo,
+        ExecuteSQLRequest,
+        ExecuteSQLResponse,
         ExpireWebhookSecretPrevRequest,
         Function,
+        GetAuditTrailRequest,
+        GetAuditTrailResponse,
         GetAuthAuditTrailRequest,
         GetAuthAuditTrailResponse,
         GetConsumerGroupRequest,
+        GetEntityHistoryRequest,
+        GetEntityHistoryResponse,
         GetEnvironmentRequest,
         GetFunctionAtVersionRequest,
         GetFunctionAtVersionResponse,
+        GetFunctionRequest,
         GetPausedStateRequest,
         GetPausedStateResponse,
+        GetProjectionRequest,
+        GetProjectionResponse,
+        GetProjectionStatusRequest,
+        GetProjectionStatusResponse,
+        GetRebuildJobRequest,
+        GetRebuildJobResponse,
+        GetRunRequest,
         GetRunStateAtRequest,
         GetRunStateAtResponse,
+        GetRunStepsRequest,
+        GetRunStepsResponse,
         GetRunTimelineRequest,
         GetRunTimelineResponse,
+        GetSchemaRequest,
+        GetSchemaResponse,
+        GetSnapshotRequest,
+        GetSnapshotResponse,
         GetStepOutputAtRequest,
         GetStepOutputAtResponse,
+        GetStreamInfoRequest,
+        GetStreamInfoResponse,
         GetTopicStatsRequest,
         GetTopicStatsResponse,
         GetWebhookSourceRequest,
         InjectStepOutputRequest,
         InjectStepOutputResponse,
+        InvokeFunctionRequest,
+        InvokeFunctionResponse,
         InvokeFunctionSyncRequest,
         InvokeFunctionSyncResponse,
         InvokeToolRequest,
@@ -75,6 +110,16 @@ if TYPE_CHECKING:
         ListConsumerGroupsResponse,
         ListFunctionHistoryRequest,
         ListFunctionHistoryResponse,
+        ListFunctionsRequest,
+        ListFunctionsResponse,
+        ListProjectionsRequest,
+        ListProjectionsResponse,
+        ListRunsRequest,
+        ListRunsResponse,
+        ListSchemasRequest,
+        ListSchemasResponse,
+        ListStreamsRequest,
+        ListStreamsResponse,
         ListToolsRequest,
         ListToolsResponse,
         ListTopicsRequest,
@@ -83,30 +128,50 @@ if TYPE_CHECKING:
         ListWebhookDeliveriesResponse,
         ListWebhookSourcesRequest,
         ListWebhookSourcesResponse,
+        PatchStepRequest,
+        PauseProjectionRequest,
+        PauseProjectionResponse,
         PauseRunRequest,
         PauseRunResponse,
         ProjectionEvent,
+        PublishRequest,
+        PublishResponse,
         QuerySQLProjectionRequest,
         QuerySQLProjectionResponse,
+        ReadStreamRequest,
+        ReadStreamResponse,
+        RebuildProjectionRequest,
+        RebuildProjectionResponse,
         RegisterFunctionRequest,
         RegisterFunctionResponse,
         RegisterProjectionRequest,
         RegisterProjectionResponse,
+        RegisterSchemaRequest,
+        RegisterSchemaResponse,
         RegisterToolRequest,
         RegisterToolResponse,
+        ResumeProjectionRequest,
+        ResumeProjectionResponse,
+        ResumeRunRequest,
         RollbackFunctionRequest,
         RollbackFunctionResponse,
         RotateAPIKeyRequest,
         RotateAPIKeyResponse,
         RotateWebhookIngestTokenRequest,
         RotateWebhookSecretRequest,
+        Run,
+        Step,
         StreamProjectionEventsRequest,
         SubscribeRequest,
         SubscriptionEvent,
+        TestUpcastRequest,
+        TestUpcastResponse,
         TestWebhookVerifyConfigRequest,
         TestWebhookVerifyConfigResponse,
         TriggerBatchRequest,
         TriggerBatchResponse,
+        TriggerRequest,
+        TriggerResponse,
         TriggerSyncRequest,
         TriggerSyncResponse,
         UnregisterToolRequest,
@@ -114,7 +179,11 @@ if TYPE_CHECKING:
         UpdateConsumerGroupRequest,
         UpdateFunctionStatusRequest,
         UpdateWebhookSourceRequest,
+        WaitForEventRequest,
+        WaitProjectionCatchupBatchRequest,
+        WaitProjectionCatchupBatchResponse,
         WaitProjectionCatchupRequest,
+        WaitProjectionCatchupResponse,
         WaitProjectionCatchupStreamResponse,
         WebhookSource,
     )
@@ -189,6 +258,19 @@ class _Audit:
         self._owner = owner
         self._client = client
 
+    # rpc: ironflow.v1.AuditService/GetAuditTrail
+    def get_trail(
+        self,
+        request: GetAuditTrailRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetAuditTrailResponse:
+        self._owner._check_open("audit.get_trail")
+        return self._client.get_audit_trail(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.AuditService/GetAuthAuditTrail
     def get_auth_trail(
         self,
@@ -242,6 +324,71 @@ class _EventSchemas:
         self._owner = owner
         self._client = client
 
+    # rpc: ironflow.v1.EventSchemaService/RegisterSchema
+    def register(
+        self,
+        request: RegisterSchemaRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> RegisterSchemaResponse:
+        self._owner._check_open("event_schemas.register")
+        return self._client.register_schema(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EventSchemaService/GetSchema
+    def get(
+        self,
+        request: GetSchemaRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetSchemaResponse:
+        self._owner._check_open("event_schemas.get")
+        return self._client.get_schema(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EventSchemaService/ListSchemas
+    def list(
+        self,
+        request: ListSchemasRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListSchemasResponse:
+        self._owner._check_open("event_schemas.list")
+        return self._client.list_schemas(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EventSchemaService/DeleteSchema
+    def delete(
+        self,
+        request: DeleteSchemaRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> DeleteSchemaResponse:
+        self._owner._check_open("event_schemas.delete")
+        return self._client.delete_schema(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EventSchemaService/TestUpcast
+    def test_upcast(
+        self,
+        request: TestUpcastRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> TestUpcastResponse:
+        self._owner._check_open("event_schemas.test_upcast")
+        return self._client.test_upcast(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.EventSchemaService/CheckEnforcement
     def check_enforcement(
         self,
@@ -251,6 +398,26 @@ class _EventSchemas:
     ) -> CheckEnforcementResponse:
         self._owner._check_open("event_schemas.check_enforcement")
         return self._client.check_enforcement(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+class _Events:
+    """Capability namespace `rpc.events`."""
+
+    def __init__(self, owner: IronflowRPC, client: ironflow_connect.IronflowServiceClientSync) -> None:
+        self._owner = owner
+        self._client = client
+
+    # rpc: ironflow.v1.IronflowService/Emit
+    def emit(
+        self,
+        request: TriggerRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> TriggerResponse:
+        self._owner._check_open("events.emit")
+        return self._client.emit(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -271,6 +438,32 @@ class _Functions:
     ) -> RegisterFunctionResponse:
         self._owner._check_open("functions.register")
         return self._client.register_function(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/GetFunction
+    def get(
+        self,
+        request: GetFunctionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Function:
+        self._owner._check_open("functions.get")
+        return self._client.get_function(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/ListFunctions
+    def list(
+        self,
+        request: ListFunctionsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListFunctionsResponse:
+        self._owner._check_open("functions.list")
+        return self._client.list_functions(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -340,6 +533,19 @@ class _Functions:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.IronflowService/InvokeFunction
+    def invoke(
+        self,
+        request: InvokeFunctionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> InvokeFunctionResponse:
+        self._owner._check_open("functions.invoke")
+        return self._client.invoke_function(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
 class _Projections:
     """Capability namespace `rpc.projections`."""
 
@@ -385,6 +591,110 @@ class _Projections:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.ProjectionService/GetProjection
+    def get(
+        self,
+        request: GetProjectionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetProjectionResponse:
+        self._owner._check_open("projections.get")
+        return self._client.get_projection(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/ListProjections
+    def list(
+        self,
+        request: ListProjectionsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListProjectionsResponse:
+        self._owner._check_open("projections.list")
+        return self._client.list_projections(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/GetProjectionStatus
+    def get_status(
+        self,
+        request: GetProjectionStatusRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetProjectionStatusResponse:
+        self._owner._check_open("projections.get_status")
+        return self._client.get_projection_status(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/RebuildProjection
+    def rebuild(
+        self,
+        request: RebuildProjectionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> RebuildProjectionResponse:
+        self._owner._check_open("projections.rebuild")
+        return self._client.rebuild_projection(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/GetRebuildJob
+    def get_rebuild_job(
+        self,
+        request: GetRebuildJobRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetRebuildJobResponse:
+        self._owner._check_open("projections.get_rebuild_job")
+        return self._client.get_rebuild_job(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/CancelRebuild
+    def cancel_rebuild(
+        self,
+        request: CancelRebuildRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> CancelRebuildResponse:
+        self._owner._check_open("projections.cancel_rebuild")
+        return self._client.cancel_rebuild(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/PauseProjection
+    def pause(
+        self,
+        request: PauseProjectionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> PauseProjectionResponse:
+        self._owner._check_open("projections.pause")
+        return self._client.pause_projection(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/ResumeProjection
+    def resume(
+        self,
+        request: ResumeProjectionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ResumeProjectionResponse:
+        self._owner._check_open("projections.resume")
+        return self._client.resume_projection(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.ProjectionService/CreateSQLProjection
     def create_sql(
         self,
@@ -407,6 +717,45 @@ class _Projections:
     ) -> QuerySQLProjectionResponse:
         self._owner._check_open("projections.query_sql")
         return self._client.query_sql_projection(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/WaitProjectionCatchup
+    def wait_catchup(
+        self,
+        request: WaitProjectionCatchupRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> WaitProjectionCatchupResponse:
+        self._owner._check_open("projections.wait_catchup")
+        return self._client.wait_projection_catchup(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/WaitProjectionCatchupBatch
+    def wait_catchup_batch(
+        self,
+        request: WaitProjectionCatchupBatchRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> WaitProjectionCatchupBatchResponse:
+        self._owner._check_open("projections.wait_catchup_batch")
+        return self._client.wait_projection_catchup_batch(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/WaitForEvent
+    def wait_for_event(
+        self,
+        request: WaitForEventRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> WaitProjectionCatchupResponse:
+        self._owner._check_open("projections.wait_for_event")
+        return self._client.wait_for_event(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -442,6 +791,19 @@ class _Pubsub:
     def __init__(self, owner: IronflowRPC, client: pubsub_connect.PubSubServiceClientSync) -> None:
         self._owner = owner
         self._client = client
+
+    # rpc: ironflow.v1.PubSubService/Emit
+    def emit(
+        self,
+        request: EmitRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> EmitResponse:
+        self._owner._check_open("pubsub.emit")
+        return self._client.emit(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
 
     # rpc: ironflow.v1.PubSubService/Subscribe
     def subscribe(
@@ -565,6 +927,19 @@ class _Pubsub:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.PubSubService/Publish
+    def publish(
+        self,
+        request: PublishRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> PublishResponse:
+        self._owner._check_open("pubsub.publish")
+        return self._client.publish(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.PubSubService/ListTopics
     def list_topics(
         self,
@@ -591,12 +966,45 @@ class _Pubsub:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+class _Query:
+    """Capability namespace `rpc.query`."""
+
+    def __init__(self, owner: IronflowRPC, client: query_connect.QueryServiceClientSync) -> None:
+        self._owner = owner
+        self._client = client
+
+    # rpc: ironflow.v1.QueryService/ExecuteSQL
+    def execute_sql(
+        self,
+        request: ExecuteSQLRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ExecuteSQLResponse:
+        self._owner._check_open("query.execute_sql")
+        return self._client.execute_sql(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
 class _Runs:
     """Capability namespace `rpc.runs`."""
 
     def __init__(self, owner: IronflowRPC, client: ironflow_connect.IronflowServiceClientSync) -> None:
         self._owner = owner
         self._client = client
+
+    # rpc: ironflow.v1.IronflowService/Trigger
+    def trigger(
+        self,
+        request: TriggerRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> TriggerResponse:
+        self._owner._check_open("runs.trigger")
+        return self._client.trigger(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
 
     # rpc: ironflow.v1.IronflowService/TriggerSync
     def trigger_sync(
@@ -637,6 +1045,84 @@ class _Runs:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.IronflowService/GetRun
+    def get(
+        self,
+        request: GetRunRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Run:
+        self._owner._check_open("runs.get")
+        return self._client.get_run(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/ListRuns
+    def list(
+        self,
+        request: ListRunsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListRunsResponse:
+        self._owner._check_open("runs.list")
+        return self._client.list_runs(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/GetRunSteps
+    def get_steps(
+        self,
+        request: GetRunStepsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetRunStepsResponse:
+        self._owner._check_open("runs.get_steps")
+        return self._client.get_run_steps(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/CancelRun
+    def cancel(
+        self,
+        request: CancelRunRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Run:
+        self._owner._check_open("runs.cancel")
+        return self._client.cancel_run(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/PatchStep
+    def patch_step(
+        self,
+        request: PatchStepRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Step:
+        self._owner._check_open("runs.patch_step")
+        return self._client.patch_step(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/ResumeRun
+    def resume(
+        self,
+        request: ResumeRunRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Run:
+        self._owner._check_open("runs.resume")
+        return self._client.resume_run(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.IronflowService/PauseRun
     def pause(
         self,
@@ -672,6 +1158,104 @@ class _Runs:
     ) -> InjectStepOutputResponse:
         self._owner._check_open("runs.inject_step_output")
         return self._client.inject_step_output(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+class _Streams:
+    """Capability namespace `rpc.streams`."""
+
+    def __init__(self, owner: IronflowRPC, client: entity_stream_connect.EntityStreamServiceClientSync) -> None:
+        self._owner = owner
+        self._client = client
+
+    # rpc: ironflow.v1.EntityStreamService/AppendEvent
+    def append_event(
+        self,
+        request: AppendEventRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> AppendEventResponse:
+        self._owner._check_open("streams.append_event")
+        return self._client.append_event(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/ReadStream
+    def read_stream(
+        self,
+        request: ReadStreamRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ReadStreamResponse:
+        self._owner._check_open("streams.read_stream")
+        return self._client.read_stream(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/GetStreamInfo
+    def get_info(
+        self,
+        request: GetStreamInfoRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetStreamInfoResponse:
+        self._owner._check_open("streams.get_info")
+        return self._client.get_stream_info(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/ListStreams
+    def list_streams(
+        self,
+        request: ListStreamsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListStreamsResponse:
+        self._owner._check_open("streams.list_streams")
+        return self._client.list_streams(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/GetEntityHistory
+    def get_history(
+        self,
+        request: GetEntityHistoryRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetEntityHistoryResponse:
+        self._owner._check_open("streams.get_history")
+        return self._client.get_entity_history(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/CreateSnapshot
+    def create_snapshot(
+        self,
+        request: CreateSnapshotRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> CreateSnapshotResponse:
+        self._owner._check_open("streams.create_snapshot")
+        return self._client.create_snapshot(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/GetSnapshot
+    def get_snapshot(
+        self,
+        request: GetSnapshotRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetSnapshotResponse:
+        self._owner._check_open("streams.get_snapshot")
+        return self._client.get_snapshot(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -886,11 +1470,13 @@ class IronflowRPC(_Coordinator):
         kw = self._client_kwargs()
         self._agent_tools_service = agent_tools_connect.AgentToolsServiceClientSync(self._server_url, **kw)
         self._audit_service = audit_connect.AuditServiceClientSync(self._server_url, **kw)
+        self._entity_stream_service = entity_stream_connect.EntityStreamServiceClientSync(self._server_url, **kw)
         self._environment_service = environment_connect.EnvironmentServiceClientSync(self._server_url, **kw)
         self._event_schema_service = event_schema_connect.EventSchemaServiceClientSync(self._server_url, **kw)
         self._ironflow_service = ironflow_connect.IronflowServiceClientSync(self._server_url, **kw)
         self._projection_service = projection_connect.ProjectionServiceClientSync(self._server_url, **kw)
         self._pub_sub_service = pubsub_connect.PubSubServiceClientSync(self._server_url, **kw)
+        self._query_service = query_connect.QueryServiceClientSync(self._server_url, **kw)
         self._time_travel_service = timetravel_connect.TimeTravelServiceClientSync(self._server_url, **kw)
         self._webhook_service = webhook_connect.WebhookServiceClientSync(self._server_url, **kw)
 
@@ -902,21 +1488,27 @@ class IronflowRPC(_Coordinator):
         self.environments = _Environments(self, self._environment_service)
         #: `rpc.event_schemas`
         self.event_schemas = _EventSchemas(self, self._event_schema_service)
+        #: `rpc.events`
+        self.events = _Events(self, self._ironflow_service)
         #: `rpc.functions`
         self.functions = _Functions(self, self._ironflow_service)
         #: `rpc.projections`
         self.projections = _Projections(self, self._projection_service)
         #: `rpc.pubsub`
         self.pubsub = _Pubsub(self, self._pub_sub_service)
+        #: `rpc.query`
+        self.query = _Query(self, self._query_service)
         #: `rpc.runs`
         self.runs = _Runs(self, self._ironflow_service)
+        #: `rpc.streams`
+        self.streams = _Streams(self, self._entity_stream_service)
         #: `rpc.time_travel`
         self.time_travel = _TimeTravel(self, self._time_travel_service)
         #: `rpc.webhooks`
         self.webhooks = _Webhooks(self, self._webhook_service)
 
     def _service_clients(self) -> tuple[Any, ...]:
-        return (self._agent_tools_service, self._audit_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._time_travel_service, self._webhook_service,)
+        return (self._agent_tools_service, self._audit_service, self._entity_stream_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._query_service, self._time_travel_service, self._webhook_service,)
 
 class _AsyncAgentTools:
     """Capability namespace `rpc.agent_tools`."""
@@ -984,6 +1576,19 @@ class _AsyncAudit:
         self._owner = owner
         self._client = client
 
+    # rpc: ironflow.v1.AuditService/GetAuditTrail
+    async def get_trail(
+        self,
+        request: GetAuditTrailRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetAuditTrailResponse:
+        self._owner._check_open("audit.get_trail")
+        return await self._client.get_audit_trail(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.AuditService/GetAuthAuditTrail
     async def get_auth_trail(
         self,
@@ -1037,6 +1642,71 @@ class _AsyncEventSchemas:
         self._owner = owner
         self._client = client
 
+    # rpc: ironflow.v1.EventSchemaService/RegisterSchema
+    async def register(
+        self,
+        request: RegisterSchemaRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> RegisterSchemaResponse:
+        self._owner._check_open("event_schemas.register")
+        return await self._client.register_schema(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EventSchemaService/GetSchema
+    async def get(
+        self,
+        request: GetSchemaRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetSchemaResponse:
+        self._owner._check_open("event_schemas.get")
+        return await self._client.get_schema(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EventSchemaService/ListSchemas
+    async def list(
+        self,
+        request: ListSchemasRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListSchemasResponse:
+        self._owner._check_open("event_schemas.list")
+        return await self._client.list_schemas(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EventSchemaService/DeleteSchema
+    async def delete(
+        self,
+        request: DeleteSchemaRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> DeleteSchemaResponse:
+        self._owner._check_open("event_schemas.delete")
+        return await self._client.delete_schema(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EventSchemaService/TestUpcast
+    async def test_upcast(
+        self,
+        request: TestUpcastRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> TestUpcastResponse:
+        self._owner._check_open("event_schemas.test_upcast")
+        return await self._client.test_upcast(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.EventSchemaService/CheckEnforcement
     async def check_enforcement(
         self,
@@ -1046,6 +1716,26 @@ class _AsyncEventSchemas:
     ) -> CheckEnforcementResponse:
         self._owner._check_open("event_schemas.check_enforcement")
         return await self._client.check_enforcement(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+class _AsyncEvents:
+    """Capability namespace `rpc.events`."""
+
+    def __init__(self, owner: AsyncIronflowRPC, client: ironflow_connect.IronflowServiceClient) -> None:
+        self._owner = owner
+        self._client = client
+
+    # rpc: ironflow.v1.IronflowService/Emit
+    async def emit(
+        self,
+        request: TriggerRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> TriggerResponse:
+        self._owner._check_open("events.emit")
+        return await self._client.emit(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -1066,6 +1756,32 @@ class _AsyncFunctions:
     ) -> RegisterFunctionResponse:
         self._owner._check_open("functions.register")
         return await self._client.register_function(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/GetFunction
+    async def get(
+        self,
+        request: GetFunctionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Function:
+        self._owner._check_open("functions.get")
+        return await self._client.get_function(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/ListFunctions
+    async def list(
+        self,
+        request: ListFunctionsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListFunctionsResponse:
+        self._owner._check_open("functions.list")
+        return await self._client.list_functions(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -1135,6 +1851,19 @@ class _AsyncFunctions:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.IronflowService/InvokeFunction
+    async def invoke(
+        self,
+        request: InvokeFunctionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> InvokeFunctionResponse:
+        self._owner._check_open("functions.invoke")
+        return await self._client.invoke_function(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
 class _AsyncProjections:
     """Capability namespace `rpc.projections`."""
 
@@ -1180,6 +1909,110 @@ class _AsyncProjections:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.ProjectionService/GetProjection
+    async def get(
+        self,
+        request: GetProjectionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetProjectionResponse:
+        self._owner._check_open("projections.get")
+        return await self._client.get_projection(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/ListProjections
+    async def list(
+        self,
+        request: ListProjectionsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListProjectionsResponse:
+        self._owner._check_open("projections.list")
+        return await self._client.list_projections(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/GetProjectionStatus
+    async def get_status(
+        self,
+        request: GetProjectionStatusRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetProjectionStatusResponse:
+        self._owner._check_open("projections.get_status")
+        return await self._client.get_projection_status(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/RebuildProjection
+    async def rebuild(
+        self,
+        request: RebuildProjectionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> RebuildProjectionResponse:
+        self._owner._check_open("projections.rebuild")
+        return await self._client.rebuild_projection(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/GetRebuildJob
+    async def get_rebuild_job(
+        self,
+        request: GetRebuildJobRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetRebuildJobResponse:
+        self._owner._check_open("projections.get_rebuild_job")
+        return await self._client.get_rebuild_job(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/CancelRebuild
+    async def cancel_rebuild(
+        self,
+        request: CancelRebuildRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> CancelRebuildResponse:
+        self._owner._check_open("projections.cancel_rebuild")
+        return await self._client.cancel_rebuild(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/PauseProjection
+    async def pause(
+        self,
+        request: PauseProjectionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> PauseProjectionResponse:
+        self._owner._check_open("projections.pause")
+        return await self._client.pause_projection(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/ResumeProjection
+    async def resume(
+        self,
+        request: ResumeProjectionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ResumeProjectionResponse:
+        self._owner._check_open("projections.resume")
+        return await self._client.resume_projection(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.ProjectionService/CreateSQLProjection
     async def create_sql(
         self,
@@ -1202,6 +2035,45 @@ class _AsyncProjections:
     ) -> QuerySQLProjectionResponse:
         self._owner._check_open("projections.query_sql")
         return await self._client.query_sql_projection(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/WaitProjectionCatchup
+    async def wait_catchup(
+        self,
+        request: WaitProjectionCatchupRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> WaitProjectionCatchupResponse:
+        self._owner._check_open("projections.wait_catchup")
+        return await self._client.wait_projection_catchup(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/WaitProjectionCatchupBatch
+    async def wait_catchup_batch(
+        self,
+        request: WaitProjectionCatchupBatchRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> WaitProjectionCatchupBatchResponse:
+        self._owner._check_open("projections.wait_catchup_batch")
+        return await self._client.wait_projection_catchup_batch(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/WaitForEvent
+    async def wait_for_event(
+        self,
+        request: WaitForEventRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> WaitProjectionCatchupResponse:
+        self._owner._check_open("projections.wait_for_event")
+        return await self._client.wait_for_event(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -1237,6 +2109,19 @@ class _AsyncPubsub:
     def __init__(self, owner: AsyncIronflowRPC, client: pubsub_connect.PubSubServiceClient) -> None:
         self._owner = owner
         self._client = client
+
+    # rpc: ironflow.v1.PubSubService/Emit
+    async def emit(
+        self,
+        request: EmitRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> EmitResponse:
+        self._owner._check_open("pubsub.emit")
+        return await self._client.emit(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
 
     # rpc: ironflow.v1.PubSubService/Subscribe
     def subscribe(
@@ -1360,6 +2245,19 @@ class _AsyncPubsub:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.PubSubService/Publish
+    async def publish(
+        self,
+        request: PublishRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> PublishResponse:
+        self._owner._check_open("pubsub.publish")
+        return await self._client.publish(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.PubSubService/ListTopics
     async def list_topics(
         self,
@@ -1386,12 +2284,45 @@ class _AsyncPubsub:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+class _AsyncQuery:
+    """Capability namespace `rpc.query`."""
+
+    def __init__(self, owner: AsyncIronflowRPC, client: query_connect.QueryServiceClient) -> None:
+        self._owner = owner
+        self._client = client
+
+    # rpc: ironflow.v1.QueryService/ExecuteSQL
+    async def execute_sql(
+        self,
+        request: ExecuteSQLRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ExecuteSQLResponse:
+        self._owner._check_open("query.execute_sql")
+        return await self._client.execute_sql(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
 class _AsyncRuns:
     """Capability namespace `rpc.runs`."""
 
     def __init__(self, owner: AsyncIronflowRPC, client: ironflow_connect.IronflowServiceClient) -> None:
         self._owner = owner
         self._client = client
+
+    # rpc: ironflow.v1.IronflowService/Trigger
+    async def trigger(
+        self,
+        request: TriggerRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> TriggerResponse:
+        self._owner._check_open("runs.trigger")
+        return await self._client.trigger(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
 
     # rpc: ironflow.v1.IronflowService/TriggerSync
     async def trigger_sync(
@@ -1432,6 +2363,84 @@ class _AsyncRuns:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.IronflowService/GetRun
+    async def get(
+        self,
+        request: GetRunRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Run:
+        self._owner._check_open("runs.get")
+        return await self._client.get_run(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/ListRuns
+    async def list(
+        self,
+        request: ListRunsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListRunsResponse:
+        self._owner._check_open("runs.list")
+        return await self._client.list_runs(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/GetRunSteps
+    async def get_steps(
+        self,
+        request: GetRunStepsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetRunStepsResponse:
+        self._owner._check_open("runs.get_steps")
+        return await self._client.get_run_steps(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/CancelRun
+    async def cancel(
+        self,
+        request: CancelRunRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Run:
+        self._owner._check_open("runs.cancel")
+        return await self._client.cancel_run(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/PatchStep
+    async def patch_step(
+        self,
+        request: PatchStepRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Step:
+        self._owner._check_open("runs.patch_step")
+        return await self._client.patch_step(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/ResumeRun
+    async def resume(
+        self,
+        request: ResumeRunRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Run:
+        self._owner._check_open("runs.resume")
+        return await self._client.resume_run(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.IronflowService/PauseRun
     async def pause(
         self,
@@ -1467,6 +2476,104 @@ class _AsyncRuns:
     ) -> InjectStepOutputResponse:
         self._owner._check_open("runs.inject_step_output")
         return await self._client.inject_step_output(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+class _AsyncStreams:
+    """Capability namespace `rpc.streams`."""
+
+    def __init__(self, owner: AsyncIronflowRPC, client: entity_stream_connect.EntityStreamServiceClient) -> None:
+        self._owner = owner
+        self._client = client
+
+    # rpc: ironflow.v1.EntityStreamService/AppendEvent
+    async def append_event(
+        self,
+        request: AppendEventRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> AppendEventResponse:
+        self._owner._check_open("streams.append_event")
+        return await self._client.append_event(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/ReadStream
+    async def read_stream(
+        self,
+        request: ReadStreamRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ReadStreamResponse:
+        self._owner._check_open("streams.read_stream")
+        return await self._client.read_stream(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/GetStreamInfo
+    async def get_info(
+        self,
+        request: GetStreamInfoRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetStreamInfoResponse:
+        self._owner._check_open("streams.get_info")
+        return await self._client.get_stream_info(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/ListStreams
+    async def list_streams(
+        self,
+        request: ListStreamsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListStreamsResponse:
+        self._owner._check_open("streams.list_streams")
+        return await self._client.list_streams(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/GetEntityHistory
+    async def get_history(
+        self,
+        request: GetEntityHistoryRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetEntityHistoryResponse:
+        self._owner._check_open("streams.get_history")
+        return await self._client.get_entity_history(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/CreateSnapshot
+    async def create_snapshot(
+        self,
+        request: CreateSnapshotRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> CreateSnapshotResponse:
+        self._owner._check_open("streams.create_snapshot")
+        return await self._client.create_snapshot(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/GetSnapshot
+    async def get_snapshot(
+        self,
+        request: GetSnapshotRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetSnapshotResponse:
+        self._owner._check_open("streams.get_snapshot")
+        return await self._client.get_snapshot(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -1681,11 +2788,13 @@ class AsyncIronflowRPC(_AsyncCoordinator):
         kw = self._client_kwargs()
         self._agent_tools_service = agent_tools_connect.AgentToolsServiceClient(self._server_url, **kw)
         self._audit_service = audit_connect.AuditServiceClient(self._server_url, **kw)
+        self._entity_stream_service = entity_stream_connect.EntityStreamServiceClient(self._server_url, **kw)
         self._environment_service = environment_connect.EnvironmentServiceClient(self._server_url, **kw)
         self._event_schema_service = event_schema_connect.EventSchemaServiceClient(self._server_url, **kw)
         self._ironflow_service = ironflow_connect.IronflowServiceClient(self._server_url, **kw)
         self._projection_service = projection_connect.ProjectionServiceClient(self._server_url, **kw)
         self._pub_sub_service = pubsub_connect.PubSubServiceClient(self._server_url, **kw)
+        self._query_service = query_connect.QueryServiceClient(self._server_url, **kw)
         self._time_travel_service = timetravel_connect.TimeTravelServiceClient(self._server_url, **kw)
         self._webhook_service = webhook_connect.WebhookServiceClient(self._server_url, **kw)
 
@@ -1697,18 +2806,24 @@ class AsyncIronflowRPC(_AsyncCoordinator):
         self.environments = _AsyncEnvironments(self, self._environment_service)
         #: `rpc.event_schemas`
         self.event_schemas = _AsyncEventSchemas(self, self._event_schema_service)
+        #: `rpc.events`
+        self.events = _AsyncEvents(self, self._ironflow_service)
         #: `rpc.functions`
         self.functions = _AsyncFunctions(self, self._ironflow_service)
         #: `rpc.projections`
         self.projections = _AsyncProjections(self, self._projection_service)
         #: `rpc.pubsub`
         self.pubsub = _AsyncPubsub(self, self._pub_sub_service)
+        #: `rpc.query`
+        self.query = _AsyncQuery(self, self._query_service)
         #: `rpc.runs`
         self.runs = _AsyncRuns(self, self._ironflow_service)
+        #: `rpc.streams`
+        self.streams = _AsyncStreams(self, self._entity_stream_service)
         #: `rpc.time_travel`
         self.time_travel = _AsyncTimeTravel(self, self._time_travel_service)
         #: `rpc.webhooks`
         self.webhooks = _AsyncWebhooks(self, self._webhook_service)
 
     def _service_clients(self) -> tuple[Any, ...]:
-        return (self._agent_tools_service, self._audit_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._time_travel_service, self._webhook_service,)
+        return (self._agent_tools_service, self._audit_service, self._entity_stream_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._query_service, self._time_travel_service, self._webhook_service,)
