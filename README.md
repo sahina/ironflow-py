@@ -34,7 +34,7 @@ KV, and config, but it ships **no worker runtime** — there is no `step.run`, n
 
 **Two clients, two protocols, neither a superset of the other.** `IronflowClient`
 speaks REST and retries idempotent methods. `IronflowRPC` / `AsyncIronflowRPC`
-speak ConnectRPC and reach 48 capabilities REST does not serve — webhook
+speak ConnectRPC and reach 86 capabilities REST does not serve — webhook
 management, agent tools, time travel, pub/sub consumer groups, function
 versioning, and environment lookup/key rotation — including four server
 streams. `IronflowRPC` retries only the unary methods the protos annotate
@@ -66,23 +66,27 @@ client = IronflowClient(
     api_key="ifkey_...",
 )
 
-# Emit an event
-with IronflowRPC(server_url=client.server_url, api_key=client.api_key) as rpc:
-    rpc.events.emit(v1.TriggerRequest(event='user.created', data=Struct.from_python({'user_id': '123', 'email': 'user@example.com'})))
-
-# List runs
-runs = client.runs_list()
-
-# Get a specific run
-run = client.runs_get("run_abc123")
-
-# List projections
-projections = client.projections_list()
-
-# Public server inspection
+# Public server inspection — REST
 health = client.health()
 readiness = client.ready()
 capabilities = client.capabilities()
+
+# Stored events — REST
+events = client.events_list()
+
+# Runs and projections are ConnectRPC-only; there is no REST sibling.
+with IronflowRPC(server_url=client.server_url, api_key=client.api_key) as rpc:
+    # Emit an event
+    rpc.events.emit(v1.TriggerRequest(event='user.created', data=Struct.from_python({'user_id': '123', 'email': 'user@example.com'})))
+
+    # List runs
+    runs = rpc.runs.list(v1.ListRunsRequest())
+
+    # Get a specific run
+    run = rpc.runs.get(v1.GetRunRequest(id="run_abc123"))
+
+    # List projections
+    projections = rpc.projections.list(v1.ListProjectionsRequest())
 ```
 
 ## ConnectRPC client

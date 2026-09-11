@@ -6,6 +6,7 @@
   "api_keys_rotate",
   "api_keys_update_roles",
   "audit_list",
+  "audit_list_settings",
   "capabilities",
   "capacity_list_buckets",
   "capacity_list_credits",

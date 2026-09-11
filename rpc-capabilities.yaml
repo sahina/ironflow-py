@@ -64,7 +64,7 @@
 # edit, not two.
 expect:
   rest: 4
-  rpc: 82
+  rpc: 86
   stream: 4
   unsupported: 1
 
@@ -294,6 +294,27 @@ rpcs:
       capability. Its own namespace rather than projections: the query is not
       projection-scoped, and gen_python_rpc.py refuses a namespace that spans two
       services.
+
+  # ── DeploymentService ──
+  # No REST siblings: executable deployment identity (ADR 0081, #2166) is a
+  # Connect-only surface. Every row is a real capability the REST client
+  # cannot answer at all — REST has no notion of a deployment.
+  - path: ironflow.v1.DeploymentService/RegisterDeployment
+    classification: rpc
+    capability: deployments
+    method: register
+  - path: ironflow.v1.DeploymentService/GetDeployment
+    classification: rpc
+    capability: deployments
+    method: get
+  - path: ironflow.v1.DeploymentService/ListDeployments
+    classification: rpc
+    capability: deployments
+    method: list
+  - path: ironflow.v1.DeploymentService/GetFunctionExecutionRouting
+    classification: rpc
+    capability: deployments
+    method: get_execution_routing
 
   # ── EventSchemaService ──
   - path: ironflow.v1.EventSchemaService/RegisterSchema

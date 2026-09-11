@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._gen import agent_tools_connect, audit_connect, entity_stream_connect, environment_connect, event_schema_connect, ironflow_connect, projection_connect, pubsub_connect, query_connect, timetravel_connect, webhook_connect
+from .._gen import agent_tools_connect, audit_connect, deployment_connect, entity_stream_connect, environment_connect, event_schema_connect, ironflow_connect, projection_connect, pubsub_connect, query_connect, timetravel_connect, webhook_connect
 from ._runtime import (
     _AsyncCoordinator,
     _Coordinator,
@@ -65,11 +65,15 @@ if TYPE_CHECKING:
         GetAuthAuditTrailRequest,
         GetAuthAuditTrailResponse,
         GetConsumerGroupRequest,
+        GetDeploymentRequest,
+        GetDeploymentResponse,
         GetEntityHistoryRequest,
         GetEntityHistoryResponse,
         GetEnvironmentRequest,
         GetFunctionAtVersionRequest,
         GetFunctionAtVersionResponse,
+        GetFunctionExecutionRoutingRequest,
+        GetFunctionExecutionRoutingResponse,
         GetFunctionRequest,
         GetPausedStateRequest,
         GetPausedStateResponse,
@@ -108,6 +112,8 @@ if TYPE_CHECKING:
         JoinConsumerGroupRequest,
         ListConsumerGroupsRequest,
         ListConsumerGroupsResponse,
+        ListDeploymentsRequest,
+        ListDeploymentsResponse,
         ListFunctionHistoryRequest,
         ListFunctionHistoryResponse,
         ListFunctionsRequest,
@@ -142,6 +148,8 @@ if TYPE_CHECKING:
         ReadStreamResponse,
         RebuildProjectionRequest,
         RebuildProjectionResponse,
+        RegisterDeploymentRequest,
+        RegisterDeploymentResponse,
         RegisterFunctionRequest,
         RegisterFunctionResponse,
         RegisterProjectionRequest,
@@ -280,6 +288,65 @@ class _Audit:
     ) -> GetAuthAuditTrailResponse:
         self._owner._check_open("audit.get_auth_trail")
         return self._client.get_auth_audit_trail(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+class _Deployments:
+    """Capability namespace `rpc.deployments`."""
+
+    def __init__(self, owner: IronflowRPC, client: deployment_connect.DeploymentServiceClientSync) -> None:
+        self._owner = owner
+        self._client = client
+
+    # rpc: ironflow.v1.DeploymentService/RegisterDeployment
+    def register(
+        self,
+        request: RegisterDeploymentRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> RegisterDeploymentResponse:
+        self._owner._check_open("deployments.register")
+        return self._client.register_deployment(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.DeploymentService/GetDeployment
+    def get(
+        self,
+        request: GetDeploymentRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetDeploymentResponse:
+        self._owner._check_open("deployments.get")
+        return self._client.get_deployment(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.DeploymentService/ListDeployments
+    def list(
+        self,
+        request: ListDeploymentsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListDeploymentsResponse:
+        self._owner._check_open("deployments.list")
+        return self._client.list_deployments(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.DeploymentService/GetFunctionExecutionRouting
+    def get_execution_routing(
+        self,
+        request: GetFunctionExecutionRoutingRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetFunctionExecutionRoutingResponse:
+        self._owner._check_open("deployments.get_execution_routing")
+        return self._client.get_function_execution_routing(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -1470,6 +1537,7 @@ class IronflowRPC(_Coordinator):
         kw = self._client_kwargs()
         self._agent_tools_service = agent_tools_connect.AgentToolsServiceClientSync(self._server_url, **kw)
         self._audit_service = audit_connect.AuditServiceClientSync(self._server_url, **kw)
+        self._deployment_service = deployment_connect.DeploymentServiceClientSync(self._server_url, **kw)
         self._entity_stream_service = entity_stream_connect.EntityStreamServiceClientSync(self._server_url, **kw)
         self._environment_service = environment_connect.EnvironmentServiceClientSync(self._server_url, **kw)
         self._event_schema_service = event_schema_connect.EventSchemaServiceClientSync(self._server_url, **kw)
@@ -1484,6 +1552,8 @@ class IronflowRPC(_Coordinator):
         self.agent_tools = _AgentTools(self, self._agent_tools_service)
         #: `rpc.audit`
         self.audit = _Audit(self, self._audit_service)
+        #: `rpc.deployments`
+        self.deployments = _Deployments(self, self._deployment_service)
         #: `rpc.environments`
         self.environments = _Environments(self, self._environment_service)
         #: `rpc.event_schemas`
@@ -1508,7 +1578,7 @@ class IronflowRPC(_Coordinator):
         self.webhooks = _Webhooks(self, self._webhook_service)
 
     def _service_clients(self) -> tuple[Any, ...]:
-        return (self._agent_tools_service, self._audit_service, self._entity_stream_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._query_service, self._time_travel_service, self._webhook_service,)
+        return (self._agent_tools_service, self._audit_service, self._deployment_service, self._entity_stream_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._query_service, self._time_travel_service, self._webhook_service,)
 
 class _AsyncAgentTools:
     """Capability namespace `rpc.agent_tools`."""
@@ -1598,6 +1668,65 @@ class _AsyncAudit:
     ) -> GetAuthAuditTrailResponse:
         self._owner._check_open("audit.get_auth_trail")
         return await self._client.get_auth_audit_trail(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+class _AsyncDeployments:
+    """Capability namespace `rpc.deployments`."""
+
+    def __init__(self, owner: AsyncIronflowRPC, client: deployment_connect.DeploymentServiceClient) -> None:
+        self._owner = owner
+        self._client = client
+
+    # rpc: ironflow.v1.DeploymentService/RegisterDeployment
+    async def register(
+        self,
+        request: RegisterDeploymentRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> RegisterDeploymentResponse:
+        self._owner._check_open("deployments.register")
+        return await self._client.register_deployment(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.DeploymentService/GetDeployment
+    async def get(
+        self,
+        request: GetDeploymentRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetDeploymentResponse:
+        self._owner._check_open("deployments.get")
+        return await self._client.get_deployment(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.DeploymentService/ListDeployments
+    async def list(
+        self,
+        request: ListDeploymentsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListDeploymentsResponse:
+        self._owner._check_open("deployments.list")
+        return await self._client.list_deployments(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.DeploymentService/GetFunctionExecutionRouting
+    async def get_execution_routing(
+        self,
+        request: GetFunctionExecutionRoutingRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetFunctionExecutionRoutingResponse:
+        self._owner._check_open("deployments.get_execution_routing")
+        return await self._client.get_function_execution_routing(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -2788,6 +2917,7 @@ class AsyncIronflowRPC(_AsyncCoordinator):
         kw = self._client_kwargs()
         self._agent_tools_service = agent_tools_connect.AgentToolsServiceClient(self._server_url, **kw)
         self._audit_service = audit_connect.AuditServiceClient(self._server_url, **kw)
+        self._deployment_service = deployment_connect.DeploymentServiceClient(self._server_url, **kw)
         self._entity_stream_service = entity_stream_connect.EntityStreamServiceClient(self._server_url, **kw)
         self._environment_service = environment_connect.EnvironmentServiceClient(self._server_url, **kw)
         self._event_schema_service = event_schema_connect.EventSchemaServiceClient(self._server_url, **kw)
@@ -2802,6 +2932,8 @@ class AsyncIronflowRPC(_AsyncCoordinator):
         self.agent_tools = _AsyncAgentTools(self, self._agent_tools_service)
         #: `rpc.audit`
         self.audit = _AsyncAudit(self, self._audit_service)
+        #: `rpc.deployments`
+        self.deployments = _AsyncDeployments(self, self._deployment_service)
         #: `rpc.environments`
         self.environments = _AsyncEnvironments(self, self._environment_service)
         #: `rpc.event_schemas`
@@ -2826,4 +2958,4 @@ class AsyncIronflowRPC(_AsyncCoordinator):
         self.webhooks = _AsyncWebhooks(self, self._webhook_service)
 
     def _service_clients(self) -> tuple[Any, ...]:
-        return (self._agent_tools_service, self._audit_service, self._entity_stream_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._query_service, self._time_travel_service, self._webhook_service,)
+        return (self._agent_tools_service, self._audit_service, self._deployment_service, self._entity_stream_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._query_service, self._time_travel_service, self._webhook_service,)

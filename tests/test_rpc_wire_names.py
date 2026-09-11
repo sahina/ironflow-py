@@ -106,8 +106,8 @@ def test_ledger_is_readable() -> None:
     nothing would leave them all green while checking nothing.
     """
     rows = ledger_rows()
-    assert len(rows) == 86, f"expected 86 exposed rows, parsed {len(rows)}"
-    assert len({p for _, _, p in rows}) == 86, "ledger paths are not unique"
+    assert len(rows) == 90, f"expected 90 exposed rows, parsed {len(rows)}"
+    assert len({p for _, _, p in rows}) == 90, "ledger paths are not unique"
 
 
 @pytest.mark.parametrize(
