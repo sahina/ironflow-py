@@ -34,10 +34,10 @@ KV, and config, but it ships **no worker runtime** — there is no `step.run`, n
 
 **Two clients, two protocols, neither a superset of the other.** `IronflowClient`
 speaks REST and retries idempotent methods. `IronflowRPC` / `AsyncIronflowRPC`
-speak ConnectRPC and reach 86 capabilities REST does not serve — webhook
+speak ConnectRPC and reach 90 capabilities REST does not serve — webhook
 management, agent tools, time travel, pub/sub consumer groups, function
-versioning, and environment lookup/key rotation — including four server
-streams. `IronflowRPC` retries only the unary methods the protos annotate
+versioning, executable deployments, raw SQL, and environment lookup/key
+rotation — including four server streams. `IronflowRPC` retries only the unary methods the protos annotate
 side-effect-free, and reconnects a subscription only when you position it (see
 [Retries](#retries-and-what-can-still-go-wrong)).
 
