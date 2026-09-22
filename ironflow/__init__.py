@@ -26,11 +26,13 @@ from typing import TYPE_CHECKING, Any
 
 from ._http import (
     IDEMPOTENT_METHODS,
+    REDACTED_MARKER_KEY,
     BaseClient,
     HealthResponse,
     IronflowError,
     ReadinessResponse,
     ServerCapabilities,
+    is_redacted,
 )
 from .client import IronflowClient
 
@@ -40,6 +42,7 @@ if TYPE_CHECKING:  # pragma: no cover - import-time cost is the point
 __all__ = [
     "IDEMPOTENT_METHODS",
     "NO_TIMEOUT",
+    "REDACTED_MARKER_KEY",
     "AsyncIronflowRPC",
     "BaseClient",
     "HealthResponse",
@@ -49,6 +52,7 @@ __all__ = [
     "IronflowRPCError",
     "ReadinessResponse",
     "ServerCapabilities",
+    "is_redacted",
 ]
 
 #: The ConnectRPC names, resolved on first access instead of at import.

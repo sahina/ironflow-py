@@ -1,6 +1,6 @@
 # Ironflow — Python SDK
 
-Python client for [Ironflow](https://ironflow.run) — the Continuous History platform for backend systems.
+Python client for [Ironflow](https://ironflow.run) — an event-driven backend platform with durable workflows, pub/sub, event sourcing, and entity streams.
 
 [![PyPI](https://img.shields.io/pypi/v/ironflow-py)](https://pypi.org/project/ironflow-py/)
 
@@ -34,7 +34,7 @@ KV, and config, but it ships **no worker runtime** — there is no `step.run`, n
 
 **Two clients, two protocols, neither a superset of the other.** `IronflowClient`
 speaks REST and retries idempotent methods. `IronflowRPC` / `AsyncIronflowRPC`
-speak ConnectRPC and reach 90 capabilities REST does not serve — webhook
+speak ConnectRPC and reach 96 capabilities REST does not serve — webhook
 management, agent tools, time travel, pub/sub consumer groups, function
 versioning, executable deployments, raw SQL, and environment lookup/key
 rotation — including four server streams. `IronflowRPC` retries only the unary methods the protos annotate
@@ -74,7 +74,7 @@ capabilities = client.capabilities()
 # Stored events — REST
 events = client.events_list()
 
-# Runs and projections are ConnectRPC-only; there is no REST sibling.
+# Listing runs and projections is ConnectRPC-only; there is no REST sibling.
 with IronflowRPC(server_url=client.server_url, api_key=client.api_key) as rpc:
     # Emit an event
     rpc.events.emit(v1.TriggerRequest(event='user.created', data=Struct.from_python({'user_id': '123', 'email': 'user@example.com'})))

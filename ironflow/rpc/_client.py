@@ -49,8 +49,13 @@ if TYPE_CHECKING:
         CreateWebhookSourceRequest,
         DeleteConsumerGroupRequest,
         DeleteFunctionRequest,
+        DeleteRunRequest,
+        DeleteRunsRequest,
+        DeleteRunsResponse,
         DeleteSchemaRequest,
         DeleteSchemaResponse,
+        DeleteStreamRequest,
+        DeleteStreamResponse,
         DeleteWebhookSourceRequest,
         DisableWebhookSignatureVerificationRequest,
         EmitRequest,
@@ -148,6 +153,9 @@ if TYPE_CHECKING:
         ReadStreamResponse,
         RebuildProjectionRequest,
         RebuildProjectionResponse,
+        RedactEventRequest,
+        RedactRunRequest,
+        RedactStepRequest,
         RegisterDeploymentRequest,
         RegisterDeploymentResponse,
         RegisterFunctionRequest,
@@ -485,6 +493,19 @@ class _Events:
     ) -> TriggerResponse:
         self._owner._check_open("events.emit")
         return self._client.emit(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/RedactEvent
+    def redact(
+        self,
+        request: RedactEventRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Empty:
+        self._owner._check_open("events.redact")
+        return self._client.redact_event(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -1164,6 +1185,58 @@ class _Runs:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.IronflowService/DeleteRun
+    def delete(
+        self,
+        request: DeleteRunRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Empty:
+        self._owner._check_open("runs.delete")
+        return self._client.delete_run(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/DeleteRuns
+    def delete_many(
+        self,
+        request: DeleteRunsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> DeleteRunsResponse:
+        self._owner._check_open("runs.delete_many")
+        return self._client.delete_runs(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/RedactStep
+    def redact_step(
+        self,
+        request: RedactStepRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Empty:
+        self._owner._check_open("runs.redact_step")
+        return self._client.redact_step(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/RedactRun
+    def redact(
+        self,
+        request: RedactRunRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Empty:
+        self._owner._check_open("runs.redact")
+        return self._client.redact_run(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.IronflowService/PatchStep
     def patch_step(
         self,
@@ -1323,6 +1396,19 @@ class _Streams:
     ) -> GetSnapshotResponse:
         self._owner._check_open("streams.get_snapshot")
         return self._client.get_snapshot(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/DeleteStream
+    def delete(
+        self,
+        request: DeleteStreamRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> DeleteStreamResponse:
+        self._owner._check_open("streams.delete")
+        return self._client.delete_stream(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -1865,6 +1951,19 @@ class _AsyncEvents:
     ) -> TriggerResponse:
         self._owner._check_open("events.emit")
         return await self._client.emit(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/RedactEvent
+    async def redact(
+        self,
+        request: RedactEventRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Empty:
+        self._owner._check_open("events.redact")
+        return await self._client.redact_event(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -2544,6 +2643,58 @@ class _AsyncRuns:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.IronflowService/DeleteRun
+    async def delete(
+        self,
+        request: DeleteRunRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Empty:
+        self._owner._check_open("runs.delete")
+        return await self._client.delete_run(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/DeleteRuns
+    async def delete_many(
+        self,
+        request: DeleteRunsRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> DeleteRunsResponse:
+        self._owner._check_open("runs.delete_many")
+        return await self._client.delete_runs(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/RedactStep
+    async def redact_step(
+        self,
+        request: RedactStepRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Empty:
+        self._owner._check_open("runs.redact_step")
+        return await self._client.redact_step(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.IronflowService/RedactRun
+    async def redact(
+        self,
+        request: RedactRunRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> Empty:
+        self._owner._check_open("runs.redact")
+        return await self._client.redact_run(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.IronflowService/PatchStep
     async def patch_step(
         self,
@@ -2703,6 +2854,19 @@ class _AsyncStreams:
     ) -> GetSnapshotResponse:
         self._owner._check_open("streams.get_snapshot")
         return await self._client.get_snapshot(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EntityStreamService/DeleteStream
+    async def delete(
+        self,
+        request: DeleteStreamRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> DeleteStreamResponse:
+        self._owner._check_open("streams.delete")
+        return await self._client.delete_stream(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )

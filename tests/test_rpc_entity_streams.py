@@ -10,6 +10,7 @@ from ironflow import AsyncIronflowRPC, IronflowRPC, IronflowRPCError
 from ironflow.rpc.v1 import (
     AppendEventRequest,
     CreateSnapshotRequest,
+    DeleteStreamRequest,
     GetEntityHistoryRequest,
     GetSnapshotRequest,
     GetStreamInfoRequest,
@@ -78,6 +79,12 @@ def test_streams(client_cls: Any) -> None:
                     )
                 )
                 assert snapshot.entity_version == version
+                deleted = await resolve(
+                    streams.delete(
+                        DeleteStreamRequest(entity_id="order-1", purge=True)
+                    )
+                )
+                assert deleted.entity_version == version + 1
                 with pytest.raises(IronflowRPCError) as exc:
                     await resolve(
                         streams.get_info(GetStreamInfoRequest(entity_id="missing"))

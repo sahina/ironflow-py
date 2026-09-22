@@ -524,3 +524,26 @@ class BaseClient:
             retryable=_status_is_retryable(e.code),
             retry_after=retry_after,
         )
+
+
+#: The JSON key a redacted payload carries. Matches `store.RedactedMarkerKey`
+#: on the server and `REDACTED_MARKER_KEY` in the Go and JS SDKs.
+REDACTED_MARKER_KEY = "$redacted"
+
+
+def is_redacted(payload: object) -> bool:
+    """Report whether a payload is a redaction placeholder, not real content.
+
+    Applies to an event's ``data``, a step's ``output`` and a run's ``input``
+    or ``output``. Redaction keeps the row and replaces only the bytes, so the
+    value still arrives at the right position in a stream and a reducer that
+    trusts its own shape will silently fold a missing value into state. Check
+    first::
+
+        if is_redacted(event["data"]):
+            return state  # keep what we had
+
+    The placeholder is ``{"$redacted": true, "sha256": ..., "redactedAt": ...}``.
+    The hash is of the original bytes; nothing recovers them from it.
+    """
+    return isinstance(payload, dict) and payload.get(REDACTED_MARKER_KEY) is True

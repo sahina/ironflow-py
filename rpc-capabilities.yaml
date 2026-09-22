@@ -64,7 +64,7 @@
 # edit, not two.
 expect:
   rest: 4
-  rpc: 86
+  rpc: 92
   stream: 4
   unsupported: 1
 
@@ -142,6 +142,26 @@ rpcs:
     classification: rpc
     capability: runs
     method: cancel
+  - path: ironflow.v1.IronflowService/DeleteRun
+    classification: rpc
+    capability: runs
+    method: delete
+  - path: ironflow.v1.IronflowService/DeleteRuns
+    classification: rpc
+    capability: runs
+    method: delete_many
+  - path: ironflow.v1.IronflowService/RedactEvent
+    classification: rpc
+    capability: events
+    method: redact
+  - path: ironflow.v1.IronflowService/RedactStep
+    classification: rpc
+    capability: runs
+    method: redact_step
+  - path: ironflow.v1.IronflowService/RedactRun
+    classification: rpc
+    capability: runs
+    method: redact
   - path: ironflow.v1.IronflowService/PatchStep
     classification: rpc
     capability: runs
@@ -211,6 +231,10 @@ rpcs:
     classification: rpc
     capability: streams
     method: get_snapshot
+  - path: ironflow.v1.EntityStreamService/DeleteStream
+    classification: rpc
+    capability: streams
+    method: delete
 
   # ── ProjectionService ──
   - path: ironflow.v1.ProjectionService/RegisterProjection

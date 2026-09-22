@@ -14,7 +14,7 @@ from connectrpc.errors import ConnectError
 from connectrpc.method import IdempotencyLevel, MethodInfo
 from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, Endpoint, EndpointSync
 
-from .entity_stream_pb import AppendEventRequest, AppendEventResponse, CreateSnapshotRequest, CreateSnapshotResponse, GetEntityHistoryRequest, GetEntityHistoryResponse, GetSnapshotRequest, GetSnapshotResponse, GetStreamInfoRequest, GetStreamInfoResponse, ListStreamsRequest, ListStreamsResponse, ReadStreamRequest, ReadStreamResponse
+from .entity_stream_pb import AppendEventRequest, AppendEventResponse, CreateSnapshotRequest, CreateSnapshotResponse, DeleteStreamRequest, DeleteStreamResponse, GetEntityHistoryRequest, GetEntityHistoryResponse, GetSnapshotRequest, GetSnapshotResponse, GetStreamInfoRequest, GetStreamInfoResponse, ListStreamsRequest, ListStreamsResponse, ReadStreamRequest, ReadStreamResponse
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable, Mapping
@@ -45,6 +45,9 @@ class EntityStreamService(Protocol):
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     async def get_snapshot(self, request: GetSnapshotRequest, ctx: RequestContext[GetSnapshotRequest, GetSnapshotResponse]) -> GetSnapshotResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def delete_stream(self, request: DeleteStreamRequest, ctx: RequestContext[DeleteStreamRequest, DeleteStreamResponse]) -> DeleteStreamResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
 
@@ -130,6 +133,16 @@ class EntityStreamServiceASGIApplication(ConnectASGIApplication[EntityStreamServ
                         idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
                     ),
                     function=svc.get_snapshot,
+                ),
+                "/ironflow.v1.EntityStreamService/DeleteStream": Endpoint.unary(
+                    method=MethodInfo(
+                        name="DeleteStream",
+                        service_name="ironflow.v1.EntityStreamService",
+                        input=DeleteStreamRequest,
+                        output=DeleteStreamResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.delete_stream,
                 ),
             },
             interceptors=interceptors,
@@ -295,6 +308,26 @@ class EntityStreamServiceClient(ConnectClient):
             use_get=use_get,
         )
 
+    async def delete_stream(
+        self,
+        request: DeleteStreamRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> DeleteStreamResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="DeleteStream",
+                service_name="ironflow.v1.EntityStreamService",
+                input=DeleteStreamRequest,
+                output=DeleteStreamResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 class EntityStreamServiceSync(Protocol):
     def append_event(self, request: AppendEventRequest, ctx: RequestContext[AppendEventRequest, AppendEventResponse]) -> AppendEventResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
@@ -315,6 +348,9 @@ class EntityStreamServiceSync(Protocol):
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     def get_snapshot(self, request: GetSnapshotRequest, ctx: RequestContext[GetSnapshotRequest, GetSnapshotResponse]) -> GetSnapshotResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def delete_stream(self, request: DeleteStreamRequest, ctx: RequestContext[DeleteStreamRequest, DeleteStreamResponse]) -> DeleteStreamResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
 
@@ -398,6 +434,16 @@ class EntityStreamServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
                     ),
                     function=service.get_snapshot,
+                ),
+                "/ironflow.v1.EntityStreamService/DeleteStream": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="DeleteStream",
+                        service_name="ironflow.v1.EntityStreamService",
+                        input=DeleteStreamRequest,
+                        output=DeleteStreamResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.delete_stream,
                 ),
             },
             interceptors=interceptors,
@@ -555,4 +601,23 @@ class EntityStreamServiceClientSync(ConnectClientSync):
             headers=headers,
             timeout_ms=timeout_ms,
             use_get=use_get,
+        )
+    def delete_stream(
+        self,
+        request: DeleteStreamRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> DeleteStreamResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="DeleteStream",
+                service_name="ironflow.v1.EntityStreamService",
+                input=DeleteStreamRequest,
+                output=DeleteStreamResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
         )

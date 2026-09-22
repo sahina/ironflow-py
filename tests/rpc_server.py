@@ -203,6 +203,11 @@ class StubEntityStreamService(EntityStreamService):  # type: ignore[misc]
             snapshot_id="snapshot-1", entity_version=request.before_version
         )
 
+    async def delete_stream(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        assert request.entity_id == "order-1"
+        assert request.purge is True
+        return stream_pb.DeleteStreamResponse(entity_version=9007199254740994)
+
 
 class StubEventSchemaService(EventSchemaService):  # type: ignore[misc]
     def __init__(self) -> None:
@@ -310,6 +315,36 @@ class StubIronflowService(IronflowService):  # type: ignore[misc]
 
         assert request.reason == "requested"
         return Run(id=request.id, status=RunStatus.CANCELLED)
+
+    async def delete_run(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from protobuf.wkt import Empty
+
+        assert request.id == "run"
+        return Empty()
+
+    async def delete_runs(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import DeleteRunsResponse
+
+        assert request.function_id == "fn"
+        return DeleteRunsResponse(deleted=3)
+
+    async def redact_event(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from protobuf.wkt import Empty
+
+        assert request.event_id == "ev"
+        return Empty()
+
+    async def redact_step(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from protobuf.wkt import Empty
+
+        assert request.step_id == "step"
+        return Empty()
+
+    async def redact_run(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from protobuf.wkt import Empty
+
+        assert request.run_id == "run"
+        return Empty()
 
     async def get_function(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
         from ironflow.rpc.v1 import (

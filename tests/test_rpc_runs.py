@@ -8,10 +8,14 @@ import pytest
 from ironflow import AsyncIronflowRPC, IronflowRPC, IronflowRPCError
 from ironflow.rpc.v1 import (
     CancelRunRequest,
+    DeleteRunRequest,
+    DeleteRunsRequest,
     GetAuditTrailRequest,
     GetRunRequest,
     GetRunStepsRequest,
     ListRunsRequest,
+    RedactRunRequest,
+    RedactStepRequest,
     RunStatus,
 )
 
@@ -45,6 +49,17 @@ def test_runs(client_cls: Any) -> None:
                     client.runs.cancel(CancelRunRequest(id="run", reason="requested"))
                 )
                 assert cancelled.status == RunStatus.CANCELLED
+                await resolve(client.runs.delete(DeleteRunRequest(id="run")))
+                deleted = await resolve(
+                    client.runs.delete_many(DeleteRunsRequest(function_id="fn"))
+                )
+                assert deleted.deleted == 3
+                # Redaction keeps the row and replaces only the payload, so
+                # these answer Empty rather than a mutated Run.
+                await resolve(client.runs.redact(RedactRunRequest(run_id="run")))
+                await resolve(
+                    client.runs.redact_step(RedactStepRequest(step_id="step"))
+                )
                 audit = await resolve(
                     client.audit.get_trail(
                         GetAuditTrailRequest(run_id="run", event_type="run.created")

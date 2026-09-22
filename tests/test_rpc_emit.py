@@ -41,3 +41,38 @@ def test_emit(client_cls: Any) -> None:
                     client.close()
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("client_cls", [IronflowRPC, AsyncIronflowRPC])
+def test_events_redact(client_cls: Any) -> None:
+    """Redaction keeps the event row and replaces only its data, so the call
+    answers Empty rather than a mutated event."""
+
+    async def exercise() -> None:
+        with serve() as server:
+            client = client_cls(server_url=server.url)
+            try:
+                result = client.events.redact(v1.RedactEventRequest(event_id="ev"))
+                if asyncio.iscoroutine(result):
+                    await result
+            finally:
+                if isinstance(client, AsyncIronflowRPC):
+                    await client.aclose()
+                else:
+                    client.close()
+
+    asyncio.run(exercise())
+
+
+def test_is_redacted() -> None:
+    """The predicate spec §7 names, so a reducer can tell a placeholder from
+    real state without knowing the placeholder's shape."""
+    from ironflow import is_redacted
+
+    assert is_redacted({"$redacted": True, "sha256": "ab", "redactedAt": "x"})
+    assert not is_redacted({"email": "a@b.c"})
+    assert not is_redacted({"$redacted": False})
+    assert not is_redacted({"$redacted": "yes"})
+    assert not is_redacted(None)
+    assert not is_redacted([1, 2])
+    assert not is_redacted("$redacted")

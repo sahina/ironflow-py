@@ -15,7 +15,7 @@ from connectrpc.method import IdempotencyLevel, MethodInfo
 from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, Endpoint, EndpointSync
 from protobuf.wkt import Empty
 
-from .ironflow_pb import CancelRunRequest, DeleteFunctionRequest, GetFunctionAtVersionRequest, GetFunctionAtVersionResponse, GetFunctionRequest, GetPausedStateRequest, GetPausedStateResponse, GetRunRequest, GetRunStepsRequest, GetRunStepsResponse, HealthRequest, HealthResponse, InfoRequest, InfoResponse, InjectStepOutputRequest, InjectStepOutputResponse, InvokeFunctionRequest, InvokeFunctionResponse, InvokeFunctionSyncRequest, InvokeFunctionSyncResponse, ListFunctionHistoryRequest, ListFunctionHistoryResponse, ListFunctionsRequest, ListFunctionsResponse, ListRunsRequest, ListRunsResponse, PatchStepRequest, PauseRunRequest, PauseRunResponse, RegisterFunctionRequest, RegisterFunctionResponse, ResumeRunRequest, RollbackFunctionRequest, RollbackFunctionResponse, TriggerBatchRequest, TriggerBatchResponse, TriggerRequest, TriggerResponse, TriggerSyncRequest, TriggerSyncResponse, UpdateFunctionStatusRequest
+from .ironflow_pb import CancelRunRequest, DeleteFunctionRequest, DeleteRunRequest, DeleteRunsRequest, DeleteRunsResponse, GetFunctionAtVersionRequest, GetFunctionAtVersionResponse, GetFunctionRequest, GetPausedStateRequest, GetPausedStateResponse, GetRunRequest, GetRunStepsRequest, GetRunStepsResponse, HealthRequest, HealthResponse, InfoRequest, InfoResponse, InjectStepOutputRequest, InjectStepOutputResponse, InvokeFunctionRequest, InvokeFunctionResponse, InvokeFunctionSyncRequest, InvokeFunctionSyncResponse, ListFunctionHistoryRequest, ListFunctionHistoryResponse, ListFunctionsRequest, ListFunctionsResponse, ListRunsRequest, ListRunsResponse, PatchStepRequest, PauseRunRequest, PauseRunResponse, RedactEventRequest, RedactRunRequest, RedactStepRequest, RegisterFunctionRequest, RegisterFunctionResponse, ResumeRunRequest, RollbackFunctionRequest, RollbackFunctionResponse, TriggerBatchRequest, TriggerBatchResponse, TriggerRequest, TriggerResponse, TriggerSyncRequest, TriggerSyncResponse, UpdateFunctionStatusRequest
 from .types_pb import Function, Run, Step
 
 if TYPE_CHECKING:
@@ -80,6 +80,21 @@ class IronflowService(Protocol):
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     async def cancel_run(self, request: CancelRunRequest, ctx: RequestContext[CancelRunRequest, Run]) -> Run:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def delete_run(self, request: DeleteRunRequest, ctx: RequestContext[DeleteRunRequest, Empty]) -> Empty:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def delete_runs(self, request: DeleteRunsRequest, ctx: RequestContext[DeleteRunsRequest, DeleteRunsResponse]) -> DeleteRunsResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def redact_event(self, request: RedactEventRequest, ctx: RequestContext[RedactEventRequest, Empty]) -> Empty:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def redact_step(self, request: RedactStepRequest, ctx: RequestContext[RedactStepRequest, Empty]) -> Empty:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def redact_run(self, request: RedactRunRequest, ctx: RequestContext[RedactRunRequest, Empty]) -> Empty:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     async def patch_step(self, request: PatchStepRequest, ctx: RequestContext[PatchStepRequest, Step]) -> Step:
@@ -296,6 +311,56 @@ class IronflowServiceASGIApplication(ConnectASGIApplication[IronflowService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.cancel_run,
+                ),
+                "/ironflow.v1.IronflowService/DeleteRun": Endpoint.unary(
+                    method=MethodInfo(
+                        name="DeleteRun",
+                        service_name="ironflow.v1.IronflowService",
+                        input=DeleteRunRequest,
+                        output=Empty,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.delete_run,
+                ),
+                "/ironflow.v1.IronflowService/DeleteRuns": Endpoint.unary(
+                    method=MethodInfo(
+                        name="DeleteRuns",
+                        service_name="ironflow.v1.IronflowService",
+                        input=DeleteRunsRequest,
+                        output=DeleteRunsResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.delete_runs,
+                ),
+                "/ironflow.v1.IronflowService/RedactEvent": Endpoint.unary(
+                    method=MethodInfo(
+                        name="RedactEvent",
+                        service_name="ironflow.v1.IronflowService",
+                        input=RedactEventRequest,
+                        output=Empty,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.redact_event,
+                ),
+                "/ironflow.v1.IronflowService/RedactStep": Endpoint.unary(
+                    method=MethodInfo(
+                        name="RedactStep",
+                        service_name="ironflow.v1.IronflowService",
+                        input=RedactStepRequest,
+                        output=Empty,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.redact_step,
+                ),
+                "/ironflow.v1.IronflowService/RedactRun": Endpoint.unary(
+                    method=MethodInfo(
+                        name="RedactRun",
+                        service_name="ironflow.v1.IronflowService",
+                        input=RedactRunRequest,
+                        output=Empty,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.redact_run,
                 ),
                 "/ironflow.v1.IronflowService/PatchStep": Endpoint.unary(
                     method=MethodInfo(
@@ -755,6 +820,106 @@ class IronflowServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def delete_run(
+        self,
+        request: DeleteRunRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> Empty:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="DeleteRun",
+                service_name="ironflow.v1.IronflowService",
+                input=DeleteRunRequest,
+                output=Empty,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def delete_runs(
+        self,
+        request: DeleteRunsRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> DeleteRunsResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="DeleteRuns",
+                service_name="ironflow.v1.IronflowService",
+                input=DeleteRunsRequest,
+                output=DeleteRunsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def redact_event(
+        self,
+        request: RedactEventRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> Empty:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RedactEvent",
+                service_name="ironflow.v1.IronflowService",
+                input=RedactEventRequest,
+                output=Empty,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def redact_step(
+        self,
+        request: RedactStepRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> Empty:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RedactStep",
+                service_name="ironflow.v1.IronflowService",
+                input=RedactStepRequest,
+                output=Empty,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def redact_run(
+        self,
+        request: RedactRunRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> Empty:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RedactRun",
+                service_name="ironflow.v1.IronflowService",
+                input=RedactRunRequest,
+                output=Empty,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
     async def patch_step(
         self,
         request: PatchStepRequest,
@@ -950,6 +1115,21 @@ class IronflowServiceSync(Protocol):
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     def cancel_run(self, request: CancelRunRequest, ctx: RequestContext[CancelRunRequest, Run]) -> Run:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def delete_run(self, request: DeleteRunRequest, ctx: RequestContext[DeleteRunRequest, Empty]) -> Empty:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def delete_runs(self, request: DeleteRunsRequest, ctx: RequestContext[DeleteRunsRequest, DeleteRunsResponse]) -> DeleteRunsResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def redact_event(self, request: RedactEventRequest, ctx: RequestContext[RedactEventRequest, Empty]) -> Empty:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def redact_step(self, request: RedactStepRequest, ctx: RequestContext[RedactStepRequest, Empty]) -> Empty:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def redact_run(self, request: RedactRunRequest, ctx: RequestContext[RedactRunRequest, Empty]) -> Empty:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     def patch_step(self, request: PatchStepRequest, ctx: RequestContext[PatchStepRequest, Step]) -> Step:
@@ -1164,6 +1344,56 @@ class IronflowServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.cancel_run,
+                ),
+                "/ironflow.v1.IronflowService/DeleteRun": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="DeleteRun",
+                        service_name="ironflow.v1.IronflowService",
+                        input=DeleteRunRequest,
+                        output=Empty,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.delete_run,
+                ),
+                "/ironflow.v1.IronflowService/DeleteRuns": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="DeleteRuns",
+                        service_name="ironflow.v1.IronflowService",
+                        input=DeleteRunsRequest,
+                        output=DeleteRunsResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.delete_runs,
+                ),
+                "/ironflow.v1.IronflowService/RedactEvent": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="RedactEvent",
+                        service_name="ironflow.v1.IronflowService",
+                        input=RedactEventRequest,
+                        output=Empty,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.redact_event,
+                ),
+                "/ironflow.v1.IronflowService/RedactStep": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="RedactStep",
+                        service_name="ironflow.v1.IronflowService",
+                        input=RedactStepRequest,
+                        output=Empty,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.redact_step,
+                ),
+                "/ironflow.v1.IronflowService/RedactRun": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="RedactRun",
+                        service_name="ironflow.v1.IronflowService",
+                        input=RedactRunRequest,
+                        output=Empty,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.redact_run,
                 ),
                 "/ironflow.v1.IronflowService/PatchStep": EndpointSync.unary(
                     method=MethodInfo(
@@ -1600,6 +1830,101 @@ class IronflowServiceClientSync(ConnectClientSync):
                 service_name="ironflow.v1.IronflowService",
                 input=CancelRunRequest,
                 output=Run,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def delete_run(
+        self,
+        request: DeleteRunRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> Empty:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="DeleteRun",
+                service_name="ironflow.v1.IronflowService",
+                input=DeleteRunRequest,
+                output=Empty,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def delete_runs(
+        self,
+        request: DeleteRunsRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> DeleteRunsResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="DeleteRuns",
+                service_name="ironflow.v1.IronflowService",
+                input=DeleteRunsRequest,
+                output=DeleteRunsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def redact_event(
+        self,
+        request: RedactEventRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> Empty:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RedactEvent",
+                service_name="ironflow.v1.IronflowService",
+                input=RedactEventRequest,
+                output=Empty,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def redact_step(
+        self,
+        request: RedactStepRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> Empty:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RedactStep",
+                service_name="ironflow.v1.IronflowService",
+                input=RedactStepRequest,
+                output=Empty,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def redact_run(
+        self,
+        request: RedactRunRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> Empty:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RedactRun",
+                service_name="ironflow.v1.IronflowService",
+                input=RedactRunRequest,
+                output=Empty,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

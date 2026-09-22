@@ -77,8 +77,8 @@ def test_ledger_is_readable() -> None:
     the failure mode ADR 0059 exists to prevent, reproduced in a test file.
     """
     rows = ledger_rows()
-    assert len(rows) == 90, f"expected 90 classified rows, parsed {len(rows)}"
-    assert sum(1 for c, _, _ in rows if c == "rpc") == 86
+    assert len(rows) == 96, f"expected 96 classified rows, parsed {len(rows)}"
+    assert sum(1 for c, _, _ in rows if c == "rpc") == 92
     assert sum(1 for c, _, _ in rows if c == "stream") == 4
 
 
@@ -158,8 +158,10 @@ def test_module_exports() -> None:
         "IronflowRPC",
         "IronflowRPCError",
         "NO_TIMEOUT",
+        "REDACTED_MARKER_KEY",
         "ReadinessResponse",
         "ServerCapabilities",
+        "is_redacted",
     ]
     missing = [n for n in ironflow.__all__ if not hasattr(ironflow, n)]
     assert not missing, f"__all__ names symbols that are not bound: {missing}"
