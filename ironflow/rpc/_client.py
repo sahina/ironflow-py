@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from typing_extensions import override
+
 from .._gen import agent_tools_connect, audit_connect, deployment_connect, entity_stream_connect, environment_connect, event_schema_connect, ironflow_connect, projection_connect, pubsub_connect, query_connect, timetravel_connect, webhook_connect
 from ._runtime import (
     _AsyncCoordinator,
@@ -33,6 +35,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
 
     from .v1 import (
+        AckEventRequest,
+        AckEventResponse,
         AppendEventRequest,
         AppendEventResponse,
         CancelRebuildRequest,
@@ -1015,6 +1019,19 @@ class _Pubsub:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.PubSubService/AckEvent
+    def ack_event(
+        self,
+        request: AckEventRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> AckEventResponse:
+        self._owner._check_open("pubsub.ack_event")
+        return self._client.ack_event(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.PubSubService/Publish
     def publish(
         self,
@@ -1663,6 +1680,7 @@ class IronflowRPC(_Coordinator):
         #: `rpc.webhooks`
         self.webhooks = _Webhooks(self, self._webhook_service)
 
+    @override
     def _service_clients(self) -> tuple[Any, ...]:
         return (self._agent_tools_service, self._audit_service, self._deployment_service, self._entity_stream_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._query_service, self._time_travel_service, self._webhook_service,)
 
@@ -2473,6 +2491,19 @@ class _AsyncPubsub:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.PubSubService/AckEvent
+    async def ack_event(
+        self,
+        request: AckEventRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> AckEventResponse:
+        self._owner._check_open("pubsub.ack_event")
+        return await self._client.ack_event(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.PubSubService/Publish
     async def publish(
         self,
@@ -3121,5 +3152,6 @@ class AsyncIronflowRPC(_AsyncCoordinator):
         #: `rpc.webhooks`
         self.webhooks = _AsyncWebhooks(self, self._webhook_service)
 
+    @override
     def _service_clients(self) -> tuple[Any, ...]:
         return (self._agent_tools_service, self._audit_service, self._deployment_service, self._entity_stream_service, self._environment_service, self._event_schema_service, self._ironflow_service, self._projection_service, self._pub_sub_service, self._query_service, self._time_travel_service, self._webhook_service,)

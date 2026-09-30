@@ -3,9 +3,8 @@
 HAND-WRITTEN. `cmd/sdk-gen` emits `client.py` and `models.py`;
 `make proto-python` emits `rpc/v1.py` and `rpc/_client.py`.
 
-Client-only: this package ships no worker runtime. There is no `step.run`, no
-`step.sleep`, and no push or pull mode. For durable step execution use the Go
-or JavaScript SDK.
+Clients: ``IronflowClient`` (REST) and ``IronflowRPC`` / ``AsyncIronflowRPC``
+(ConnectRPC). Pull-mode worker with durable steps: ``ironflow.worker``.
 
 Two clients, different protocols, both first-class:
 
@@ -18,40 +17,55 @@ Two clients, different protocols, both first-class:
   annotate `NO_SIDE_EFFECTS`; reconnects a subscription you positioned with
   `start_after_sequence`, and no other stream (#1848).
 
+Agents: ``ironflow.agent`` (tools, LLM turns, approvals, spawn, memory, expose_mcp).
+
 Neither is a superset of the other. `IronflowClient.request()` remains the
 escape hatch for anything neither wraps.
 """
 
 from typing import TYPE_CHECKING, Any
 
+from ._command_dedup import DEFAULT_COMMAND_DEDUP_TTL_SECONDS, CommandDedup
 from ._http import (
     IDEMPOTENT_METHODS,
     REDACTED_MARKER_KEY,
     BaseClient,
+    ErrorContext,
+    ErrorHook,
     HealthResponse,
     IronflowError,
     ReadinessResponse,
     ServerCapabilities,
     is_redacted,
 )
+from ._watch import ConfigWatchEvent, KVWatchEvent
 from .client import IronflowClient
+from .upcaster import UpcasterChainError, UpcasterRegistry
 
 if TYPE_CHECKING:  # pragma: no cover - import-time cost is the point
     from .rpc import NO_TIMEOUT, AsyncIronflowRPC, IronflowRPC, IronflowRPCError
 
 __all__ = [
+    "DEFAULT_COMMAND_DEDUP_TTL_SECONDS",
     "IDEMPOTENT_METHODS",
     "NO_TIMEOUT",
     "REDACTED_MARKER_KEY",
     "AsyncIronflowRPC",
     "BaseClient",
+    "CommandDedup",
+    "ConfigWatchEvent",
+    "ErrorContext",
+    "ErrorHook",
     "HealthResponse",
     "IronflowClient",
     "IronflowError",
     "IronflowRPC",
     "IronflowRPCError",
+    "KVWatchEvent",
     "ReadinessResponse",
     "ServerCapabilities",
+    "UpcasterChainError",
+    "UpcasterRegistry",
     "is_redacted",
 ]
 

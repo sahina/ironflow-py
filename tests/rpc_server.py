@@ -607,6 +607,17 @@ class StubPubSubService(PubSubService):  # type: ignore[misc]
         assert request.data.to_python() == {"id": 1}
         return PublishResponse(event_id="evt_1", sequence=9007199254740993)
 
+    async def ack_event(self, request: Any, ctx: RequestContext[Any, Any]) -> Any:
+        from ironflow.rpc.v1 import AckEventResponse
+
+        self.rec.record(ctx)
+        assert request.group_name == "workers"
+        assert request.consumer_id == "consumer-1"
+        assert request.event_id == "evt_1"
+        assert request.ack_type == 2  # AckType.NAK
+        assert request.redeliver_delay_ms == 250
+        return AckEventResponse()
+
     async def subscribe(
         self, request: Any, ctx: RequestContext[Any, Any]
     ) -> AsyncIterator[Any]:

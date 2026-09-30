@@ -116,3 +116,12 @@ def async_rpc_factory(server_url: str, api_key: str) -> Any:
         return AsyncIronflowRPC(server_url=server_url, api_key=api_key, timeout=30.0)
 
     return make
+
+
+@pytest.fixture(scope="session")
+def signing_key() -> str:
+    key = os.environ.get("IRONFLOW_TEST_SIGNING_KEY")
+    if not key:
+        pytest.fail("IRONFLOW_TEST_SIGNING_KEY is not set. `make test-python-integration` starts the "
+                    "engine with IRONFLOW_SIGNING_KEY and passes the same value here.")
+    return key

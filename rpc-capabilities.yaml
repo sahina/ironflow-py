@@ -64,7 +64,7 @@
 # edit, not two.
 expect:
   rest: 4
-  rpc: 92
+  rpc: 93
   stream: 4
   unsupported: 1
 
@@ -497,6 +497,10 @@ rpcs:
     classification: stream
     capability: pubsub
     method: join_consumer_group
+  - path: ironflow.v1.PubSubService/AckEvent
+    classification: rpc
+    capability: pubsub
+    method: ack_event
   - path: ironflow.v1.PubSubService/Publish
     classification: rpc
     capability: pubsub

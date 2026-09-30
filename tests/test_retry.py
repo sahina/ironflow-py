@@ -220,5 +220,12 @@ class TestTotalTimeout:
         # Retry-After asks for 5s; the deadline must refuse rather than obey.
         assert elapsed < 1.0, f"total_timeout ignored; took {elapsed:.2f}s"
 
+    def test_expiry_message_leaves_out_the_query_string(self, server) -> None:
+        # Query parameters can carry secrets, and the message ends up in logs.
+        c = client(server, total_timeout=1e-9)
+        with pytest.raises(IronflowError) as exc:
+            c.request("GET", "/api/v1/events", params={"token": "s3cret"})
+        assert "/api/v1/events" in str(exc.value) and "s3cret" not in str(exc.value)
+
     def test_none_by_default(self, server) -> None:
         assert client(server).total_timeout is None

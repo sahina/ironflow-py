@@ -216,6 +216,8 @@ from .._gen.projection_pb import (
 )
 
 from .._gen.pubsub_pb import (
+    AckEventRequest,
+    AckEventResponse,
     AckMode,
     AckType,
     BackpressureMode,
@@ -303,6 +305,8 @@ from .._gen.webhook_pb import (
 )
 
 __all__ = [
+    "AckEventRequest",
+    "AckEventResponse",
     "AckMode",
     "AckProjectionEventsRequest",
     "AckProjectionEventsResponse",

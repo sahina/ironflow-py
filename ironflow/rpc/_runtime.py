@@ -46,11 +46,15 @@ from .._http import (
     _DEFAULT_MAX_ATTEMPTS,
     _DEFAULT_MAX_BACKOFF,
     DEFAULT_SERVER_URL,
+    ErrorContext,
+    ErrorHook,
     IronflowError,
+    anotify_error,
+    notify_error,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Iterator
+    from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 
     from connectrpc.request import RequestContext
 
@@ -157,6 +161,11 @@ def _closed_stream(client_name: str) -> _ClosedError:
     )
 
 
+def _error_context(ctx: RequestContext[Any, Any]) -> ErrorContext:
+    method = ctx.method
+    return ErrorContext(method=method.name, endpoint=f"/{method.service_name}/{method.name}")
+
+
 #: The only Connect code worth a second attempt.
 #:
 #: `unavailable` is what `_client_sync.py` raises for every transport failure —
@@ -240,6 +249,7 @@ class _AuthErrorInterceptor:
         is_closed: Callable[[], bool] | None = None,
         client_name: str = "The client",
         max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
+        on_error: ErrorHook | None = None,
     ) -> None:
         self._auth = f"Bearer {api_key}" if api_key else None
         #: Reads the owning coordinator's closed flag. The interceptor is the
@@ -248,14 +258,81 @@ class _AuthErrorInterceptor:
         self._is_closed = is_closed or (lambda: False)
         self._client_name = client_name
         self._max_attempts = max(1, max_attempts)
+        self._on_error = on_error
 
     def _apply_auth(self, ctx: RequestContext[Any, Any]) -> None:
         if self._auth is not None:
             ctx.request_headers["authorization"] = self._auth
 
-    # ── sync ─────────────────────────────────────────────────────────────────
+    def _report_sync(self, err: IronflowRPCError, ctx: RequestContext[Any, Any]) -> None:
+        if not isinstance(err, _ClosedError):  # use after close is a programming error, not a failed call
+            notify_error(self._on_error, err, _error_context(ctx))
+
+    async def _report_async(self, err: IronflowRPCError, ctx: RequestContext[Any, Any]) -> None:
+        if not isinstance(err, _ClosedError):
+            await anotify_error(self._on_error, err, _error_context(ctx))
+
+    # With no hook every wrapper below returns the old code path untouched, so "no hook, no behavior
+    # change" holds by construction and the resume and aclose machinery never sees the extra layer.
 
     def intercept_unary_sync(
+        self,
+        call_next: Callable[[REQ, RequestContext[REQ, RES]], RES],
+        request: REQ,
+        ctx: RequestContext[REQ, RES],
+    ) -> RES:
+        if self._on_error is None:
+            return self._unary_sync(call_next, request, ctx)
+        try:
+            return self._unary_sync(call_next, request, ctx)
+        except IronflowRPCError as err:
+            self._report_sync(err, ctx)
+            raise
+
+    def intercept_server_stream_sync(
+        self,
+        call_next: Callable[[REQ, RequestContext[REQ, RES]], Iterator[RES]],
+        request: REQ,
+        ctx: RequestContext[REQ, RES],
+    ) -> Iterator[RES]:
+        if self._on_error is None:
+            return self._stream_sync(call_next, request, ctx)
+        try:
+            stream = self._stream_sync(call_next, request, ctx)  # creation can fail before any iteration
+        except IronflowRPCError as err:
+            self._report_sync(err, ctx)
+            raise
+        return _reporting_iter(stream, lambda err: self._report_sync(err, ctx))
+
+    async def intercept_unary(
+        self,
+        call_next: Callable[[REQ, RequestContext[REQ, RES]], Any],
+        request: REQ,
+        ctx: RequestContext[REQ, RES],
+    ) -> Any:
+        if self._on_error is None:
+            return await self._unary_async(call_next, request, ctx)
+        try:
+            return await self._unary_async(call_next, request, ctx)
+        except IronflowRPCError as err:
+            await self._report_async(err, ctx)
+            raise
+
+    def intercept_server_stream(
+        self,
+        call_next: Callable[[REQ, RequestContext[REQ, RES]], AsyncIterator[RES]],
+        request: REQ,
+        ctx: RequestContext[REQ, RES],
+    ) -> AsyncIterator[RES]:
+        # NOT async def: same reason as `_stream_async`.
+        stream = self._stream_async(call_next, request, ctx)
+        if self._on_error is None:
+            return stream
+        return _reporting_aiter(stream, lambda err: self._report_async(err, ctx))
+
+    # ── sync ─────────────────────────────────────────────────────────────────
+
+    def _unary_sync(
         self,
         call_next: Callable[[REQ, RequestContext[REQ, RES]], RES],
         request: REQ,
@@ -277,7 +354,7 @@ class _AuthErrorInterceptor:
             # from being chained onto whatever the next one raises.
             time.sleep(wait)
 
-    def intercept_server_stream_sync(
+    def _stream_sync(
         self,
         call_next: Callable[[REQ, RequestContext[REQ, RES]], Iterator[RES]],
         request: REQ,
@@ -297,7 +374,7 @@ class _AuthErrorInterceptor:
 
     # ── async ────────────────────────────────────────────────────────────────
 
-    async def intercept_unary(
+    async def _unary_async(
         self,
         call_next: Callable[[REQ, RequestContext[REQ, RES]], Any],
         request: REQ,
@@ -317,7 +394,7 @@ class _AuthErrorInterceptor:
                     raise translated from err
             await asyncio.sleep(wait)
 
-    def intercept_server_stream(
+    def _stream_async(
         self,
         call_next: Callable[[REQ, RequestContext[REQ, RES]], AsyncIterator[RES]],
         request: REQ,
@@ -564,6 +641,31 @@ async def _translating_aiter(
             await aclose()
 
 
+def _reporting_iter(stream: Iterator[RES], report: Callable[[IronflowRPCError], None]) -> Iterator[RES]:
+    """Report a mid-iteration failure. `yield from` propagates `.close()` to the stream underneath."""
+    try:
+        yield from stream
+    except IronflowRPCError as err:
+        report(err)
+        raise
+
+
+async def _reporting_aiter(
+    stream: AsyncIterator[RES], report: Callable[[IronflowRPCError], Awaitable[None]],
+) -> AsyncIterator[RES]:
+    """Async twin. The `finally` matters for the reason it does in `_translating_aiter`."""
+    try:
+        async for item in stream:
+            yield item
+    except IronflowRPCError as err:
+        await report(err)
+        raise
+    finally:
+        aclose = getattr(stream, "aclose", None)
+        if aclose is not None:
+            await aclose()
+
+
 def _timeout_ms(
     timeout: float | _NoTimeout | None,
     default: float | None,
@@ -614,6 +716,8 @@ class _Coordinator:
     the four constants are shared with `_http.py` so the two transports back off
     identically. See `_retry_waits`.
 
+    ``on_error`` fires once per failed call, after retries; see `ErrorContext`.
+
     On what "close" actually does, because upstream is not what it looks like:
     `pyqwest.SyncClient` has NO close method and is NOT a context manager (the
     upstream docstring shows `with SyncClient() as http_client`, which raises
@@ -638,6 +742,7 @@ class _Coordinator:
         timeout: float | None = None,
         read_max_bytes: int | None = None,
         max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
+        on_error: ErrorHook | None = None,
     ) -> None:
         from pyqwest import SyncClient
 
@@ -647,7 +752,7 @@ class _Coordinator:
         # Set BEFORE the interceptor, which captures a reader for it.
         self._closed_flag = False
         self._interceptor = _AuthErrorInterceptor(
-            api_key, lambda: self._closed_flag, self._NAME, max_attempts
+            api_key, lambda: self._closed_flag, self._NAME, max_attempts, on_error
         )
         self._http = SyncClient()
 
@@ -684,6 +789,8 @@ class _AsyncCoordinator:
     an awaitable `close()`; this layer is the one callers touch.
 
     See `_Coordinator` for why closing releases no socket.
+
+    ``on_error`` fires once per failed call, after retries; see `ErrorContext`.
     """
 
     def _service_clients(self) -> tuple[Any, ...]:
@@ -699,6 +806,7 @@ class _AsyncCoordinator:
         timeout: float | None = None,
         read_max_bytes: int | None = None,
         max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
+        on_error: ErrorHook | None = None,
     ) -> None:
         from pyqwest import Client
 
@@ -708,7 +816,7 @@ class _AsyncCoordinator:
         # Set BEFORE the interceptor, which captures a reader for it.
         self._closed_flag = False
         self._interceptor = _AuthErrorInterceptor(
-            api_key, lambda: self._closed_flag, self._NAME, max_attempts
+            api_key, lambda: self._closed_flag, self._NAME, max_attempts, on_error
         )
         self._http = Client()
 

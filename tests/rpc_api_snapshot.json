@@ -1,4 +1,6 @@
 [
+  "AckEventRequest",
+  "AckEventResponse",
   "AckMode",
   "AckProjectionEventsRequest",
   "AckProjectionEventsResponse",

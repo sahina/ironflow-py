@@ -44,22 +44,31 @@ bounded here rather than taken at face value:
 from __future__ import annotations
 
 import contextlib
+import inspect
 import json
+import logging
 import socket
 import ssl
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from typing import Any, TypedDict, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from typing_extensions import override
+
+from ._command_dedup import _CommandDedupMixin
+from ._watch import _WatchMixin
+
 __all__ = [
     "DEFAULT_SERVER_URL",
     "IDEMPOTENT_METHODS",
     "MAX_RESPONSE_BYTES",
     "BaseClient",
+    "ErrorContext",
     "HealthResponse",
     "IronflowError",
     "ReadinessResponse",
@@ -93,6 +102,8 @@ _DEFAULT_MAX_ATTEMPTS = 3
 _DEFAULT_INITIAL_BACKOFF = 0.1
 _DEFAULT_MAX_BACKOFF = 10.0
 _DEFAULT_BACKOFF_FACTOR = 2.0
+
+_log = logging.getLogger("ironflow")
 
 
 class HealthResponse(TypedDict, total=False):
@@ -143,6 +154,49 @@ class IronflowError(Exception):
         self.retryable = retryable
         #: Seconds requested by the server's Retry-After header, if any.
         self.retry_after = retry_after
+
+
+@dataclass(frozen=True)
+class ErrorContext:
+    """What failed, passed to a client's ``on_error`` hook.
+
+    ``status_code`` is ``None`` for connection and timeout errors, and always
+    ``None`` on the RPC clients (Connect codes are not HTTP statuses; read
+    ``error.code``).
+    """
+
+    method: str
+    endpoint: str
+    status_code: int | None = None
+
+
+ErrorHook = Callable[[Exception, ErrorContext], Any]
+
+
+def _call_hook(hook: ErrorHook | None, error: Exception, ctx: ErrorContext) -> Any:
+    if hook is None:
+        return None
+    try:
+        return hook(error, ctx)
+    except Exception:  # noqa: BLE001 - a broken hook must never mask the call's own error
+        _log.exception("ironflow: on_error hook raised")
+        return None
+
+
+def notify_error(hook: ErrorHook | None, error: Exception, ctx: ErrorContext) -> None:
+    result = _call_hook(hook, error, ctx)
+    if inspect.iscoroutine(result):
+        result.close()  # closing it stops the "never awaited" RuntimeWarning
+        _log.error("ironflow: on_error is a coroutine function but this client is synchronous; it was not awaited")
+
+
+async def anotify_error(hook: ErrorHook | None, error: Exception, ctx: ErrorContext) -> None:
+    result = _call_hook(hook, error, ctx)
+    if inspect.isawaitable(result):
+        try:
+            await result
+        except Exception:  # noqa: BLE001 - same reason as _call_hook
+            _log.exception("ironflow: on_error hook raised")
 
 
 def _parse_retry_after(value: str | None) -> float | None:
@@ -229,6 +283,7 @@ class _SafeRedirectHandler(HTTPRedirectHandler):
     which _from_http_error turns into an IronflowError.
     """
 
+    @override
     def redirect_request(
         self,
         req: Request,
@@ -251,7 +306,7 @@ class _SafeRedirectHandler(HTTPRedirectHandler):
 _OPENER = build_opener(_SafeRedirectHandler)
 
 
-class BaseClient:
+class BaseClient(_WatchMixin, _CommandDedupMixin):
     """Transport shared by every generated client method.
 
     ``timeout`` bounds socket inactivity on a single attempt, matching urllib
@@ -276,6 +331,7 @@ class BaseClient:
         initial_backoff: float = _DEFAULT_INITIAL_BACKOFF,
         max_backoff: float = _DEFAULT_MAX_BACKOFF,
         backoff_factor: float = _DEFAULT_BACKOFF_FACTOR,
+        on_error: ErrorHook | None = None,
     ) -> None:
         self.server_url = server_url.rstrip("/")
         self.api_key = api_key
@@ -286,6 +342,7 @@ class BaseClient:
         self.initial_backoff = initial_backoff
         self.max_backoff = max_backoff
         self.backoff_factor = backoff_factor
+        self._on_error = on_error
 
     # ── public ───────────────────────────────────────────────────────────
 
@@ -352,6 +409,29 @@ class BaseClient:
         headers: Mapping[str, str] | None,
         retry_override: bool | None,
     ) -> Any:
+        """The one funnel behind every REST call: reports a call's FINAL failure, after retries."""
+        if self._on_error is None:  # no hook: exactly the old code path
+            return self._send_attempts(method, path, body, headers, retry_override)
+        try:
+            return self._send_attempts(method, path, body, headers, retry_override)
+        except IronflowError as err:
+            # Not re-entrancy guarded: a hook that calls this client and fails is called again.
+            # The path is cut at "?": query parameters can carry secrets.
+            notify_error(
+                self._on_error,
+                err,
+                ErrorContext(method.upper(), path.partition("?")[0], err.status_code or None),
+            )
+            raise
+
+    def _send_attempts(
+        self,
+        method: str,
+        path: str,
+        body: Any,
+        headers: Mapping[str, str] | None,
+        retry_override: bool | None,
+    ) -> Any:
         method = method.upper()
         if retry_override is None:
             may_retry = method in self.retry_methods
@@ -396,7 +476,8 @@ class BaseClient:
                 raise last
             time.sleep(wait)
 
-        raise last  # unreachable; satisfies type checkers
+        # max_attempts is clamped to >= 1 in __init__, so the loop always assigns `last`.
+        raise last  # pyrefly: ignore[unbound-name]
 
     def _attempt(
         self,
@@ -407,6 +488,8 @@ class BaseClient:
         deadline: float | None = None,
     ) -> Any:
         url = f"{self.server_url}{path}"
+        # Error text ends up in logs; query parameters can carry secrets.
+        where = path.partition("?")[0]
         data = json.dumps(body).encode("utf-8") if body is not None else None
 
         req = Request(url, data=data, method=method)
@@ -425,7 +508,7 @@ class BaseClient:
             if remaining <= 0:
                 raise IronflowError(
                     f"total_timeout of {self.total_timeout}s elapsed before "
-                    f"calling {path}",
+                    f"calling {where}",
                     retryable=False,
                 )
             timeout = min(timeout, remaining)
@@ -435,28 +518,28 @@ class BaseClient:
                 raw = resp.read(MAX_RESPONSE_BYTES + 1)
                 if len(raw) > MAX_RESPONSE_BYTES:
                     raise IronflowError(
-                        f"response from {path} exceeds {MAX_RESPONSE_BYTES} "
+                        f"response from {where} exceeds {MAX_RESPONSE_BYTES} "
                         f"bytes; refusing to buffer it"
                     )
         except HTTPError as e:
             raise self._from_http_error(e) from e
         except TimeoutError as e:
             raise IronflowError(
-                f"request to {path} timed out after {timeout}s",
+                f"request to {where} timed out after {timeout}s",
                 retryable=True,
             ) from e
         except ssl.SSLError as e:
             # TLS failures are configuration problems; retrying repeats them.
-            raise IronflowError(f"TLS error calling {path}: {e}") from e
+            raise IronflowError(f"TLS error calling {where}: {e}") from e
         except URLError as e:
             reason = e.reason
             if isinstance(reason, socket.timeout):
                 raise IronflowError(
-                    f"request to {path} timed out after {timeout}s",
+                    f"request to {where} timed out after {timeout}s",
                     retryable=True,
                 ) from e
             if isinstance(reason, ssl.SSLError):
-                raise IronflowError(f"TLS error calling {path}: {reason}") from e
+                raise IronflowError(f"TLS error calling {where}: {reason}") from e
             raise IronflowError(
                 f"cannot reach {self.server_url}: {reason}", retryable=True
             ) from e
@@ -475,7 +558,7 @@ class BaseClient:
             # RecursionError comes from deeply nested JSON — a server-controlled
             # input, so it must surface as IronflowError like everything else.
             preview = raw[:200].decode("utf-8", errors="replace")
-            raise IronflowError(f"expected JSON from {path}, got: {preview}") from e
+            raise IronflowError(f"expected JSON from {where}, got: {preview}") from e
 
     def _from_http_error(self, e: HTTPError) -> IronflowError:
         body_text = ""
