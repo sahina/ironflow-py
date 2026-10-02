@@ -120,7 +120,8 @@ async def handle(
             server, env(api_key, "IRONFLOW_API_KEY"), env(environment, "IRONFLOW_ENV") or "default", req["run_id"])
     outcome = await run_function(
         fn, raw_event=req["event"], upcasters=upcasters, ctx=ctx,
-        run=RunInfo(id=req["run_id"], function_id=fn.id, attempt=req.get("attempt", 1)),
+        run=RunInfo(id=req["run_id"], function_id=fn.id, attempt=req.get("attempt", 1),
+                    environment=env(environment, "IRONFLOW_ENV") or None),
         secrets=req.get("secrets") or {},
         logger=logging.LoggerAdapter(_log, {"run_id": req["run_id"], "function_id": fn.id}),
     )

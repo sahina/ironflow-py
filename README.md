@@ -239,8 +239,10 @@ async def research(ctx):
             messages.append({"role": "tool", "name": c["name"], "content": output})
 ```
 
-`define_tool()` does no schema validation: a `ToolValidationError` means the args
-are not JSON-serialisable, not that they failed `input_schema`.
+Install `ironflow-py[validate]` and `ctx.tool()` / `ctx.tool_by_name()` check the
+args against `input_schema` before the handler runs, raising `ToolValidationError`
+on a mismatch. Without the extra, the schema goes to the model and the args are not
+checked; `ToolValidationError` then means only that they are not JSON-serialisable.
 
 **(b) Expose tools to an external MCP client.** Register tools with the engine,
 then serve the dispatch callback next to your other functions:

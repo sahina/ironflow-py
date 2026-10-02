@@ -250,8 +250,10 @@ class _AuthErrorInterceptor:
         client_name: str = "The client",
         max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
         on_error: ErrorHook | None = None,
+        environment: str | None = None,
     ) -> None:
         self._auth = f"Bearer {api_key}" if api_key else None
+        self._environment = environment or None
         #: Reads the owning coordinator's closed flag. The interceptor is the
         #: only layer that sees a stream begin, so the post-close guard has to
         #: live here rather than on the coordinator.
@@ -263,6 +265,8 @@ class _AuthErrorInterceptor:
     def _apply_auth(self, ctx: RequestContext[Any, Any]) -> None:
         if self._auth is not None:
             ctx.request_headers["authorization"] = self._auth
+        if self._environment is not None:
+            ctx.request_headers["x-ironflow-environment"] = self._environment
 
     def _report_sync(self, err: IronflowRPCError, ctx: RequestContext[Any, Any]) -> None:
         if not isinstance(err, _ClosedError):  # use after close is a programming error, not a failed call
@@ -743,7 +747,10 @@ class _Coordinator:
         read_max_bytes: int | None = None,
         max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
         on_error: ErrorHook | None = None,
+        environment: str | None = None,
     ) -> None:
+        # environment is sent as X-Ironflow-Environment; None sends no header.
+        # The client does not read IRONFLOW_ENV (#2471).
         from pyqwest import SyncClient
 
         self._server_url = server_url.rstrip("/")
@@ -752,7 +759,7 @@ class _Coordinator:
         # Set BEFORE the interceptor, which captures a reader for it.
         self._closed_flag = False
         self._interceptor = _AuthErrorInterceptor(
-            api_key, lambda: self._closed_flag, self._NAME, max_attempts, on_error
+            api_key, lambda: self._closed_flag, self._NAME, max_attempts, on_error, environment
         )
         self._http = SyncClient()
 
@@ -807,7 +814,10 @@ class _AsyncCoordinator:
         read_max_bytes: int | None = None,
         max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
         on_error: ErrorHook | None = None,
+        environment: str | None = None,
     ) -> None:
+        # environment is sent as X-Ironflow-Environment; None sends no header.
+        # The client does not read IRONFLOW_ENV (#2471).
         from pyqwest import Client
 
         self._server_url = server_url.rstrip("/")
@@ -816,7 +826,7 @@ class _AsyncCoordinator:
         # Set BEFORE the interceptor, which captures a reader for it.
         self._closed_flag = False
         self._interceptor = _AuthErrorInterceptor(
-            api_key, lambda: self._closed_flag, self._NAME, max_attempts, on_error
+            api_key, lambda: self._closed_flag, self._NAME, max_attempts, on_error, environment
         )
         self._http = Client()
 

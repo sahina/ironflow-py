@@ -405,3 +405,30 @@ def test_response_is_a_generated_message(client_cls: Any) -> None:
     assert isinstance(got, WebhookSource)
     assert got.id == "whs_stub"
     assert got.name == "Stripe"
+
+
+def test_environment_is_sent_on_every_call(client_cls: Any) -> None:
+    """#2471: the environment scopes a client the same way the API key does."""
+    with serve() as srv:
+        client = client_cls(server_url=srv.url, api_key=API_KEY, environment="staging")
+        try:
+            call(client, CreateWebhookSourceRequest(name="x", event_prefix="x."))
+        finally:
+            close(client)
+
+        assert srv.service.seen_headers[0]["x-ironflow-environment"] == "staging"
+
+
+def test_no_environment_sends_no_header_even_with_ironflow_env(
+    client_cls: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A plain client must not pick up the worker's IRONFLOW_ENV."""
+    monkeypatch.setenv("IRONFLOW_ENV", "qa")
+    with serve() as srv:
+        client = client_cls(server_url=srv.url, api_key=API_KEY)
+        try:
+            call(client, CreateWebhookSourceRequest(name="x", event_prefix="x."))
+        finally:
+            close(client)
+
+        assert "x-ironflow-environment" not in srv.service.seen_headers[0]

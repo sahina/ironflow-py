@@ -38,7 +38,7 @@ def agent(
             raise TypeError(f"agent {id!r}: the handler must be an 'async def' function")
 
         async def run(ctx: Context) -> Any:
-            mem = Memory(ctx.step, memory, ctx.run.id, memory.backend or rpc_backend()) if memory else None
+            mem = Memory(ctx.step, memory, ctx.run.id, memory.backend or rpc_backend(ctx.run.environment)) if memory else None
             return await handler(AgentContext(ctx, tools=registry, max_turns=max_turns, memory=mem))
 
         fn = function(id=id, **function_kwargs)(run)

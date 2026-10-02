@@ -452,7 +452,8 @@ class Worker:
         try:
             outcome = await run_function(
                 fn, raw_event=job["event"], upcasters=self._upcasters, ctx=ctx,
-                run=RunInfo(id=job["run_id"], function_id=job["function_id"], attempt=job["attempt"]),
+                run=RunInfo(id=job["run_id"], function_id=job["function_id"], attempt=job["attempt"],
+                            environment=self._transport._environment),
                 secrets=(job.get("context") or {}).get("secrets") or {},
                 logger=logging.LoggerAdapter(self._log, {"run_id": job["run_id"], "function_id": job["function_id"]}),
             )

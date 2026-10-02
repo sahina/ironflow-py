@@ -219,3 +219,41 @@ def test_publish_step_without_a_server_url_fails_without_retry(monkeypatch: pyte
     status, body = call([fn_of(h)], req())
     assert status == 200 and body["status"] == "failed"
     assert body["error"]["retryable"] is False and "server URL" in body["error"]["message"]
+
+
+@pytest.mark.parametrize("configured,env_var,want", [
+    ("staging", "qa", "staging"),
+    (None, "qa", "qa"),
+    (None, None, None),
+])
+def test_run_info_environment_has_no_default_fallback(
+    monkeypatch: pytest.MonkeyPatch, configured: str | None, env_var: str | None, want: str | None
+) -> None:
+    """#2471: push RunInfo.environment is explicit only; "default" would 403 a scoped key."""
+    if env_var is None:
+        monkeypatch.delenv("IRONFLOW_ENV", raising=False)
+    else:
+        monkeypatch.setenv("IRONFLOW_ENV", env_var)
+
+    async def h(ctx: Any) -> Any:
+        return ctx.run.environment
+
+    status, body = call([fn_of(h)], req(), environment=configured)
+    assert status == 200 and body["result"] == want
+
+
+def test_agent_memory_backend_gets_the_run_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#2471: agent() hands ctx.run.environment to the default memory backend."""
+    import ironflow.agent._agent as agent_mod
+    from ironflow.agent import MemoryConfig, agent
+
+    seen: list[str | None] = []
+    monkeypatch.setattr(agent_mod, "rpc_backend", lambda environment=None: seen.append(environment))
+
+    @agent(id="fn", triggers=[{"event": "e"}], memory=MemoryConfig("s1", "notes"))
+    async def a(ctx: Any) -> Any:
+        return "ok"
+
+    status, body = call([a], req(), environment="staging")
+    assert status == 200 and body["result"] == "ok"
+    assert seen == ["staging"]

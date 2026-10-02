@@ -39,9 +39,13 @@ class ExposeMcpHandle:
 
 async def expose_mcp(
     *, name: str, callback_url: str, tools: Sequence[ToolDefinition], server_url: str | None = None,
-    api_key: str | None = None, rpc: Any = None,
+    api_key: str | None = None, rpc: Any = None, environment: str | None = None,
 ) -> ExposeMcpHandle:
-    """Register tools with the engine. MCP clients reach them through ``serve()``'s dispatch route."""
+    """Register tools with the engine. MCP clients reach them through ``serve()``'s dispatch route.
+
+    ``environment`` (else ``IRONFLOW_ENV``) scopes register and unregister. It applies only when
+    the SDK builds the client; a passed ``rpc`` keeps its own.
+    """
     if not tools:
         raise AgentError("expose_mcp() requires at least one tool", "AGENT_MCP_NO_TOOLS")
     if not callback_url:
@@ -63,7 +67,8 @@ async def expose_mcp(
             raise AgentError("expose_mcp() requires api_key (or IRONFLOW_API_KEY) with agent:tools:register",
                              "AGENT_MCP_MISSING_API_KEY")
         from ..rpc import AsyncIronflowRPC
-        rpc = AsyncIronflowRPC(server_url=url, api_key=key)
+        rpc = AsyncIronflowRPC(server_url=url, api_key=key,
+                               environment=environment or os.environ.get("IRONFLOW_ENV") or None)
     from ..rpc.v1 import RegisterToolRequest, ToolDef
     resp = await rpc.agent_tools.register(RegisterToolRequest(
         agent_name=name, callback_url=callback_url,

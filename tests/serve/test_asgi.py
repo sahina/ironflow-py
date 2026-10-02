@@ -51,6 +51,21 @@ def test_chunked_body_completes_with_env_header() -> None:
     assert json.loads(body["body"])["result"] == "ok"
 
 
+def test_unset_environment_reaches_the_run_as_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#2471: the "default" fallback is for the response header only, not for RunInfo."""
+    monkeypatch.delenv("IRONFLOW_ENV", raising=False)
+
+    @function(id="env-fn", triggers=[{"event": "e"}])
+    async def env_fn(ctx: Any) -> Any:
+        return ctx.run.environment
+
+    raw = json.dumps({"run_id": "r", "function_id": "env-fn", "event": EVENT}).encode()
+    start, body = drive(serve([env_fn], signing_key=""), http(), body_chunks(raw, 1))
+    assert start["status"] == 200
+    assert (b"x-ironflow-environment", b"default") in start["headers"]
+    assert json.loads(body["body"])["result"] is None
+
+
 def test_root_path_is_stripped_for_webhooks() -> None:
     hook = Webhook(id="h", transform=lambda b: WebhookEvent("h.e"))
     app = serve([fn], webhooks=[hook], signing_key="")

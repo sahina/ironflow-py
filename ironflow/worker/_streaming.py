@@ -31,6 +31,8 @@ from .._gen.worker_pb import (
     JobAck,
     JobCompleted,
     JobFailed,
+    JobNack,
+    JobNackReason,
     LeaseState,
     SleepYield,
     StepCompleted,
@@ -369,14 +371,23 @@ class StreamingWorker(Worker):
                     self._abandon(active, "execution lease is stale")
 
     async def _handle_job_assignment(self, proto: ProtoJobAssignment) -> None:
-        if (
-            self.state != "connected"
-            or self._draining is None
-            or self._draining.is_set()
-        ):
+        # A re-delivered job that already runs here is dropped, never nacked: a
+        # nack would re-queue a job that is still running.
+        if proto.job_id in self._jobs:
+            self._log.debug("job %s is already active, ignoring it", proto.job_id)
+            return
+        # A job the worker cannot run gets a nack (#2456). A nack uses no run
+        # attempt, and the engine re-queues the job at once.
+        if self._draining is not None and self._draining.is_set():
+            self._log.info("draining, nacking job %s", proto.job_id)
+            self._nack(proto, JobNackReason.DRAINING)
+            return
+        if self.state != "connected" or self._draining is None:
             return
         job = _job_from_proto(proto)
-        if job["job_id"] in self._jobs or len(self._jobs) >= self._max:
+        if len(self._jobs) >= self._max:
+            self._log.warning("at capacity, nacking job %s", proto.job_id)
+            self._nack(proto, JobNackReason.AT_CAPACITY)
             return
         ack = _message(
             (
@@ -391,6 +402,22 @@ class StreamingWorker(Worker):
         )
         if self._send(ack):
             self._start_job(job)
+
+    def _nack(self, proto: ProtoJobAssignment, reason: JobNackReason) -> None:
+        self._send(
+            _message(
+                (
+                    "job_nack",
+                    JobNack(
+                        job_id=proto.job_id,
+                        run_id=proto.run_id,
+                        execution_seq=proto.execution_seq,
+                        lease_token=proto.lease_token,
+                        reason=reason,
+                    ),
+                )
+            )
+        )
 
     @override
     async def _execute(self, active: _ActiveJob) -> None:
@@ -452,6 +479,7 @@ class StreamingWorker(Worker):
                     id=job["run_id"],
                     function_id=job["function_id"],
                     attempt=job["attempt"],
+                    environment=self._transport._environment,
                 ),
                 logger=logging.LoggerAdapter(
                     self._log,

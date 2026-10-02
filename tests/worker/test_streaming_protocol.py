@@ -17,6 +17,8 @@ from ironflow._gen.worker_pb import (
     JobCompleted,
     JobContext,
     JobFailed,
+    JobNack,
+    JobNackReason,
     StepCompleted,
     WorkerHeartbeat,
 )
@@ -170,6 +172,82 @@ def test_assignment_is_acked_and_durable_step_is_streamed(
     assert isinstance(result, JobCompleted)
     assert result.output_value.to_python() == "done"
     assert calls == 1
+
+
+def test_run_info_carries_the_streaming_worker_environment(loop: asyncio.AbstractEventLoop) -> None:
+    """#2471: same rule as the polling worker."""
+    @function(id="env-fn", triggers=[{"event": "env.started"}])
+    async def handler(ctx: Any) -> Any:
+        return ctx.run.environment
+
+    async def scenario() -> list[Any]:
+        worker = StreamingWorker(functions=[handler], environment="staging")
+        worker.state = "connected"
+        worker._draining = asyncio.Event()
+        await worker._handle_job_assignment(JobAssignment(
+            job_id="job-1", run_id="run-1", function_id="env-fn", attempt=1,
+            event=Event(id="event-1", name="env.started", data=Struct.from_python({}),
+                        timestamp=Timestamp(seconds=1_790_000_000)),
+        ))
+        deadline = asyncio.get_running_loop().time() + 1
+        while worker._jobs and asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0)
+        return list(worker._outbox)
+
+    result = run(loop, scenario())[-1].payload.value
+    assert isinstance(result, JobCompleted)
+    assert result.output_value.to_python() == "staging"
+
+
+def test_job_the_worker_cannot_run_is_nacked_and_logged(
+    loop: asyncio.AbstractEventLoop, caplog: pytest.LogCaptureFixture
+) -> None:
+    release = asyncio.Event()
+
+    @function(id="busy-fn", triggers=[{"event": "busy.started"}])
+    async def handler(_ctx: Any) -> None:
+        await release.wait()
+
+    def job(job_id: str) -> JobAssignment:
+        return JobAssignment(
+            job_id=job_id,
+            run_id=f"run-{job_id}",
+            function_id="busy-fn",
+            attempt=1,
+            event=Event(
+                id="event-1",
+                name="busy.started",
+                data=Struct.from_python({}),
+                timestamp=Timestamp(seconds=1_790_000_000),
+            ),
+            execution_seq=1,
+            lease_token="lease-1",
+        )
+
+    async def scenario() -> list[Any]:
+        worker = StreamingWorker(functions=[handler], max_concurrent_jobs=1)
+        worker.state = "connected"
+        worker._draining = asyncio.Event()
+        await worker._handle_job_assignment(job("job-1"))
+        await worker._handle_job_assignment(job("job-1"))  # duplicate
+        await worker._handle_job_assignment(job("job-2"))  # full
+        worker._draining.set()
+        await worker._handle_job_assignment(job("job-3"))  # draining
+        messages = list(worker._outbox)
+        release.set()
+        await until(lambda: not worker._jobs)
+        return messages
+
+    with caplog.at_level("DEBUG", logger="ironflow.worker"):
+        messages = run(loop, scenario())
+    # Nack, not reject: a JobFailed would use one attempt of the run.
+    assert [m.payload.field for m in messages] == ["job_ack", "job_nack", "job_nack"]
+    assert messages[0].payload.value.job_id == "job-1"
+    assert [m.payload.value.job_id for m in messages[1:]] == ["job-2", "job-3"]
+    logged = {(r.levelname, r.getMessage()) for r in caplog.records}
+    assert ("DEBUG", "job job-1 is already active, ignoring it") in logged
+    assert ("WARNING", "at capacity, nacking job job-2") in logged
+    assert ("INFO", "draining, nacking job job-3") in logged
 
 
 def test_schema_failure_fails_the_job_without_retry(loop: asyncio.AbstractEventLoop) -> None:
@@ -364,3 +442,92 @@ def test_yield_message_maps_invoke(
     else:
         assert json.loads(value.input_json) == [1, 2]
         assert value.invoke_timeout_ms == 5000
+
+
+def _assignment() -> JobAssignment:
+    return JobAssignment(
+        job_id="job-1",
+        run_id="run-1",
+        function_id="nack-fn",
+        attempt=1,
+        event=Event(
+            id="event-1",
+            name="nack.event",
+            data=Struct.from_python({}),
+            timestamp=Timestamp(seconds=1_790_000_000),
+        ),
+        execution_seq=7,
+        lease_token="tok",
+    )
+
+
+@pytest.mark.parametrize(
+    ("full", "draining", "reason"),
+    [
+        (True, False, JobNackReason.AT_CAPACITY),
+        (False, True, JobNackReason.DRAINING),
+        (True, True, JobNackReason.DRAINING),
+    ],
+)
+def test_refused_job_is_nacked(
+    loop: asyncio.AbstractEventLoop, full: bool, draining: bool, reason: JobNackReason
+) -> None:
+    calls = 0
+
+    @function(id="nack-fn", triggers=[{"event": "nack.event"}])
+    async def handler(_ctx: Any) -> None:
+        nonlocal calls
+        calls += 1
+
+    async def scenario() -> list[Any]:
+        worker = StreamingWorker(functions=[handler], max_concurrent_jobs=1)
+        worker.state = "connected"
+        worker._draining = asyncio.Event()
+        if draining:
+            worker.state = "draining"
+            worker._draining.set()
+        if full:
+            worker._jobs["held"] = object()  # type: ignore[assignment]
+        await worker._handle_job_assignment(_assignment())
+        return list(worker._outbox)
+
+    messages = run(loop, scenario())
+    assert [m.payload.field for m in messages] == ["job_nack"]
+    nack = messages[0].payload.value
+    assert isinstance(nack, JobNack)
+    assert (nack.job_id, nack.run_id, nack.execution_seq, nack.lease_token) == ("job-1", "run-1", 7, "tok")
+    assert nack.reason == reason
+    assert calls == 0
+
+
+def test_duplicate_assignment_is_dropped_without_a_nack(loop: asyncio.AbstractEventLoop) -> None:
+    @function(id="nack-fn", triggers=[{"event": "nack.event"}])
+    async def handler(_ctx: Any) -> None:
+        return None
+
+    async def scenario() -> list[Any]:
+        worker = StreamingWorker(functions=[handler], max_concurrent_jobs=5)
+        worker.state = "connected"
+        worker._draining = asyncio.Event()
+        worker._jobs["job-1"] = object()  # type: ignore[assignment]
+        await worker._handle_job_assignment(_assignment())
+        return list(worker._outbox)
+
+    assert run(loop, scenario()) == []
+
+
+def test_duplicate_assignment_stays_silent_while_draining(loop: asyncio.AbstractEventLoop) -> None:
+    @function(id="nack-fn", triggers=[{"event": "nack.event"}])
+    async def handler(_ctx: Any) -> None:
+        return None
+
+    async def scenario() -> list[Any]:
+        worker = StreamingWorker(functions=[handler], max_concurrent_jobs=5)
+        worker.state = "draining"
+        worker._draining = asyncio.Event()
+        worker._draining.set()
+        worker._jobs["job-1"] = object()  # type: ignore[assignment]
+        await worker._handle_job_assignment(_assignment())
+        return list(worker._outbox)
+
+    assert run(loop, scenario()) == []

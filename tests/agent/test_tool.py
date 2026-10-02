@@ -1,4 +1,5 @@
 import asyncio
+import sys
 
 from ironflow.agent import ToolNotFoundError, ToolValidationError, agent, define_tool
 from ironflow.testing import TestClient
@@ -64,3 +65,49 @@ def test_by_args_unserialisable_args() -> None:
         await ctx.tool(dedupe, {"x": object()})
 
     assert isinstance(emit(a).error, ToolValidationError)
+
+
+typed = define_tool(
+    name="typed", handler=lambda i: calls.append(i) or i["n"],
+    input_schema={"type": "object", "properties": {"n": {"type": "integer"}}, "required": ["n"]},
+)
+
+
+def test_invalid_args_rejected_before_handler() -> None:
+    calls.clear()
+
+    @agent(id="a", triggers=[{"event": "go"}], tools=[typed])
+    async def a(ctx):
+        await ctx.tool(typed, {"n": "x"})
+
+    r = emit(a)
+    assert isinstance(r.error, ToolValidationError) and "n: 'x' is not of type" in str(r.error)
+    assert calls == [] and r.steps == []
+
+
+def test_valid_args_pass_schema() -> None:
+    @agent(id="a", triggers=[{"event": "go"}], tools=[typed])
+    async def a(ctx):
+        return await ctx.tool(typed, {"n": 3})
+
+    assert emit(a).output == 3
+
+
+def test_bad_schema_is_validation_error() -> None:
+    bad = define_tool(name="bad", handler=lambda i: i, input_schema={"type": "nope"})
+
+    @agent(id="a", triggers=[{"event": "go"}], tools=[bad])
+    async def a(ctx):
+        await ctx.tool(bad, {})
+
+    assert "input_schema is invalid" in str(emit(a).error)
+
+
+def test_validation_skipped_without_jsonschema(monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "jsonschema", None)
+
+    @agent(id="a", triggers=[{"event": "go"}], tools=[typed])
+    async def a(ctx):
+        return await ctx.tool(typed, {"n": "x"})
+
+    assert emit(a).output == "x"

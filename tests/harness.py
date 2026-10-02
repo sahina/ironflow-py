@@ -45,12 +45,20 @@ class ScriptedServer:
             def _handle(self) -> None:
                 length = int(self.headers.get("Content-Length", 0))
                 raw = self.rfile.read(length) if length else b""
+                # Raw bytes are kept for byte-route tests; body is set only
+                # when they parse as JSON, so a binary upload does not crash
+                # the handler.
+                try:
+                    body = json.loads(raw) if raw else None
+                except ValueError:
+                    body = None
                 harness.requests.append(
                     {
                         "method": self.command,
                         "path": self.path,
                         "headers": dict(self.headers),
-                        "body": json.loads(raw) if raw else None,
+                        "body": body,
+                        "raw": raw,
                     }
                 )
 

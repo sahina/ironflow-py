@@ -27,9 +27,11 @@ def define_tool(
     description: str = "", idempotent: ToolIdempotency = "by_call", timeout: Duration = "60s",
     scopes: tuple[str, ...] = (),
 ) -> ToolDefinition:
-    """Define a tool. ``input_schema`` is JSON Schema; the SDK passes it on and does not validate.
+    """Define a tool. ``input_schema`` is JSON Schema, passed to the model.
 
-    No schema validation: ToolValidationError means the args are not JSON-serialisable.
+    With ``ironflow-py[validate]`` installed, args are validated against it before the handler
+    runs; without it they are not. Either way ToolValidationError is raised for args that are
+    not JSON-serialisable.
     """
     if not isinstance(name, str) or not name:
         raise ValueError("tool name must be a non-empty string")

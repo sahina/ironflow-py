@@ -63,14 +63,14 @@ class Memory:
 class _RPCBackend:
     """Default backend over ConnectRPC. The REST client has none of these three calls."""
 
-    def __init__(self, url: str, api_key: str | None) -> None:
-        self._url, self._api_key = url, api_key
+    def __init__(self, url: str, api_key: str | None, environment: str | None = None) -> None:
+        self._url, self._api_key, self._environment = url, api_key, environment
 
     def _rpc(self) -> Any:
         # ponytail: one client per call, so append/get/wait each pay a connection setup
         # (two per append). Cache one client per backend instance if that latency matters.
         from ..rpc import AsyncIronflowRPC  # lazy: keep `import ironflow.agent` cheap
-        return AsyncIronflowRPC(server_url=self._url, api_key=self._api_key)
+        return AsyncIronflowRPC(server_url=self._url, api_key=self._api_key, environment=self._environment)
 
     async def append_event(self, stream_id: str, *, name: str, data: dict[str, Any], entity_type: str,
                            idempotency_key: str, metadata: dict[str, Any] | None = None) -> str:
@@ -100,6 +100,6 @@ class _RPCBackend:
                 event_id=event_id, projection=projection, timeout=Duration(seconds=timeout_s)))
 
 
-def rpc_backend() -> MemoryBackend | None:
+def rpc_backend(environment: str | None = None) -> MemoryBackend | None:
     url = os.environ.get("IRONFLOW_URL") or os.environ.get("IRONFLOW_SERVER_URL")
-    return _RPCBackend(url, os.environ.get("IRONFLOW_API_KEY")) if url else None
+    return _RPCBackend(url, os.environ.get("IRONFLOW_API_KEY"), environment) if url else None

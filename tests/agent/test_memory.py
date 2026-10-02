@@ -10,7 +10,7 @@ from ironflow.agent import (
     MemoryProjectionRequiredError,
     agent,
 )
-from ironflow.agent._memory import _RPCBackend
+from ironflow.agent._memory import _RPCBackend, rpc_backend
 from ironflow.testing import TestClient
 
 
@@ -158,3 +158,16 @@ def test_rpc_backend_forwards_metadata(monkeypatch) -> None:
                                idempotency_key="k", metadata={"trace": "abc"}))
     (append,) = fake.reqs
     assert append.metadata.to_python() == {"trace": "abc"}
+
+
+def test_rpc_backend_passes_the_environment(monkeypatch) -> None:
+    """#2471: memory writes where the run lives."""
+    import ironflow.rpc as rpc_mod
+
+    built: dict = {}
+    monkeypatch.setattr(rpc_mod, "AsyncIronflowRPC", lambda **kw: built.update(kw) or FakeRPC())
+    monkeypatch.setenv("IRONFLOW_URL", "http://engine")
+    backend = rpc_backend("staging")
+    assert isinstance(backend, _RPCBackend)
+    backend._rpc()
+    assert built["environment"] == "staging"

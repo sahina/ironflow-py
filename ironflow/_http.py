@@ -44,21 +44,25 @@ bounded here rather than taken at face value:
 from __future__ import annotations
 
 import contextlib
+import http.client
 import inspect
 import json
 import logging
+import os
+import re
 import socket
 import ssl
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
-from typing import Any, TypedDict, cast
+from types import TracebackType
+from typing import Any, BinaryIO, TypedDict, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from typing_extensions import override
+from typing_extensions import Self, override
 
 from ._command_dedup import _CommandDedupMixin
 from ._watch import _WatchMixin
@@ -68,11 +72,15 @@ __all__ = [
     "IDEMPOTENT_METHODS",
     "MAX_RESPONSE_BYTES",
     "BaseClient",
+    "BinaryResponse",
     "ErrorContext",
     "HealthResponse",
     "IronflowError",
+    "PayloadTooLargeError",
+    "PreconditionFailedError",
     "ReadinessResponse",
     "ServerCapabilities",
+    "UnsupportedMediaTypeError",
 ]
 
 DEFAULT_SERVER_URL = "http://localhost:9123"
@@ -83,6 +91,10 @@ DEFAULT_SERVER_URL = "http://localhost:9123"
 IDEMPOTENT_METHODS: frozenset[str] = frozenset(
     {"GET", "HEAD", "PUT", "DELETE", "OPTIONS", "TRACE"}
 )
+
+#: POSTs that are safe to retry: a sign call only mints a URL. The generated
+#: methods cannot mark one route, so ``_request`` matches the path.
+_RETRYABLE_POST = re.compile(r"/api/v1/files/buckets/[^/?]+/signed-urls/(upload|download)")
 
 #: Status codes worth retrying. Everything else in 4xx is a client error that
 #: will fail identically on retry.
@@ -154,6 +166,110 @@ class IronflowError(Exception):
         self.retryable = retryable
         #: Seconds requested by the server's Retry-After header, if any.
         self.retry_after = retry_after
+
+
+class PreconditionFailedError(IronflowError):
+    """HTTP 412: an ``If-Match`` / ``If-None-Match`` precondition failed."""
+
+
+class PayloadTooLargeError(IronflowError):
+    """HTTP 413: the upload is over the effective size cap."""
+
+
+class UnsupportedMediaTypeError(IronflowError):
+    """HTTP 415: the bucket or the signed URL does not allow this content type."""
+
+
+_TYPED_HTTP_ERRORS: dict[int, type[IronflowError]] = {
+    412: PreconditionFailedError,
+    413: PayloadTooLargeError,
+    415: UnsupportedMediaTypeError,
+}
+
+
+class BinaryResponse:
+    """A successful byte response, read on demand.
+
+    Nothing is buffered up front, so a large file does not need to fit in
+    memory and ``MAX_RESPONSE_BYTES`` does not apply; ``read()`` loads the
+    whole body, ``iter_bytes()`` does not. Close it, or use it as a context
+    manager, to release the connection.
+    """
+
+    def __init__(self, resp: Any) -> None:
+        self._resp = resp
+        self.status: int = resp.status
+        self.headers: Mapping[str, str] = resp.headers
+        declared = resp.headers.get("Content-Length")
+        self._expected = int(declared) if declared and declared.isdigit() else None
+        self._seen = 0
+
+    def _read(self, amt: int | None) -> bytes:
+        try:
+            chunk: bytes = self._resp.read(amt)
+        except (OSError, http.client.HTTPException) as e:
+            raise IronflowError(f"download interrupted: {e}", retryable=True) from e
+        self._seen += len(chunk)
+        # A server that deletes the object mid-stream ends the body early with
+        # no error on the wire; a silent short file would pass as complete.
+        if not chunk and self._expected is not None and self._seen < self._expected:
+            raise IronflowError(
+                f"download truncated: got {self._seen} of {self._expected} bytes",
+                retryable=True,
+            )
+        return chunk
+
+    def read(self) -> bytes:
+        """Return the rest of the body."""
+        return b"".join(self.iter_bytes())
+
+    def iter_bytes(self, chunk_size: int = 65536) -> Iterator[bytes]:
+        """Yield the body ``chunk_size`` bytes at a time."""
+        while chunk := self._read(chunk_size):
+            yield chunk
+
+    def close(self) -> None:
+        self._resp.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.close()
+
+
+@dataclass(frozen=True)
+class _RawBody:
+    """A byte upload. Replayable: bytes are re-sent, a file is rewound."""
+
+    data: bytes | BinaryIO
+    length: int
+    start: int = 0
+
+    def rewind(self) -> None:
+        if not isinstance(self.data, bytes):
+            self.data.seek(self.start)
+
+
+def _raw_body(body: object) -> _RawBody:
+    if isinstance(body, bytes | bytearray | memoryview):
+        data = bytes(body)
+        return _RawBody(data, len(data))
+    seekable = getattr(body, "seekable", None)
+    if callable(seekable) and seekable() and callable(getattr(body, "read", None)):
+        f = cast("BinaryIO", body)
+        start = f.tell()
+        length = f.seek(0, os.SEEK_END) - start
+        f.seek(start)
+        return _RawBody(f, length, start)
+    # No stream upload in v1: a retry or redirect cannot replay a pipe, and
+    # fstat is no length for one.
+    raise ValueError("pass bytes or a seekable file")
 
 
 @dataclass(frozen=True)
@@ -257,6 +373,13 @@ def _with_query(path: str, params: Mapping[str, Any] | None) -> str:
         return path
     sep = "&" if "?" in path else "?"
     return f"{path}{sep}{urlencode(flat)}"
+
+
+def _present(headers: Mapping[str, str | None] | None) -> dict[str, str] | None:
+    """Drop unset (None) optional headers, as _request does."""
+    if headers is None:
+        return None
+    return {key: value for key, value in headers.items() if value is not None}
 
 
 def _status_is_retryable(status: int) -> bool:
@@ -397,8 +520,41 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
             if headers is not None
             else None
         )
+        retry = True if method == "POST" and _RETRYABLE_POST.fullmatch(path) else None
         return self._send(
-            method, _with_query(path, params), body, present_headers, None
+            method, _with_query(path, params), body, present_headers, retry
+        )
+
+    def _request_binary(
+        self,
+        method: str,
+        path: str,
+        body: bytes | BinaryIO,
+        headers: Mapping[str, str | None] | None = None,
+        params: Mapping[str, Any] | None = None,
+    ) -> Any:
+        """Upload raw bytes; the generated byte-route methods call this."""
+        return self._send(
+            method,
+            _with_query(path, params),
+            _raw_body(body),
+            _present(headers),
+            None,
+        )
+
+    def _request_stream(
+        self,
+        method: str,
+        path: str,
+        headers: Mapping[str, str | None] | None = None,
+        params: Mapping[str, Any] | None = None,
+    ) -> BinaryResponse:
+        """Download raw bytes; the body is read by the caller, not buffered here."""
+        return cast(
+            "BinaryResponse",
+            self._send(
+                method, _with_query(path, params), None, _present(headers), None, stream=True
+            ),
         )
 
     def _send(
@@ -408,12 +564,13 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
         body: Any,
         headers: Mapping[str, str] | None,
         retry_override: bool | None,
+        stream: bool = False,
     ) -> Any:
         """The one funnel behind every REST call: reports a call's FINAL failure, after retries."""
         if self._on_error is None:  # no hook: exactly the old code path
-            return self._send_attempts(method, path, body, headers, retry_override)
+            return self._send_attempts(method, path, body, headers, retry_override, stream)
         try:
-            return self._send_attempts(method, path, body, headers, retry_override)
+            return self._send_attempts(method, path, body, headers, retry_override, stream)
         except IronflowError as err:
             # Not re-entrancy guarded: a hook that calls this client and fails is called again.
             # The path is cut at "?": query parameters can carry secrets.
@@ -431,7 +588,14 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
         body: Any,
         headers: Mapping[str, str] | None,
         retry_override: bool | None,
+        stream: bool = False,
     ) -> Any:
+        # client.py quotes a file path with safe="/", which leaves "." and "..".
+        # urllib sends them as written and the server resolves them, so a
+        # "../" path could address another bucket. An empty segment is an
+        # empty bucket name or path part, which no route accepts.
+        if any(seg in ("", ".", "..") for seg in path.partition("?")[0].split("/")[1:]):
+            raise ValueError(f"path {path.partition('?')[0]!r} has an empty or dot segment")
         method = method.upper()
         if retry_override is None:
             may_retry = method in self.retry_methods
@@ -450,7 +614,7 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
 
         for attempt in range(1, attempts + 1):
             try:
-                return self._attempt(method, path, body, headers, deadline)
+                return self._attempt(method, path, body, headers, deadline, stream)
             except IronflowError as err:
                 last = err
 
@@ -486,14 +650,24 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
         body: Any,
         headers: Mapping[str, str] | None,
         deadline: float | None = None,
+        stream: bool = False,
     ) -> Any:
         url = f"{self.server_url}{path}"
         # Error text ends up in logs; query parameters can carry secrets.
         where = path.partition("?")[0]
-        data = json.dumps(body).encode("utf-8") if body is not None else None
+        data: bytes | BinaryIO | None
+        if isinstance(body, _RawBody):
+            body.rewind()  # a retry must re-send from the start
+            data = body.data
+        else:
+            data = json.dumps(body).encode("utf-8") if body is not None else None
 
         req = Request(url, data=data, method=method)
-        req.add_header("Content-Type", "application/json")
+        if isinstance(body, _RawBody):
+            # urllib streams a file only when it is told the length.
+            req.add_header("Content-Length", str(body.length))
+        else:
+            req.add_header("Content-Type", "application/json")
         if self.api_key:
             req.add_header("Authorization", f"Bearer {self.api_key}")
         for key, value in (headers or {}).items():
@@ -514,7 +688,10 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
             timeout = min(timeout, remaining)
 
         try:
-            with _OPENER.open(req, timeout=timeout) as resp:
+            resp = _OPENER.open(req, timeout=timeout)
+            if stream:
+                return BinaryResponse(resp)
+            with resp:
                 raw = resp.read(MAX_RESPONSE_BYTES + 1)
                 if len(raw) > MAX_RESPONSE_BYTES:
                     raise IronflowError(
@@ -600,7 +777,7 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
         retry_after = _parse_retry_after(
             e.headers.get("Retry-After") if e.headers else None
         )
-        return IronflowError(
+        return _TYPED_HTTP_ERRORS.get(e.code, IronflowError)(
             message,
             status_code=e.code,
             code=code,

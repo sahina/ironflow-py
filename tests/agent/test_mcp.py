@@ -106,3 +106,38 @@ def test_unregister_failure() -> None:
     with pytest.raises(AgentError) as e:
         asyncio.run(h.unregister())
     assert e.value.code == "AGENT_MCP_UNREGISTER_FAILED"
+
+
+@pytest.mark.parametrize("configured,env_var,want", [
+    ("staging", "qa", "staging"),
+    (None, "qa", "qa"),
+    (None, None, None),
+])
+def test_environment_reaches_the_built_client(monkeypatch, configured, env_var, want) -> None:
+    """#2471: register and unregister share one client, so one assertion covers both."""
+    import ironflow.rpc as rpc_mod
+
+    built: dict = {}
+    client = fake()
+
+    async def aclose() -> None:
+        return None
+
+    client.aclose = aclose
+
+    def make(**kw):
+        built.update(kw)
+        return client
+
+    monkeypatch.setattr(rpc_mod, "AsyncIronflowRPC", make)
+    monkeypatch.setenv("IRONFLOW_URL", "http://engine")
+    monkeypatch.setenv("IRONFLOW_API_KEY", "ifkey_x")
+    if env_var is None:
+        monkeypatch.delenv("IRONFLOW_ENV", raising=False)
+    else:
+        monkeypatch.setenv("IRONFLOW_ENV", env_var)
+
+    h = asyncio.run(expose_mcp(name="demo", callback_url="http://app/x", tools=[echo], environment=configured))
+    asyncio.run(h.unregister())
+    assert built["environment"] == want
+    assert client.agent_tools.unregistered == ["demo"]

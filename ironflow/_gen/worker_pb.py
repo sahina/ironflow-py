@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from .types_pb import Error, Event, StepType
 
 
-_WorkerMessageFields: TypeAlias = Literal["register", "heartbeat", "step_started", "step_completed", "step_failed", "step_yielded", "job_completed", "job_failed", "job_ack"]
+_WorkerMessageFields: TypeAlias = Literal["register", "heartbeat", "step_started", "step_completed", "step_failed", "step_yielded", "job_completed", "job_failed", "job_ack", "job_nack"]
 
 class WorkerMessage(Message[_WorkerMessageFields]):
     """
@@ -43,11 +43,11 @@ class WorkerMessage(Message[_WorkerMessageFields]):
         def __init__(
             self,
             *,
-            payload: Oneof[Literal["register"], WorkerRegister] | Oneof[Literal["heartbeat"], WorkerHeartbeat] | Oneof[Literal["step_started"], StepStarted] | Oneof[Literal["step_completed"], StepCompleted] | Oneof[Literal["step_failed"], StepFailed] | Oneof[Literal["step_yielded"], StepYielded] | Oneof[Literal["job_completed"], JobCompleted] | Oneof[Literal["job_failed"], JobFailed] | Oneof[Literal["job_ack"], JobAck] | None = None,
+            payload: Oneof[Literal["register"], WorkerRegister] | Oneof[Literal["heartbeat"], WorkerHeartbeat] | Oneof[Literal["step_started"], StepStarted] | Oneof[Literal["step_completed"], StepCompleted] | Oneof[Literal["step_failed"], StepFailed] | Oneof[Literal["step_yielded"], StepYielded] | Oneof[Literal["job_completed"], JobCompleted] | Oneof[Literal["job_failed"], JobFailed] | Oneof[Literal["job_ack"], JobAck] | Oneof[Literal["job_nack"], JobNack] | None = None,
         ) -> None:
             pass
 
-        payload: Oneof[Literal["register"], WorkerRegister] | Oneof[Literal["heartbeat"], WorkerHeartbeat] | Oneof[Literal["step_started"], StepStarted] | Oneof[Literal["step_completed"], StepCompleted] | Oneof[Literal["step_failed"], StepFailed] | Oneof[Literal["step_yielded"], StepYielded] | Oneof[Literal["job_completed"], JobCompleted] | Oneof[Literal["job_failed"], JobFailed] | Oneof[Literal["job_ack"], JobAck] | None
+        payload: Oneof[Literal["register"], WorkerRegister] | Oneof[Literal["heartbeat"], WorkerHeartbeat] | Oneof[Literal["step_started"], StepStarted] | Oneof[Literal["step_completed"], StepCompleted] | Oneof[Literal["step_failed"], StepFailed] | Oneof[Literal["step_yielded"], StepYielded] | Oneof[Literal["job_completed"], JobCompleted] | Oneof[Literal["job_failed"], JobFailed] | Oneof[Literal["job_ack"], JobAck] | Oneof[Literal["job_nack"], JobNack] | None
 
 _WorkerRegisterFields: TypeAlias = Literal["worker_id", "hostname", "function_ids", "max_concurrent_jobs", "labels", "version"]
 
@@ -965,6 +965,65 @@ class JobAck(Message[_JobAckFields]):
         execution_seq: int
         lease_token: str
 
+_JobNackFields: TypeAlias = Literal["job_id", "run_id", "execution_seq", "lease_token", "reason"]
+
+class JobNack(Message[_JobNackFields]):
+    """
+    A worker refuses an assignment that it did not start (#2456). A nack uses no
+    run attempt: the engine re-queues the segment at once under a fresh
+    execution_seq. An engine that predates this message drops it as unknown.
+
+    ```proto
+    message ironflow.v1.JobNack
+    ```
+
+    Attributes:
+        job_id:
+            ```proto
+            string job_id = 1;
+            ```
+        run_id:
+            ```proto
+            string run_id = 2;
+            ```
+        execution_seq:
+            Echo of the assignment fence (#1206, ADR 0037). A stale nack is discarded,
+            so it cannot release a newer execution's lease.
+
+            ```proto
+            int64 execution_seq = 3;
+            ```
+        lease_token:
+            ```proto
+            string lease_token = 4;
+            ```
+        reason:
+            ```proto
+            ironflow.v1.JobNackReason reason = 5;
+            ```
+    """
+
+    __slots__ = ("job_id", "run_id", "execution_seq", "lease_token", "reason")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            job_id: str = "",
+            run_id: str = "",
+            execution_seq: int = 0,
+            lease_token: str = "",
+            reason: JobNackReason | None = None,
+        ) -> None:
+            pass
+
+        job_id: str
+        run_id: str
+        execution_seq: int
+        lease_token: str
+        reason: JobNackReason
+
 _EngineMessageFields: TypeAlias = Literal["registered", "job", "step_ack", "resume", "cancel", "shutdown", "lease_refresh"]
 
 class EngineMessage(Message[_EngineMessageFields]):
@@ -1489,6 +1548,33 @@ class Shutdown(Message[_ShutdownFields]):
         reason: str
         drain_timeout_ms: int
 
+class JobNackReason(Enum):
+    """
+    ```proto
+    enum ironflow.v1.JobNackReason
+    ```
+
+    Attributes:
+        UNSPECIFIED:
+            The engine treats this value as AT_CAPACITY.
+
+            ```proto
+            JOB_NACK_REASON_UNSPECIFIED = 0
+            ```
+        AT_CAPACITY:
+            ```proto
+            JOB_NACK_REASON_AT_CAPACITY = 1
+            ```
+        DRAINING:
+            ```proto
+            JOB_NACK_REASON_DRAINING = 2
+            ```
+    """
+
+    UNSPECIFIED = 0
+    AT_CAPACITY = 1
+    DRAINING = 2
+
 class LeaseState(Enum):
     """
     ```proto
@@ -1527,7 +1613,7 @@ class LeaseState(Enum):
 
 
 _DESC = file_desc(
-    b'\n\x18ironflow/v1/worker.proto\x12\x0bironflow.v1\x1a\x17ironflow/v1/types.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xbd\x04\n\rWorkerMessage\x129\n\x08register\x18\x01 \x01(\x0b2\x1b.ironflow.v1.WorkerRegisterH\x00R\x08register\x12<\n\theartbeat\x18\x02 \x01(\x0b2\x1c.ironflow.v1.WorkerHeartbeatH\x00R\theartbeat\x12=\n\x0cstep_started\x18\x03 \x01(\x0b2\x18.ironflow.v1.StepStartedH\x00R\x0bstepStarted\x12C\n\x0estep_completed\x18\x04 \x01(\x0b2\x1a.ironflow.v1.StepCompletedH\x00R\rstepCompleted\x12:\n\x0bstep_failed\x18\x05 \x01(\x0b2\x17.ironflow.v1.StepFailedH\x00R\nstepFailed\x12=\n\x0cstep_yielded\x18\x06 \x01(\x0b2\x18.ironflow.v1.StepYieldedH\x00R\x0bstepYielded\x12@\n\rjob_completed\x18\x07 \x01(\x0b2\x19.ironflow.v1.JobCompletedH\x00R\x0cjobCompleted\x127\n\njob_failed\x18\x08 \x01(\x0b2\x16.ironflow.v1.JobFailedH\x00R\tjobFailed\x12.\n\x07job_ack\x18\t \x01(\x0b2\x13.ironflow.v1.JobAckH\x00R\x06jobAckB\t\n\x07payload"\xce\x02\n\x0eWorkerRegister\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x12\x1a\n\x08hostname\x18\x02 \x01(\tR\x08hostname\x12!\n\x0cfunction_ids\x18\x03 \x03(\tR\x0bfunctionIds\x12.\n\x13max_concurrent_jobs\x18\x04 \x01(\x05R\x11maxConcurrentJobs\x12?\n\x06labels\x18\x05 \x03(\x0b2\'.ironflow.v1.WorkerRegister.LabelsEntryR\x06labels\x124\n\x07version\x18\x06 \x01(\x0b2\x1a.ironflow.v1.WorkerVersionR\x07version\x1a9\n\x0bLabelsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01";\n\rWorkerVersion\x12\x10\n\x03sdk\x18\x01 \x01(\tR\x03sdk\x12\x18\n\x07runtime\x18\x02 \x01(\tR\x07runtime"\xb1\x01\n\x0fWorkerHeartbeat\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x12\x1f\n\x0bactive_jobs\x18\x02 \x01(\x05R\nactiveJobs\x12*\n\x04jobs\x18\x03 \x03(\x0b2\x16.ironflow.v1.ActiveJobR\x04jobs\x124\n\x07metrics\x18\x04 \x01(\x0b2\x1a.ironflow.v1.WorkerMetricsR\x07metrics"\xba\x01\n\tActiveJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x129\n\nstarted_at\x18\x02 \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x12\x15\n\x06run_id\x18\x03 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x04 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x05 \x01(\tR\nleaseToken"\x9f\x01\n\rWorkerMetrics\x12\x1f\n\x0bcpu_percent\x18\x01 \x01(\x01R\ncpuPercent\x12%\n\x0ememory_percent\x18\x02 \x01(\x01R\rmemoryPercent\x12%\n\x0ejobs_completed\x18\x03 \x01(\x03R\rjobsCompleted\x12\x1f\n\x0bjobs_failed\x18\x04 \x01(\x03R\njobsFailed"\xcb\x01\n\x0bStepStarted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x122\n\tstep_type\x18\x04 \x01(\x0e2\x15.ironflow.v1.StepTypeR\x08stepType\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\x92\x02\n\rStepCompleted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12/\n\x06output\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x07 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12\x1f\n\x0bduration_ms\x18\x04 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\xcd\x01\n\nStepFailed\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12(\n\x05error\x18\x03 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x1f\n\x0bduration_ms\x18\x04 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\xaa\x03\n\x0bStepYielded\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12/\n\x05sleep\x18\x03 \x01(\x0b2\x17.ironflow.v1.SleepYieldH\x00R\x05sleep\x12<\n\nwait_event\x18\x04 \x01(\x0b2\x1b.ironflow.v1.WaitEventYieldH\x00R\twaitEvent\x12K\n\x0finvoke_function\x18\x07 \x01(\x0b2 .ironflow.v1.InvokeFunctionYieldH\x00R\x0einvokeFunction\x12[\n\x15invoke_function_async\x18\x08 \x01(\x0b2%.ironflow.v1.InvokeFunctionAsyncYieldH\x00R\x13invokeFunctionAsync\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseTokenB\x0c\n\nyield_info">\n\nSleepYield\x120\n\x05until\x18\x01 \x01(\x0b2\x1a.google.protobuf.TimestampR\x05until"\xd4\x01\n\x0eWaitEventYield\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12)\n\x10match_expression\x18\x02 \x01(\tR\x0fmatchExpression\x12\x1f\n\x0bmatch_value\x18\x03 \x01(\tR\nmatchValue\x124\n\x07timeout\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\x07timeout\x12!\n\x0cpayload_json\x18\x05 \x01(\x0cR\x0bpayloadJson"\x81\x01\n\x13InvokeFunctionYield\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x1d\n\ninput_json\x18\x02 \x01(\x0cR\tinputJson\x12*\n\x11invoke_timeout_ms\x18\x03 \x01(\x03R\x0finvokeTimeoutMs"Z\n\x18InvokeFunctionAsyncYield\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x1d\n\ninput_json\x18\x02 \x01(\x0cR\tinputJson"\xf8\x01\n\x0cJobCompleted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12/\n\x06output\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x06 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12\x1f\n\x0bduration_ms\x18\x03 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x04 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x05 \x01(\tR\nleaseToken"\xe4\x01\n\tJobFailed\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12(\n\x05error\x18\x02 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x1f\n\x0bduration_ms\x18\x03 \x01(\x05R\ndurationMs\x12/\n\x05steps\x18\x04 \x03(\x0b2\x19.ironflow.v1.ExecutedStepR\x05steps\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\xc0\x02\n\x0cExecutedStep\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n\x04type\x18\x03 \x01(\tR\x04type\x12\x16\n\x06status\x18\x04 \x01(\tR\x06status\x12/\n\x06output\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\t \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12(\n\x05error\x18\x06 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12)\n\x10compensation_for\x18\x07 \x01(\tR\x0fcompensationFor\x12\x1f\n\x0bduration_ms\x18\x08 \x01(\x05R\ndurationMs"|\n\x06JobAck\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x03 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x04 \x01(\tR\nleaseToken"\x9f\x03\n\rEngineMessage\x12?\n\nregistered\x18\x01 \x01(\x0b2\x1d.ironflow.v1.WorkerRegisteredH\x00R\nregistered\x12.\n\x03job\x18\x02 \x01(\x0b2\x1a.ironflow.v1.JobAssignmentH\x00R\x03job\x121\n\x08step_ack\x18\x03 \x01(\x0b2\x14.ironflow.v1.StepAckH\x00R\x07stepAck\x120\n\x06resume\x18\x04 \x01(\x0b2\x16.ironflow.v1.ResumeJobH\x00R\x06resume\x120\n\x06cancel\x18\x05 \x01(\x0b2\x16.ironflow.v1.CancelJobH\x00R\x06cancel\x123\n\x08shutdown\x18\x06 \x01(\x0b2\x15.ironflow.v1.ShutdownH\x00R\x08shutdown\x12F\n\rlease_refresh\x18\x07 \x01(\x0b2\x1f.ironflow.v1.LeaseRefreshResultH\x00R\x0cleaseRefreshB\t\n\x07payload"Q\n\x12LeaseRefreshResult\x12;\n\x08segments\x18\x01 \x03(\x0b2\x1f.ironflow.v1.SegmentLeaseStatusR\x08segments"\x7f\n\x12SegmentLeaseStatus\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x02 \x01(\x03R\x0cexecutionSeq\x12-\n\x05state\x18\x03 \x01(\x0e2\x17.ironflow.v1.LeaseStateR\x05state"c\n\x10WorkerRegistered\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x122\n\x15heartbeat_interval_ms\x18\x02 \x01(\x05R\x13heartbeatIntervalMs"\xe4\x03\n\rJobAssignment\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n\x0bfunction_id\x18\x03 \x01(\tR\nfunctionId\x12(\n\x05event\x18\x04 \x01(\x0b2\x12.ironflow.v1.EventR\x05event\x12C\n\x0fcompleted_steps\x18\x05 \x03(\x0b2\x1a.ironflow.v1.CompletedStepR\x0ecompletedSteps\x12\x19\n\x08actor_id\x18\x06 \x01(\tR\x07actorId\x12\x18\n\x07attempt\x18\x07 \x01(\x05R\x07attempt\x121\n\x07context\x18\x08 \x01(\x0b2\x17.ironflow.v1.JobContextR\x07context\x12#\n\rexecution_seq\x18\t \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\n \x01(\tR\nleaseToken\x12D\n\x10lease_expires_at\x18\x0b \x01(\x0b2\x1a.google.protobuf.TimestampR\x0eleaseExpiresAt\x12!\n\x0cmax_attempts\x18\x0c \x01(\x05R\x0bmaxAttempts"\xdf\x01\n\rCompletedStep\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12/\n\x06output\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x04 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12\x16\n\x06status\x18\x05 \x01(\tR\x06status\x12\x1d\n\nerror_json\x18\x06 \x01(\x0cR\terrorJson"\xa3\x02\n\nJobContext\x12\x19\n\x08trace_id\x18\x01 \x01(\tR\x07traceId\x12A\n\x08metadata\x18\x02 \x03(\x0b2%.ironflow.v1.JobContext.MetadataEntryR\x08metadata\x12>\n\x07secrets\x18\x03 \x03(\x0b2$.ironflow.v1.JobContext.SecretsEntryR\x07secrets\x1a;\n\rMetadataEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a:\n\x0cSecretsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01"T\n\x07StepAck\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\x1a\n\x08accepted\x18\x02 \x01(\x08R\x08accepted\x12\x14\n\x05error\x18\x03 \x01(\tR\x05error"\xda\x01\n\tResumeJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12\x1f\n\x0bresume_type\x18\x03 \x01(\tR\nresumeType\x128\n\x0bresume_data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\nresumeData\x12B\n\x11resume_data_value\x18\x05 \x01(\x0b2\x16.google.protobuf.ValueR\x0fresumeDataValue":\n\tCancelJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n\x06reason\x18\x02 \x01(\tR\x06reason"L\n\x08Shutdown\x12\x16\n\x06reason\x18\x01 \x01(\tR\x06reason\x12(\n\x10drain_timeout_ms\x18\x02 \x01(\x05R\x0edrainTimeoutMs*t\n\nLeaseState\x12\x1b\n\x17LEASE_STATE_UNSPECIFIED\x10\x00\x12\x19\n\x15LEASE_STATE_REFRESHED\x10\x01\x12\x15\n\x11LEASE_STATE_STALE\x10\x02\x12\x17\n\x13LEASE_STATE_UNKNOWN\x10\x032V\n\rWorkerService\x12E\n\x07Connect\x12\x1a.ironflow.v1.WorkerMessage\x1a\x1a.ironflow.v1.EngineMessage(\x010\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x18ironflow/v1/worker.proto\x12\x0bironflow.v1\x1a\x17ironflow/v1/types.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xf0\x04\n\rWorkerMessage\x129\n\x08register\x18\x01 \x01(\x0b2\x1b.ironflow.v1.WorkerRegisterH\x00R\x08register\x12<\n\theartbeat\x18\x02 \x01(\x0b2\x1c.ironflow.v1.WorkerHeartbeatH\x00R\theartbeat\x12=\n\x0cstep_started\x18\x03 \x01(\x0b2\x18.ironflow.v1.StepStartedH\x00R\x0bstepStarted\x12C\n\x0estep_completed\x18\x04 \x01(\x0b2\x1a.ironflow.v1.StepCompletedH\x00R\rstepCompleted\x12:\n\x0bstep_failed\x18\x05 \x01(\x0b2\x17.ironflow.v1.StepFailedH\x00R\nstepFailed\x12=\n\x0cstep_yielded\x18\x06 \x01(\x0b2\x18.ironflow.v1.StepYieldedH\x00R\x0bstepYielded\x12@\n\rjob_completed\x18\x07 \x01(\x0b2\x19.ironflow.v1.JobCompletedH\x00R\x0cjobCompleted\x127\n\njob_failed\x18\x08 \x01(\x0b2\x16.ironflow.v1.JobFailedH\x00R\tjobFailed\x12.\n\x07job_ack\x18\t \x01(\x0b2\x13.ironflow.v1.JobAckH\x00R\x06jobAck\x121\n\x08job_nack\x18\n \x01(\x0b2\x14.ironflow.v1.JobNackH\x00R\x07jobNackB\t\n\x07payload"\xce\x02\n\x0eWorkerRegister\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x12\x1a\n\x08hostname\x18\x02 \x01(\tR\x08hostname\x12!\n\x0cfunction_ids\x18\x03 \x03(\tR\x0bfunctionIds\x12.\n\x13max_concurrent_jobs\x18\x04 \x01(\x05R\x11maxConcurrentJobs\x12?\n\x06labels\x18\x05 \x03(\x0b2\'.ironflow.v1.WorkerRegister.LabelsEntryR\x06labels\x124\n\x07version\x18\x06 \x01(\x0b2\x1a.ironflow.v1.WorkerVersionR\x07version\x1a9\n\x0bLabelsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01";\n\rWorkerVersion\x12\x10\n\x03sdk\x18\x01 \x01(\tR\x03sdk\x12\x18\n\x07runtime\x18\x02 \x01(\tR\x07runtime"\xb1\x01\n\x0fWorkerHeartbeat\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x12\x1f\n\x0bactive_jobs\x18\x02 \x01(\x05R\nactiveJobs\x12*\n\x04jobs\x18\x03 \x03(\x0b2\x16.ironflow.v1.ActiveJobR\x04jobs\x124\n\x07metrics\x18\x04 \x01(\x0b2\x1a.ironflow.v1.WorkerMetricsR\x07metrics"\xba\x01\n\tActiveJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x129\n\nstarted_at\x18\x02 \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x12\x15\n\x06run_id\x18\x03 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x04 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x05 \x01(\tR\nleaseToken"\x9f\x01\n\rWorkerMetrics\x12\x1f\n\x0bcpu_percent\x18\x01 \x01(\x01R\ncpuPercent\x12%\n\x0ememory_percent\x18\x02 \x01(\x01R\rmemoryPercent\x12%\n\x0ejobs_completed\x18\x03 \x01(\x03R\rjobsCompleted\x12\x1f\n\x0bjobs_failed\x18\x04 \x01(\x03R\njobsFailed"\xcb\x01\n\x0bStepStarted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x122\n\tstep_type\x18\x04 \x01(\x0e2\x15.ironflow.v1.StepTypeR\x08stepType\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\x92\x02\n\rStepCompleted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12/\n\x06output\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x07 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12\x1f\n\x0bduration_ms\x18\x04 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\xcd\x01\n\nStepFailed\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12(\n\x05error\x18\x03 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x1f\n\x0bduration_ms\x18\x04 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\xaa\x03\n\x0bStepYielded\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12/\n\x05sleep\x18\x03 \x01(\x0b2\x17.ironflow.v1.SleepYieldH\x00R\x05sleep\x12<\n\nwait_event\x18\x04 \x01(\x0b2\x1b.ironflow.v1.WaitEventYieldH\x00R\twaitEvent\x12K\n\x0finvoke_function\x18\x07 \x01(\x0b2 .ironflow.v1.InvokeFunctionYieldH\x00R\x0einvokeFunction\x12[\n\x15invoke_function_async\x18\x08 \x01(\x0b2%.ironflow.v1.InvokeFunctionAsyncYieldH\x00R\x13invokeFunctionAsync\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseTokenB\x0c\n\nyield_info">\n\nSleepYield\x120\n\x05until\x18\x01 \x01(\x0b2\x1a.google.protobuf.TimestampR\x05until"\xd4\x01\n\x0eWaitEventYield\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12)\n\x10match_expression\x18\x02 \x01(\tR\x0fmatchExpression\x12\x1f\n\x0bmatch_value\x18\x03 \x01(\tR\nmatchValue\x124\n\x07timeout\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\x07timeout\x12!\n\x0cpayload_json\x18\x05 \x01(\x0cR\x0bpayloadJson"\x81\x01\n\x13InvokeFunctionYield\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x1d\n\ninput_json\x18\x02 \x01(\x0cR\tinputJson\x12*\n\x11invoke_timeout_ms\x18\x03 \x01(\x03R\x0finvokeTimeoutMs"Z\n\x18InvokeFunctionAsyncYield\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x1d\n\ninput_json\x18\x02 \x01(\x0cR\tinputJson"\xf8\x01\n\x0cJobCompleted\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12/\n\x06output\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x06 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12\x1f\n\x0bduration_ms\x18\x03 \x01(\x05R\ndurationMs\x12#\n\rexecution_seq\x18\x04 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x05 \x01(\tR\nleaseToken"\xe4\x01\n\tJobFailed\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12(\n\x05error\x18\x02 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x1f\n\x0bduration_ms\x18\x03 \x01(\x05R\ndurationMs\x12/\n\x05steps\x18\x04 \x03(\x0b2\x19.ironflow.v1.ExecutedStepR\x05steps\x12#\n\rexecution_seq\x18\x05 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x06 \x01(\tR\nleaseToken"\xc0\x02\n\x0cExecutedStep\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n\x04type\x18\x03 \x01(\tR\x04type\x12\x16\n\x06status\x18\x04 \x01(\tR\x06status\x12/\n\x06output\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\t \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12(\n\x05error\x18\x06 \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12)\n\x10compensation_for\x18\x07 \x01(\tR\x0fcompensationFor\x12\x1f\n\x0bduration_ms\x18\x08 \x01(\x05R\ndurationMs"|\n\x06JobAck\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x03 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x04 \x01(\tR\nleaseToken"\xb1\x01\n\x07JobNack\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x03 \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\x04 \x01(\tR\nleaseToken\x122\n\x06reason\x18\x05 \x01(\x0e2\x1a.ironflow.v1.JobNackReasonR\x06reason"\x9f\x03\n\rEngineMessage\x12?\n\nregistered\x18\x01 \x01(\x0b2\x1d.ironflow.v1.WorkerRegisteredH\x00R\nregistered\x12.\n\x03job\x18\x02 \x01(\x0b2\x1a.ironflow.v1.JobAssignmentH\x00R\x03job\x121\n\x08step_ack\x18\x03 \x01(\x0b2\x14.ironflow.v1.StepAckH\x00R\x07stepAck\x120\n\x06resume\x18\x04 \x01(\x0b2\x16.ironflow.v1.ResumeJobH\x00R\x06resume\x120\n\x06cancel\x18\x05 \x01(\x0b2\x16.ironflow.v1.CancelJobH\x00R\x06cancel\x123\n\x08shutdown\x18\x06 \x01(\x0b2\x15.ironflow.v1.ShutdownH\x00R\x08shutdown\x12F\n\rlease_refresh\x18\x07 \x01(\x0b2\x1f.ironflow.v1.LeaseRefreshResultH\x00R\x0cleaseRefreshB\t\n\x07payload"Q\n\x12LeaseRefreshResult\x12;\n\x08segments\x18\x01 \x03(\x0b2\x1f.ironflow.v1.SegmentLeaseStatusR\x08segments"\x7f\n\x12SegmentLeaseStatus\x12\x15\n\x06run_id\x18\x01 \x01(\tR\x05runId\x12#\n\rexecution_seq\x18\x02 \x01(\x03R\x0cexecutionSeq\x12-\n\x05state\x18\x03 \x01(\x0e2\x17.ironflow.v1.LeaseStateR\x05state"c\n\x10WorkerRegistered\x12\x1b\n\tworker_id\x18\x01 \x01(\tR\x08workerId\x122\n\x15heartbeat_interval_ms\x18\x02 \x01(\x05R\x13heartbeatIntervalMs"\xe4\x03\n\rJobAssignment\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1f\n\x0bfunction_id\x18\x03 \x01(\tR\nfunctionId\x12(\n\x05event\x18\x04 \x01(\x0b2\x12.ironflow.v1.EventR\x05event\x12C\n\x0fcompleted_steps\x18\x05 \x03(\x0b2\x1a.ironflow.v1.CompletedStepR\x0ecompletedSteps\x12\x19\n\x08actor_id\x18\x06 \x01(\tR\x07actorId\x12\x18\n\x07attempt\x18\x07 \x01(\x05R\x07attempt\x121\n\x07context\x18\x08 \x01(\x0b2\x17.ironflow.v1.JobContextR\x07context\x12#\n\rexecution_seq\x18\t \x01(\x03R\x0cexecutionSeq\x12\x1f\n\x0blease_token\x18\n \x01(\tR\nleaseToken\x12D\n\x10lease_expires_at\x18\x0b \x01(\x0b2\x1a.google.protobuf.TimestampR\x0eleaseExpiresAt\x12!\n\x0cmax_attempts\x18\x0c \x01(\x05R\x0bmaxAttempts"\xdf\x01\n\rCompletedStep\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12/\n\x06output\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x04 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12\x16\n\x06status\x18\x05 \x01(\tR\x06status\x12\x1d\n\nerror_json\x18\x06 \x01(\x0cR\terrorJson"\xa3\x02\n\nJobContext\x12\x19\n\x08trace_id\x18\x01 \x01(\tR\x07traceId\x12A\n\x08metadata\x18\x02 \x03(\x0b2%.ironflow.v1.JobContext.MetadataEntryR\x08metadata\x12>\n\x07secrets\x18\x03 \x03(\x0b2$.ironflow.v1.JobContext.SecretsEntryR\x07secrets\x1a;\n\rMetadataEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a:\n\x0cSecretsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01"T\n\x07StepAck\x12\x17\n\x07step_id\x18\x01 \x01(\tR\x06stepId\x12\x1a\n\x08accepted\x18\x02 \x01(\x08R\x08accepted\x12\x14\n\x05error\x18\x03 \x01(\tR\x05error"\xda\x01\n\tResumeJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x17\n\x07step_id\x18\x02 \x01(\tR\x06stepId\x12\x1f\n\x0bresume_type\x18\x03 \x01(\tR\nresumeType\x128\n\x0bresume_data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\nresumeData\x12B\n\x11resume_data_value\x18\x05 \x01(\x0b2\x16.google.protobuf.ValueR\x0fresumeDataValue":\n\tCancelJob\x12\x15\n\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n\x06reason\x18\x02 \x01(\tR\x06reason"L\n\x08Shutdown\x12\x16\n\x06reason\x18\x01 \x01(\tR\x06reason\x12(\n\x10drain_timeout_ms\x18\x02 \x01(\x05R\x0edrainTimeoutMs*o\n\rJobNackReason\x12\x1f\n\x1bJOB_NACK_REASON_UNSPECIFIED\x10\x00\x12\x1f\n\x1bJOB_NACK_REASON_AT_CAPACITY\x10\x01\x12\x1c\n\x18JOB_NACK_REASON_DRAINING\x10\x02*t\n\nLeaseState\x12\x1b\n\x17LEASE_STATE_UNSPECIFIED\x10\x00\x12\x19\n\x15LEASE_STATE_REFRESHED\x10\x01\x12\x15\n\x11LEASE_STATE_STALE\x10\x02\x12\x17\n\x13LEASE_STATE_UNKNOWN\x10\x032V\n\rWorkerService\x12E\n\x07Connect\x12\x1a.ironflow.v1.WorkerMessage\x1a\x1a.ironflow.v1.EngineMessage(\x010\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         types_pb.desc(),
         struct_pb.desc(),
@@ -1552,6 +1638,7 @@ _DESC = file_desc(
         "JobFailed": JobFailed,
         "ExecutedStep": ExecutedStep,
         "JobAck": JobAck,
+        "JobNack": JobNack,
         "EngineMessage": EngineMessage,
         "LeaseRefreshResult": LeaseRefreshResult,
         "SegmentLeaseStatus": SegmentLeaseStatus,
@@ -1563,6 +1650,7 @@ _DESC = file_desc(
         "ResumeJob": ResumeJob,
         "CancelJob": CancelJob,
         "Shutdown": Shutdown,
+        "JobNackReason": JobNackReason,
         "LeaseState": LeaseState,
     },
 )

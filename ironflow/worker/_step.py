@@ -166,6 +166,10 @@ class RunInfo:
     id: str
     function_id: str
     attempt: int
+    #: Environment this run's outbound calls use: the value a pull worker polls
+    #: with, or serve's ``environment`` / ``IRONFLOW_ENV`` in push mode. ``None``
+    #: means no environment header is sent.
+    environment: str | None = None
 
 
 @dataclass(frozen=True)

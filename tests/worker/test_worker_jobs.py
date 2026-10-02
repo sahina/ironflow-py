@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import pytest
+
 from ironflow._http import IronflowError
 from ironflow.worker._function import function
 from ironflow.worker._step import NonRetryableError
@@ -389,3 +391,26 @@ def test_publish_step_posts_with_the_run_id(loop: asyncio.AbstractEventLoop, eng
     assert call["body"] == {"topic": "orders", "data": {"a": 1}, "idempotencyKey": "k1"}
     assert {k.lower(): v for k, v in call["headers"].items()}["x-ironflow-run-id"] == "run_1"
     assert terminal(engine)["output"] == "evt_pub_1"
+
+
+@pytest.mark.parametrize("configured,env_var,want", [
+    ("staging", "qa", "staging"),
+    (None, "qa", "qa"),
+    (None, None, "default"),
+])
+def test_run_info_carries_the_worker_environment(
+    loop: asyncio.AbstractEventLoop, engine: FakeEngine, monkeypatch: pytest.MonkeyPatch,
+    configured: str | None, env_var: str | None, want: str,
+) -> None:
+    """#2471: the run's outbound calls reuse the environment the worker polls with."""
+    if env_var is None:
+        monkeypatch.delenv("IRONFLOW_ENV", raising=False)
+    else:
+        monkeypatch.setenv("IRONFLOW_ENV", env_var)
+
+    async def h(ctx: Any) -> Any:
+        return ctx.run.environment
+
+    engine.enqueue(make_job())
+    run(loop, run_until(worker_for(engine, h, environment=configured), lambda: engine.calls("terminal")))
+    assert terminal(engine)["output"] == want
