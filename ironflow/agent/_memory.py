@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any, Protocol
 
+from .._discovery import hydrate_env_from_discovery
 from ..worker import Step
 from ._errors import AgentError
 from ._types import MemoryConfig
@@ -101,5 +102,6 @@ class _RPCBackend:
 
 
 def rpc_backend(environment: str | None = None) -> MemoryBackend | None:
+    hydrate_env_from_discovery()
     url = os.environ.get("IRONFLOW_URL") or os.environ.get("IRONFLOW_SERVER_URL")
     return _RPCBackend(url, os.environ.get("IRONFLOW_API_KEY"), environment) if url else None

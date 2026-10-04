@@ -7,6 +7,7 @@ import os
 from collections.abc import Sequence
 from typing import Any
 
+from .._discovery import hydrate_env_from_discovery
 from ._errors import AgentError, DuplicateToolError
 from ._registry import RegisteredTool, register_local, unregister_local
 from ._types import ToolDefinition
@@ -58,6 +59,7 @@ async def expose_mcp(
         seen.add(t.name)
     owns_rpc = rpc is None
     if rpc is None:
+        hydrate_env_from_discovery()
         url = server_url or os.environ.get("IRONFLOW_URL") or os.environ.get("IRONFLOW_SERVER_URL")
         if not url:
             raise AgentError("expose_mcp() requires server_url (or IRONFLOW_URL / IRONFLOW_SERVER_URL)",

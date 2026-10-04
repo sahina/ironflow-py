@@ -88,6 +88,8 @@ if TYPE_CHECKING:
         GetPausedStateResponse,
         GetProjectionRequest,
         GetProjectionResponse,
+        GetProjectionRevisionRequest,
+        GetProjectionRevisionResponse,
         GetProjectionStatusRequest,
         GetProjectionStatusResponse,
         GetRebuildJobRequest,
@@ -101,6 +103,8 @@ if TYPE_CHECKING:
         GetRunTimelineResponse,
         GetSchemaRequest,
         GetSchemaResponse,
+        GetSchemaRevisionRequest,
+        GetSchemaRevisionResponse,
         GetSnapshotRequest,
         GetSnapshotResponse,
         GetStepOutputAtRequest,
@@ -127,10 +131,14 @@ if TYPE_CHECKING:
         ListFunctionHistoryResponse,
         ListFunctionsRequest,
         ListFunctionsResponse,
+        ListProjectionHistoryRequest,
+        ListProjectionHistoryResponse,
         ListProjectionsRequest,
         ListProjectionsResponse,
         ListRunsRequest,
         ListRunsResponse,
+        ListSchemaHistoryRequest,
+        ListSchemaHistoryResponse,
         ListSchemasRequest,
         ListSchemasResponse,
         ListStreamsRequest,
@@ -455,6 +463,32 @@ class _EventSchemas:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.EventSchemaService/ListSchemaHistory
+    def list_history(
+        self,
+        request: ListSchemaHistoryRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListSchemaHistoryResponse:
+        self._owner._check_open("event_schemas.list_history")
+        return self._client.list_schema_history(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EventSchemaService/GetSchemaRevision
+    def get_revision(
+        self,
+        request: GetSchemaRevisionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetSchemaRevisionResponse:
+        self._owner._check_open("event_schemas.get_revision")
+        return self._client.get_schema_revision(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.EventSchemaService/TestUpcast
     def test_upcast(
         self,
@@ -705,6 +739,32 @@ class _Projections:
     ) -> ListProjectionsResponse:
         self._owner._check_open("projections.list")
         return self._client.list_projections(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/ListProjectionHistory
+    def list_history(
+        self,
+        request: ListProjectionHistoryRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListProjectionHistoryResponse:
+        self._owner._check_open("projections.list_history")
+        return self._client.list_projection_history(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/GetProjectionRevision
+    def get_revision(
+        self,
+        request: GetProjectionRevisionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetProjectionRevisionResponse:
+        self._owner._check_open("projections.get_revision")
+        return self._client.get_projection_revision(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
@@ -1927,6 +1987,32 @@ class _AsyncEventSchemas:
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )
 
+    # rpc: ironflow.v1.EventSchemaService/ListSchemaHistory
+    async def list_history(
+        self,
+        request: ListSchemaHistoryRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListSchemaHistoryResponse:
+        self._owner._check_open("event_schemas.list_history")
+        return await self._client.list_schema_history(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.EventSchemaService/GetSchemaRevision
+    async def get_revision(
+        self,
+        request: GetSchemaRevisionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetSchemaRevisionResponse:
+        self._owner._check_open("event_schemas.get_revision")
+        return await self._client.get_schema_revision(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
     # rpc: ironflow.v1.EventSchemaService/TestUpcast
     async def test_upcast(
         self,
@@ -2177,6 +2263,32 @@ class _AsyncProjections:
     ) -> ListProjectionsResponse:
         self._owner._check_open("projections.list")
         return await self._client.list_projections(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/ListProjectionHistory
+    async def list_history(
+        self,
+        request: ListProjectionHistoryRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ListProjectionHistoryResponse:
+        self._owner._check_open("projections.list_history")
+        return await self._client.list_projection_history(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
+
+    # rpc: ironflow.v1.ProjectionService/GetProjectionRevision
+    async def get_revision(
+        self,
+        request: GetProjectionRevisionRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> GetProjectionRevisionResponse:
+        self._owner._check_open("projections.get_revision")
+        return await self._client.get_projection_revision(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
         )

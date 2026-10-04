@@ -16,7 +16,7 @@ from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, DE
 from protobuf import DescService
 
 from . import projection_pb
-from .projection_pb import AckProjectionEventsRequest, AckProjectionEventsResponse, CancelRebuildRequest, CancelRebuildResponse, CreateSQLProjectionRequest, CreateSQLProjectionResponse, GetProjectionRequest, GetProjectionResponse, GetProjectionStatusRequest, GetProjectionStatusResponse, GetRebuildJobRequest, GetRebuildJobResponse, ListProjectionsRequest, ListProjectionsResponse, PauseProjectionRequest, PauseProjectionResponse, PollProjectionEventsRequest, PollProjectionEventsResponse, ProjectionEvent, QuerySQLProjectionRequest, QuerySQLProjectionResponse, RebuildProjectionRequest, RebuildProjectionResponse, RegisterProjectionRequest, RegisterProjectionResponse, ReportRebuildProgressRequest, ReportRebuildProgressResponse, ResumeProjectionRequest, ResumeProjectionResponse, SaveProjectionStateRequest, SaveProjectionStateResponse, StreamProjectionEventsRequest, UnregisterProjectionRequest, UnregisterProjectionResponse, WaitForEventRequest, WaitProjectionCatchupBatchRequest, WaitProjectionCatchupBatchResponse, WaitProjectionCatchupRequest, WaitProjectionCatchupResponse, WaitProjectionCatchupStreamResponse
+from .projection_pb import AckProjectionEventsRequest, AckProjectionEventsResponse, CancelRebuildRequest, CancelRebuildResponse, CreateSQLProjectionRequest, CreateSQLProjectionResponse, GetProjectionRequest, GetProjectionResponse, GetProjectionRevisionRequest, GetProjectionRevisionResponse, GetProjectionStatusRequest, GetProjectionStatusResponse, GetRebuildJobRequest, GetRebuildJobResponse, ListProjectionHistoryRequest, ListProjectionHistoryResponse, ListProjectionsRequest, ListProjectionsResponse, PauseProjectionRequest, PauseProjectionResponse, PollProjectionEventsRequest, PollProjectionEventsResponse, ProjectionEvent, QuerySQLProjectionRequest, QuerySQLProjectionResponse, RebuildProjectionRequest, RebuildProjectionResponse, RegisterProjectionRequest, RegisterProjectionResponse, ReportRebuildProgressRequest, ReportRebuildProgressResponse, ResumeProjectionRequest, ResumeProjectionResponse, SaveProjectionStateRequest, SaveProjectionStateResponse, StreamProjectionEventsRequest, UnregisterProjectionRequest, UnregisterProjectionResponse, WaitForEventRequest, WaitProjectionCatchupBatchRequest, WaitProjectionCatchupBatchResponse, WaitProjectionCatchupRequest, WaitProjectionCatchupResponse, WaitProjectionCatchupStreamResponse
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Iterable, Iterator, Mapping
@@ -28,6 +28,15 @@ if TYPE_CHECKING:
 
 
 class ProjectionService(Protocol):
+    async def list_projection_history(self, request: ListProjectionHistoryRequest, ctx: RequestContext[ListProjectionHistoryRequest, ListProjectionHistoryResponse], /) -> ListProjectionHistoryResponse:
+        """
+        Archived definitions captured before replacement or deletion.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def get_projection_revision(self, request: GetProjectionRevisionRequest, ctx: RequestContext[GetProjectionRevisionRequest, GetProjectionRevisionResponse], /) -> GetProjectionRevisionResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
     async def register_projection(self, request: RegisterProjectionRequest, ctx: RequestContext[RegisterProjectionRequest, RegisterProjectionResponse], /) -> RegisterProjectionResponse:
         """
         Registration (SDK → Server)
@@ -156,6 +165,26 @@ class ProjectionServiceASGIApplication(ConnectASGIApplication[ProjectionService]
         super().__init__(
             service=service,
             endpoints=lambda svc: {
+                "/ironflow.v1.ProjectionService/ListProjectionHistory": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ListProjectionHistory",
+                        service_name="ironflow.v1.ProjectionService",
+                        input=ListProjectionHistoryRequest,
+                        output=ListProjectionHistoryResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=svc.list_projection_history,
+                ),
+                "/ironflow.v1.ProjectionService/GetProjectionRevision": Endpoint.unary(
+                    method=MethodInfo(
+                        name="GetProjectionRevision",
+                        service_name="ironflow.v1.ProjectionService",
+                        input=GetProjectionRevisionRequest,
+                        output=GetProjectionRevisionResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=svc.get_projection_revision,
+                ),
                 "/ironflow.v1.ProjectionService/RegisterProjection": Endpoint.unary(
                     method=MethodInfo(
                         name="RegisterProjection",
@@ -380,6 +409,53 @@ class ProjectionServiceASGIApplication(ConnectASGIApplication[ProjectionService]
 
 
 class ProjectionServiceClient(ConnectClient):
+    async def list_projection_history(
+        self,
+        request: ListProjectionHistoryRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> ListProjectionHistoryResponse:
+        """
+        Archived definitions captured before replacement or deletion.
+        """
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListProjectionHistory",
+                service_name="ironflow.v1.ProjectionService",
+                input=ListProjectionHistoryRequest,
+                output=ListProjectionHistoryResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
+        )
+
+    async def get_projection_revision(
+        self,
+        request: GetProjectionRevisionRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> GetProjectionRevisionResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="GetProjectionRevision",
+                service_name="ironflow.v1.ProjectionService",
+                input=GetProjectionRevisionRequest,
+                output=GetProjectionRevisionResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
+        )
+
     async def register_projection(
         self,
         request: RegisterProjectionRequest,
@@ -858,6 +934,15 @@ class ProjectionServiceClient(ConnectClient):
         )
 
 class ProjectionServiceSync(Protocol):
+    def list_projection_history(self, request: ListProjectionHistoryRequest, ctx: RequestContext[ListProjectionHistoryRequest, ListProjectionHistoryResponse], /) -> ListProjectionHistoryResponse:
+        """
+        Archived definitions captured before replacement or deletion.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def get_projection_revision(self, request: GetProjectionRevisionRequest, ctx: RequestContext[GetProjectionRevisionRequest, GetProjectionRevisionResponse], /) -> GetProjectionRevisionResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
     def register_projection(self, request: RegisterProjectionRequest, ctx: RequestContext[RegisterProjectionRequest, RegisterProjectionResponse], /) -> RegisterProjectionResponse:
         """
         Registration (SDK → Server)
@@ -984,6 +1069,26 @@ class ProjectionServiceWSGIApplication(ConnectWSGIApplication):
     ) -> None:
         super().__init__(
             endpoints={
+                "/ironflow.v1.ProjectionService/ListProjectionHistory": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ListProjectionHistory",
+                        service_name="ironflow.v1.ProjectionService",
+                        input=ListProjectionHistoryRequest,
+                        output=ListProjectionHistoryResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=service.list_projection_history,
+                ),
+                "/ironflow.v1.ProjectionService/GetProjectionRevision": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="GetProjectionRevision",
+                        service_name="ironflow.v1.ProjectionService",
+                        input=GetProjectionRevisionRequest,
+                        output=GetProjectionRevisionResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=service.get_projection_revision,
+                ),
                 "/ironflow.v1.ProjectionService/RegisterProjection": EndpointSync.unary(
                     method=MethodInfo(
                         name="RegisterProjection",
@@ -1208,6 +1313,51 @@ class ProjectionServiceWSGIApplication(ConnectWSGIApplication):
 
 
 class ProjectionServiceClientSync(ConnectClientSync):
+    def list_projection_history(
+        self,
+        request: ListProjectionHistoryRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> ListProjectionHistoryResponse:
+        """
+        Archived definitions captured before replacement or deletion.
+        """
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListProjectionHistory",
+                service_name="ironflow.v1.ProjectionService",
+                input=ListProjectionHistoryRequest,
+                output=ListProjectionHistoryResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
+        )
+    def get_projection_revision(
+        self,
+        request: GetProjectionRevisionRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> GetProjectionRevisionResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="GetProjectionRevision",
+                service_name="ironflow.v1.ProjectionService",
+                input=GetProjectionRevisionRequest,
+                output=GetProjectionRevisionResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
+        )
     def register_projection(
         self,
         request: RegisterProjectionRequest,

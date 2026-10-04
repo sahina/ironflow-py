@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from importlib import metadata
 from typing import TYPE_CHECKING, Any
 
+from .._discovery import hydrate_env_from_discovery
 from .._http import DEFAULT_SERVER_URL, IronflowError
 from ._checkpoint import Checkpointer
 from ._duration import Duration, iso_utc, to_seconds
@@ -84,6 +85,7 @@ class Worker:
         self._labels = dict(labels or {})
         self._log = logger or logging.getLogger("ironflow.worker")
         self._upcasters = upcasters
+        hydrate_env_from_discovery()
         self._transport = Transport(
             server_url or os.environ.get("IRONFLOW_SERVER_URL") or DEFAULT_SERVER_URL,
             api_key or os.environ.get("IRONFLOW_API_KEY") or None,

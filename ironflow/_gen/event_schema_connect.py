@@ -16,7 +16,7 @@ from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, DE
 from protobuf import DescService
 
 from . import event_schema_pb
-from .event_schema_pb import CheckEnforcementRequest, CheckEnforcementResponse, DeleteSchemaRequest, DeleteSchemaResponse, GetSchemaRequest, GetSchemaResponse, ListSchemasRequest, ListSchemasResponse, RegisterSchemaRequest, RegisterSchemaResponse, TestUpcastRequest, TestUpcastResponse
+from .event_schema_pb import CheckEnforcementRequest, CheckEnforcementResponse, DeleteSchemaRequest, DeleteSchemaResponse, GetSchemaRequest, GetSchemaResponse, GetSchemaRevisionRequest, GetSchemaRevisionResponse, ListSchemaHistoryRequest, ListSchemaHistoryResponse, ListSchemasRequest, ListSchemasResponse, RegisterSchemaRequest, RegisterSchemaResponse, TestUpcastRequest, TestUpcastResponse
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable, Mapping
@@ -28,6 +28,15 @@ if TYPE_CHECKING:
 
 
 class EventSchemaService(Protocol):
+    async def list_schema_history(self, request: ListSchemaHistoryRequest, ctx: RequestContext[ListSchemaHistoryRequest, ListSchemaHistoryResponse], /) -> ListSchemaHistoryResponse:
+        """
+        Archived definitions captured before replacement or deletion.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def get_schema_revision(self, request: GetSchemaRevisionRequest, ctx: RequestContext[GetSchemaRevisionRequest, GetSchemaRevisionResponse], /) -> GetSchemaRevisionResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
     async def register_schema(self, request: RegisterSchemaRequest, ctx: RequestContext[RegisterSchemaRequest, RegisterSchemaResponse], /) -> RegisterSchemaResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -73,6 +82,26 @@ class EventSchemaServiceASGIApplication(ConnectASGIApplication[EventSchemaServic
         super().__init__(
             service=service,
             endpoints=lambda svc: {
+                "/ironflow.v1.EventSchemaService/ListSchemaHistory": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ListSchemaHistory",
+                        service_name="ironflow.v1.EventSchemaService",
+                        input=ListSchemaHistoryRequest,
+                        output=ListSchemaHistoryResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=svc.list_schema_history,
+                ),
+                "/ironflow.v1.EventSchemaService/GetSchemaRevision": Endpoint.unary(
+                    method=MethodInfo(
+                        name="GetSchemaRevision",
+                        service_name="ironflow.v1.EventSchemaService",
+                        input=GetSchemaRevisionRequest,
+                        output=GetSchemaRevisionResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=svc.get_schema_revision,
+                ),
                 "/ironflow.v1.EventSchemaService/RegisterSchema": Endpoint.unary(
                     method=MethodInfo(
                         name="RegisterSchema",
@@ -147,6 +176,53 @@ class EventSchemaServiceASGIApplication(ConnectASGIApplication[EventSchemaServic
 
 
 class EventSchemaServiceClient(ConnectClient):
+    async def list_schema_history(
+        self,
+        request: ListSchemaHistoryRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> ListSchemaHistoryResponse:
+        """
+        Archived definitions captured before replacement or deletion.
+        """
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListSchemaHistory",
+                service_name="ironflow.v1.EventSchemaService",
+                input=ListSchemaHistoryRequest,
+                output=ListSchemaHistoryResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
+        )
+
+    async def get_schema_revision(
+        self,
+        request: GetSchemaRevisionRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> GetSchemaRevisionResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="GetSchemaRevision",
+                service_name="ironflow.v1.EventSchemaService",
+                input=GetSchemaRevisionRequest,
+                output=GetSchemaRevisionResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
+        )
+
     async def register_schema(
         self,
         request: RegisterSchemaRequest,
@@ -285,6 +361,15 @@ class EventSchemaServiceClient(ConnectClient):
         )
 
 class EventSchemaServiceSync(Protocol):
+    def list_schema_history(self, request: ListSchemaHistoryRequest, ctx: RequestContext[ListSchemaHistoryRequest, ListSchemaHistoryResponse], /) -> ListSchemaHistoryResponse:
+        """
+        Archived definitions captured before replacement or deletion.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def get_schema_revision(self, request: GetSchemaRevisionRequest, ctx: RequestContext[GetSchemaRevisionRequest, GetSchemaRevisionResponse], /) -> GetSchemaRevisionResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
     def register_schema(self, request: RegisterSchemaRequest, ctx: RequestContext[RegisterSchemaRequest, RegisterSchemaResponse], /) -> RegisterSchemaResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -328,6 +413,26 @@ class EventSchemaServiceWSGIApplication(ConnectWSGIApplication):
     ) -> None:
         super().__init__(
             endpoints={
+                "/ironflow.v1.EventSchemaService/ListSchemaHistory": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ListSchemaHistory",
+                        service_name="ironflow.v1.EventSchemaService",
+                        input=ListSchemaHistoryRequest,
+                        output=ListSchemaHistoryResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=service.list_schema_history,
+                ),
+                "/ironflow.v1.EventSchemaService/GetSchemaRevision": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="GetSchemaRevision",
+                        service_name="ironflow.v1.EventSchemaService",
+                        input=GetSchemaRevisionRequest,
+                        output=GetSchemaRevisionResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=service.get_schema_revision,
+                ),
                 "/ironflow.v1.EventSchemaService/RegisterSchema": EndpointSync.unary(
                     method=MethodInfo(
                         name="RegisterSchema",
@@ -402,6 +507,51 @@ class EventSchemaServiceWSGIApplication(ConnectWSGIApplication):
 
 
 class EventSchemaServiceClientSync(ConnectClientSync):
+    def list_schema_history(
+        self,
+        request: ListSchemaHistoryRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> ListSchemaHistoryResponse:
+        """
+        Archived definitions captured before replacement or deletion.
+        """
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListSchemaHistory",
+                service_name="ironflow.v1.EventSchemaService",
+                input=ListSchemaHistoryRequest,
+                output=ListSchemaHistoryResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
+        )
+    def get_schema_revision(
+        self,
+        request: GetSchemaRevisionRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> GetSchemaRevisionResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="GetSchemaRevision",
+                service_name="ironflow.v1.EventSchemaService",
+                input=GetSchemaRevisionRequest,
+                output=GetSchemaRevisionResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
+        )
     def register_schema(
         self,
         request: RegisterSchemaRequest,

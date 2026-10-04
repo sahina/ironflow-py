@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
+from .._discovery import hydrate_env_from_discovery
 from ..worker._function import Function
 from ._handler import handle, index_functions
 from ._response import env
@@ -23,6 +24,7 @@ def serve(
     upcasters: UpcasterRegistry | None = None, webhooks: Sequence[Webhook] = (),
     server_url: str | None = None, api_key: str | None = None, environment: str | None = None,
 ) -> ASGIApp:
+    hydrate_env_from_discovery()
     fns = list(index_functions(functions).values())
     hooks = list(webhooks)
     if len({h.id for h in hooks}) != len(hooks):

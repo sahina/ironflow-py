@@ -77,8 +77,8 @@ def test_ledger_is_readable() -> None:
     the failure mode ADR 0059 exists to prevent, reproduced in a test file.
     """
     rows = ledger_rows()
-    assert len(rows) == 97, f"expected 97 classified rows, parsed {len(rows)}"
-    assert sum(1 for c, _, _ in rows if c == "rpc") == 93
+    assert len(rows) == 101, f"expected 101 classified rows, parsed {len(rows)}"
+    assert sum(1 for c, _, _ in rows if c == "rpc") == 97
     assert sum(1 for c, _, _ in rows if c == "stream") == 4
 
 

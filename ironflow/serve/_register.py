@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from .._discovery import hydrate_env_from_discovery
 from .._http import DEFAULT_SERVER_URL, IronflowError
 from ..worker._function import Function, registration_body
 from ..worker._transport import Transport
@@ -15,6 +16,7 @@ async def register(
     api_key: str | None = None, environment: str | None = None,
 ) -> None:
     """Register ``functions`` as push functions served at ``endpoint_url``. Call once per deploy."""
+    hydrate_env_from_discovery()
     transport = Transport(
         env(server_url, "IRONFLOW_SERVER_URL") or DEFAULT_SERVER_URL,
         env(api_key, "IRONFLOW_API_KEY"),

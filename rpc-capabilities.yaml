@@ -64,7 +64,7 @@
 # edit, not two.
 expect:
   rest: 4
-  rpc: 93
+  rpc: 97
   stream: 4
   unsupported: 1
 
@@ -256,6 +256,14 @@ rpcs:
     classification: rpc
     capability: projections
     method: list
+  - path: ironflow.v1.ProjectionService/ListProjectionHistory
+    classification: rpc
+    capability: projections
+    method: list_history
+  - path: ironflow.v1.ProjectionService/GetProjectionRevision
+    classification: rpc
+    capability: projections
+    method: get_revision
   - path: ironflow.v1.ProjectionService/GetProjectionStatus
     classification: rpc
     capability: projections
@@ -357,6 +365,14 @@ rpcs:
     classification: rpc
     capability: event_schemas
     method: delete
+  - path: ironflow.v1.EventSchemaService/ListSchemaHistory
+    classification: rpc
+    capability: event_schemas
+    method: list_history
+  - path: ironflow.v1.EventSchemaService/GetSchemaRevision
+    classification: rpc
+    capability: event_schemas
+    method: get_revision
   - path: ironflow.v1.EventSchemaService/TestUpcast
     classification: rpc
     capability: event_schemas

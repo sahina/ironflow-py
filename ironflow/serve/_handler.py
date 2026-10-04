@@ -14,6 +14,7 @@ import logging
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+from .._discovery import hydrate_env_from_discovery
 from ..worker._function import Function
 from ..worker._protocol import CompletedStep
 from ..worker._publish import bind_publish
@@ -80,6 +81,7 @@ async def handle(
     webhooks: Sequence[Webhook] = (), server_url: str | None = None, api_key: str | None = None,
     environment: str | None = None,
 ) -> Response:
+    hydrate_env_from_discovery()
     if method != "POST":
         return error_response(405, "METHOD_NOT_ALLOWED", "only POST is allowed")
     headers = {k.lower(): v for k, v in headers.items()}

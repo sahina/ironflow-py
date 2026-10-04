@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from protobuf.wkt import Struct, Timestamp, Value
 
 
-_RegisterSchemaRequestFields: TypeAlias = Literal["event_name", "version", "schema_json", "description"]
+_RegisterSchemaRequestFields: TypeAlias = Literal["event_name", "version", "schema_json", "description", "change_reason"]
 
 class RegisterSchemaRequest(Message[_RegisterSchemaRequestFields]):
     """
@@ -44,9 +44,13 @@ class RegisterSchemaRequest(Message[_RegisterSchemaRequestFields]):
             ```proto
             string description = 4;
             ```
+        change_reason:
+            ```proto
+            string change_reason = 5;
+            ```
     """
 
-    __slots__ = ("event_name", "version", "schema_json", "description")
+    __slots__ = ("event_name", "version", "schema_json", "description", "change_reason")
 
     if TYPE_CHECKING:
 
@@ -57,6 +61,7 @@ class RegisterSchemaRequest(Message[_RegisterSchemaRequestFields]):
             version: int = 0,
             schema_json: str = "",
             description: str = "",
+            change_reason: str = "",
         ) -> None:
             pass
 
@@ -64,6 +69,7 @@ class RegisterSchemaRequest(Message[_RegisterSchemaRequestFields]):
         version: int
         schema_json: str
         description: str
+        change_reason: str
 
 _RegisterSchemaResponseFields: TypeAlias = Literal["status"]
 
@@ -75,10 +81,7 @@ class RegisterSchemaResponse(Message[_RegisterSchemaResponseFields]):
 
     Attributes:
         status:
-            "created" or "updated". Advisory only: the server reads before the upsert
-            rather than deriving this from it, so concurrent registrations of the same
-            (event_name, version) can both report "created". The write is still
-            correct — last one wins. Display it; do not branch on it. (#1958)
+            "created" or "updated", determined inside the registration transaction.
 
             ```proto
             string status = 1;
@@ -328,7 +331,7 @@ class SchemaInfo(Message[_SchemaInfoFields]):
         schema_json: str
         environment_id: str
 
-_DeleteSchemaRequestFields: TypeAlias = Literal["event_name", "version"]
+_DeleteSchemaRequestFields: TypeAlias = Literal["event_name", "version", "change_reason"]
 
 class DeleteSchemaRequest(Message[_DeleteSchemaRequestFields]):
     """
@@ -345,9 +348,13 @@ class DeleteSchemaRequest(Message[_DeleteSchemaRequestFields]):
             ```proto
             int32 version = 2;
             ```
+        change_reason:
+            ```proto
+            string change_reason = 3;
+            ```
     """
 
-    __slots__ = ("event_name", "version")
+    __slots__ = ("event_name", "version", "change_reason")
 
     if TYPE_CHECKING:
 
@@ -356,11 +363,13 @@ class DeleteSchemaRequest(Message[_DeleteSchemaRequestFields]):
             *,
             event_name: str = "",
             version: int = 0,
+            change_reason: str = "",
         ) -> None:
             pass
 
         event_name: str
         version: int
+        change_reason: str
 
 _DeleteSchemaResponseFields: TypeAlias = NoReturn
 
@@ -744,9 +753,295 @@ class SchemaTraffic(Message[_SchemaTrafficFields]):
         schema_hash: str
         count: int
 
+_ListSchemaHistoryRequestFields: TypeAlias = Literal["event_name", "version", "limit", "before_revision"]
+
+class ListSchemaHistoryRequest(Message[_ListSchemaHistoryRequestFields]):
+    """
+    History revisions identify pre-change snapshots, not the current definition.
+
+    ```proto
+    message ironflow.v1.ListSchemaHistoryRequest
+    ```
+
+    Attributes:
+        event_name:
+            ```proto
+            string event_name = 1;
+            ```
+        version:
+            Required positive schema version; independent of revision.
+
+            ```proto
+            int32 version = 2;
+            ```
+        limit:
+            0 = 50, maximum 200; negative values are invalid.
+
+            ```proto
+            int32 limit = 3;
+            ```
+        before_revision:
+            Exclusive cursor; 0 starts at the newest revision.
+
+            ```proto
+            int64 before_revision = 4;
+            ```
+    """
+
+    __slots__ = ("event_name", "version", "limit", "before_revision")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            event_name: str = "",
+            version: int = 0,
+            limit: int = 0,
+            before_revision: int = 0,
+        ) -> None:
+            pass
+
+        event_name: str
+        version: int
+        limit: int
+        before_revision: int
+
+_ListSchemaHistoryResponseFields: TypeAlias = Literal["entries", "has_more", "next_before_revision"]
+
+class ListSchemaHistoryResponse(Message[_ListSchemaHistoryResponseFields]):
+    """
+    ```proto
+    message ironflow.v1.ListSchemaHistoryResponse
+    ```
+
+    Attributes:
+        entries:
+            ```proto
+            repeated ironflow.v1.SchemaHistoryEntry entries = 1;
+            ```
+        has_more:
+            ```proto
+            bool has_more = 2;
+            ```
+        next_before_revision:
+            0 when exhausted.
+
+            ```proto
+            int64 next_before_revision = 3;
+            ```
+    """
+
+    __slots__ = ("entries", "has_more", "next_before_revision")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            entries: list[SchemaHistoryEntry] | None = None,
+            has_more: bool = False,
+            next_before_revision: int = 0,
+        ) -> None:
+            pass
+
+        entries: list[SchemaHistoryEntry]
+        has_more: bool
+        next_before_revision: int
+
+_GetSchemaRevisionRequestFields: TypeAlias = Literal["event_name", "version", "revision"]
+
+class GetSchemaRevisionRequest(Message[_GetSchemaRevisionRequestFields]):
+    """
+    ```proto
+    message ironflow.v1.GetSchemaRevisionRequest
+    ```
+
+    Attributes:
+        event_name:
+            ```proto
+            string event_name = 1;
+            ```
+        version:
+            Required positive schema version; independent of revision.
+
+            ```proto
+            int32 version = 2;
+            ```
+        revision:
+            Required positive history revision; exact match only.
+
+            ```proto
+            int64 revision = 3;
+            ```
+    """
+
+    __slots__ = ("event_name", "version", "revision")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            event_name: str = "",
+            version: int = 0,
+            revision: int = 0,
+        ) -> None:
+            pass
+
+        event_name: str
+        version: int
+        revision: int
+
+_GetSchemaRevisionResponseFields: TypeAlias = Literal["entry"]
+
+class GetSchemaRevisionResponse(Message[_GetSchemaRevisionResponseFields]):
+    """
+    ```proto
+    message ironflow.v1.GetSchemaRevisionResponse
+    ```
+
+    Attributes:
+        entry:
+            ```proto
+            optional ironflow.v1.SchemaHistoryEntry entry = 1;
+            ```
+    """
+
+    __slots__ = ("entry",)
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            entry: SchemaHistoryEntry | None = None,
+        ) -> None:
+            pass
+
+        entry: SchemaHistoryEntry | None
+
+_SchemaHistoryEntryFields: TypeAlias = Literal["event_id", "revision", "previous_definition", "actor_id", "change_reason", "change_type", "recorded_at"]
+
+class SchemaHistoryEntry(Message[_SchemaHistoryEntryFields]):
+    """
+    ```proto
+    message ironflow.v1.SchemaHistoryEntry
+    ```
+
+    Attributes:
+        event_id:
+            ```proto
+            string event_id = 1;
+            ```
+        revision:
+            ```proto
+            int64 revision = 2;
+            ```
+        previous_definition:
+            ```proto
+            optional ironflow.v1.SchemaDefinition previous_definition = 3;
+            ```
+        actor_id:
+            Actor of the mutation that archived the definition.
+
+            ```proto
+            string actor_id = 4;
+            ```
+        change_reason:
+            ```proto
+            string change_reason = 5;
+            ```
+        change_type:
+            ```proto
+            string change_type = 6;
+            ```
+        recorded_at:
+            ```proto
+            optional google.protobuf.Timestamp recorded_at = 7;
+            ```
+    """
+
+    __slots__ = ("event_id", "revision", "previous_definition", "actor_id", "change_reason", "change_type", "recorded_at")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            event_id: str = "",
+            revision: int = 0,
+            previous_definition: SchemaDefinition | None = None,
+            actor_id: str = "",
+            change_reason: str = "",
+            change_type: str = "",
+            recorded_at: Timestamp | None = None,
+        ) -> None:
+            pass
+
+        event_id: str
+        revision: int
+        previous_definition: SchemaDefinition | None
+        actor_id: str
+        change_reason: str
+        change_type: str
+        recorded_at: Timestamp | None
+
+_SchemaDefinitionFields: TypeAlias = Literal["event_name", "environment_id", "version", "schema_json", "description"]
+
+class SchemaDefinition(Message[_SchemaDefinitionFields]):
+    """
+    ```proto
+    message ironflow.v1.SchemaDefinition
+    ```
+
+    Attributes:
+        event_name:
+            ```proto
+            string event_name = 1;
+            ```
+        environment_id:
+            ```proto
+            string environment_id = 2;
+            ```
+        version:
+            ```proto
+            int32 version = 3;
+            ```
+        schema_json:
+            ```proto
+            string schema_json = 4;
+            ```
+        description:
+            ```proto
+            string description = 5;
+            ```
+    """
+
+    __slots__ = ("event_name", "environment_id", "version", "schema_json", "description")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            event_name: str = "",
+            environment_id: str = "",
+            version: int = 0,
+            schema_json: str = "",
+            description: str = "",
+        ) -> None:
+            pass
+
+        event_name: str
+        environment_id: str
+        version: int
+        schema_json: str
+        description: str
+
 
 _DESC = file_desc(
-    b'\n\x1eironflow/v1/event_schema.proto\x12\x0bironflow.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\x93\x01\n\x15RegisterSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x1f\n\x0bschema_json\x18\x03 \x01(\tR\nschemaJson\x12 \n\x0bdescription\x18\x04 \x01(\tR\x0bdescription"0\n\x16RegisterSchemaResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status"K\n\x10GetSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version"\xf1\x01\n\x11GetSchemaResponse\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x1f\n\x0bschema_json\x18\x03 \x01(\tR\nschemaJson\x12 \n\x0bdescription\x18\x04 \x01(\tR\x0bdescription\x129\n\ncreated_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x12%\n\x0eenvironment_id\x18\x06 \x01(\tR\renvironmentId"a\n\x12ListSchemasRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x03 \x01(\x05R\x06offset"i\n\x13ListSchemasResponse\x121\n\x07schemas\x18\x01 \x03(\x0b2\x17.ironflow.v1.SchemaInfoR\x07schemas\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\xea\x01\n\nSchemaInfo\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription\x129\n\ncreated_at\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1f\n\x0bschema_json\x18\x05 \x01(\tR\nschemaJson\x12%\n\x0eenvironment_id\x18\x06 \x01(\tR\renvironmentId"N\n\x13DeleteSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version"\x16\n\x14DeleteSchemaResponse"\xd8\x01\n\x11TestUpcastRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12!\n\x0cfrom_version\x18\x02 \x01(\x05R\x0bfromVersion\x12\x1d\n\nto_version\x18\x03 \x01(\x05R\ttoVersion\x12+\n\x04data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x05 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue"\xb6\x01\n\x12TestUpcastResponse\x12+\n\x04data\x18\x01 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x03 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12<\n\rsteps_applied\x18\x02 \x03(\x0b2\x17.ironflow.v1.UpcastStepR\x0cstepsApplied"p\n\nUpcastStep\x12!\n\x0cfrom_version\x18\x01 \x01(\x05R\x0bfromVersion\x12\x1d\n\nto_version\x18\x02 \x01(\x05R\ttoVersion\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription"j\n\x17CheckEnforcementRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x120\n\x14traffic_window_hours\x18\x02 \x01(\x05R\x12trafficWindowHours"\xb9\x01\n\x18CheckEnforcementResponse\x12\x12\n\x04mode\x18\x01 \x01(\tR\x04mode\x122\n\x07schemas\x18\x02 \x03(\x0b2\x18.ironflow.v1.SchemaCheckR\x07schemas\x120\n\x14traffic_window_hours\x18\x03 \x01(\x05R\x12trafficWindowHours\x12#\n\rtotal_schemas\x18\x04 \x01(\x05R\x0ctotalSchemas"\x89\x02\n\x0bSchemaCheck\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x1f\n\x0bschema_hash\x18\x03 \x01(\tR\nschemaHash\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x18\n\x07asserts\x18\x04 \x01(\x08R\x07asserts\x12#\n\rcompile_error\x18\x05 \x01(\tR\x0ccompileError\x124\n\x07traffic\x18\x06 \x03(\x0b2\x1a.ironflow.v1.SchemaTrafficR\x07traffic\x12+\n\x11traffic_truncated\x18\x07 \x01(\x08R\x10trafficTruncated"`\n\rSchemaTraffic\x12\x18\n\x07version\x18\x01 \x01(\x05R\x07version\x12\x1f\n\x0bschema_hash\x18\x02 \x01(\tR\nschemaHash\x12\x14\n\x05count\x18\x03 \x01(\x03R\x05count2\xa6\x04\n\x12EventSchemaService\x12Y\n\x0eRegisterSchema\x12".ironflow.v1.RegisterSchemaRequest\x1a#.ironflow.v1.RegisterSchemaResponse\x12O\n\tGetSchema\x12\x1d.ironflow.v1.GetSchemaRequest\x1a\x1e.ironflow.v1.GetSchemaResponse"\x03\x90\x02\x01\x12U\n\x0bListSchemas\x12\x1f.ironflow.v1.ListSchemasRequest\x1a .ironflow.v1.ListSchemasResponse"\x03\x90\x02\x01\x12S\n\x0cDeleteSchema\x12 .ironflow.v1.DeleteSchemaRequest\x1a!.ironflow.v1.DeleteSchemaResponse\x12R\n\nTestUpcast\x12\x1e.ironflow.v1.TestUpcastRequest\x1a\x1f.ironflow.v1.TestUpcastResponse"\x03\x90\x02\x01\x12d\n\x10CheckEnforcement\x12$.ironflow.v1.CheckEnforcementRequest\x1a%.ironflow.v1.CheckEnforcementResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x1eironflow/v1/event_schema.proto\x12\x0bironflow.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xb8\x01\n\x15RegisterSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x1f\n\x0bschema_json\x18\x03 \x01(\tR\nschemaJson\x12 \n\x0bdescription\x18\x04 \x01(\tR\x0bdescription\x12#\n\rchange_reason\x18\x05 \x01(\tR\x0cchangeReason"0\n\x16RegisterSchemaResponse\x12\x16\n\x06status\x18\x01 \x01(\tR\x06status"K\n\x10GetSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version"\xf1\x01\n\x11GetSchemaResponse\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x1f\n\x0bschema_json\x18\x03 \x01(\tR\nschemaJson\x12 \n\x0bdescription\x18\x04 \x01(\tR\x0bdescription\x129\n\ncreated_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x12%\n\x0eenvironment_id\x18\x06 \x01(\tR\renvironmentId"a\n\x12ListSchemasRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x03 \x01(\x05R\x06offset"i\n\x13ListSchemasResponse\x121\n\x07schemas\x18\x01 \x03(\x0b2\x17.ironflow.v1.SchemaInfoR\x07schemas\x12\x1f\n\x0btotal_count\x18\x02 \x01(\x05R\ntotalCount"\xea\x01\n\nSchemaInfo\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription\x129\n\ncreated_at\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1f\n\x0bschema_json\x18\x05 \x01(\tR\nschemaJson\x12%\n\x0eenvironment_id\x18\x06 \x01(\tR\renvironmentId"s\n\x13DeleteSchemaRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12#\n\rchange_reason\x18\x03 \x01(\tR\x0cchangeReason"\x16\n\x14DeleteSchemaResponse"\xd8\x01\n\x11TestUpcastRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12!\n\x0cfrom_version\x18\x02 \x01(\x05R\x0bfromVersion\x12\x1d\n\nto_version\x18\x03 \x01(\x05R\ttoVersion\x12+\n\x04data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x05 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue"\xb6\x01\n\x12TestUpcastResponse\x12+\n\x04data\x18\x01 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x03 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12<\n\rsteps_applied\x18\x02 \x03(\x0b2\x17.ironflow.v1.UpcastStepR\x0cstepsApplied"p\n\nUpcastStep\x12!\n\x0cfrom_version\x18\x01 \x01(\x05R\x0bfromVersion\x12\x1d\n\nto_version\x18\x02 \x01(\x05R\ttoVersion\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription"j\n\x17CheckEnforcementRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x120\n\x14traffic_window_hours\x18\x02 \x01(\x05R\x12trafficWindowHours"\xb9\x01\n\x18CheckEnforcementResponse\x12\x12\n\x04mode\x18\x01 \x01(\tR\x04mode\x122\n\x07schemas\x18\x02 \x03(\x0b2\x18.ironflow.v1.SchemaCheckR\x07schemas\x120\n\x14traffic_window_hours\x18\x03 \x01(\x05R\x12trafficWindowHours\x12#\n\rtotal_schemas\x18\x04 \x01(\x05R\x0ctotalSchemas"\x89\x02\n\x0bSchemaCheck\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x1f\n\x0bschema_hash\x18\x03 \x01(\tR\nschemaHash\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x18\n\x07asserts\x18\x04 \x01(\x08R\x07asserts\x12#\n\rcompile_error\x18\x05 \x01(\tR\x0ccompileError\x124\n\x07traffic\x18\x06 \x03(\x0b2\x1a.ironflow.v1.SchemaTrafficR\x07traffic\x12+\n\x11traffic_truncated\x18\x07 \x01(\x08R\x10trafficTruncated"`\n\rSchemaTraffic\x12\x18\n\x07version\x18\x01 \x01(\x05R\x07version\x12\x1f\n\x0bschema_hash\x18\x02 \x01(\tR\nschemaHash\x12\x14\n\x05count\x18\x03 \x01(\x03R\x05count"\x92\x01\n\x18ListSchemaHistoryRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\'\n\x0fbefore_revision\x18\x04 \x01(\x03R\x0ebeforeRevision"\xa3\x01\n\x19ListSchemaHistoryResponse\x129\n\x07entries\x18\x01 \x03(\x0b2\x1f.ironflow.v1.SchemaHistoryEntryR\x07entries\x12\x19\n\x08has_more\x18\x02 \x01(\x08R\x07hasMore\x120\n\x14next_before_revision\x18\x03 \x01(\x03R\x12nextBeforeRevision"o\n\x18GetSchemaRevisionRequest\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12\x18\n\x07version\x18\x02 \x01(\x05R\x07version\x12\x1a\n\x08revision\x18\x03 \x01(\x03R\x08revision"R\n\x19GetSchemaRevisionResponse\x125\n\x05entry\x18\x01 \x01(\x0b2\x1f.ironflow.v1.SchemaHistoryEntryR\x05entry"\xb9\x02\n\x12SchemaHistoryEntry\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12\x1a\n\x08revision\x18\x02 \x01(\x03R\x08revision\x12N\n\x13previous_definition\x18\x03 \x01(\x0b2\x1d.ironflow.v1.SchemaDefinitionR\x12previousDefinition\x12\x19\n\x08actor_id\x18\x04 \x01(\tR\x07actorId\x12#\n\rchange_reason\x18\x05 \x01(\tR\x0cchangeReason\x12\x1f\n\x0bchange_type\x18\x06 \x01(\tR\nchangeType\x12;\n\x0brecorded_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\nrecordedAt"\xb5\x01\n\x10SchemaDefinition\x12\x1d\n\nevent_name\x18\x01 \x01(\tR\teventName\x12%\n\x0eenvironment_id\x18\x02 \x01(\tR\renvironmentId\x12\x18\n\x07version\x18\x03 \x01(\x05R\x07version\x12\x1f\n\x0bschema_json\x18\x04 \x01(\tR\nschemaJson\x12 \n\x0bdescription\x18\x05 \x01(\tR\x0bdescription2\xf8\x05\n\x12EventSchemaService\x12g\n\x11ListSchemaHistory\x12%.ironflow.v1.ListSchemaHistoryRequest\x1a&.ironflow.v1.ListSchemaHistoryResponse"\x03\x90\x02\x01\x12g\n\x11GetSchemaRevision\x12%.ironflow.v1.GetSchemaRevisionRequest\x1a&.ironflow.v1.GetSchemaRevisionResponse"\x03\x90\x02\x01\x12Y\n\x0eRegisterSchema\x12".ironflow.v1.RegisterSchemaRequest\x1a#.ironflow.v1.RegisterSchemaResponse\x12O\n\tGetSchema\x12\x1d.ironflow.v1.GetSchemaRequest\x1a\x1e.ironflow.v1.GetSchemaResponse"\x03\x90\x02\x01\x12U\n\x0bListSchemas\x12\x1f.ironflow.v1.ListSchemasRequest\x1a .ironflow.v1.ListSchemasResponse"\x03\x90\x02\x01\x12S\n\x0cDeleteSchema\x12 .ironflow.v1.DeleteSchemaRequest\x1a!.ironflow.v1.DeleteSchemaResponse\x12R\n\nTestUpcast\x12\x1e.ironflow.v1.TestUpcastRequest\x1a\x1f.ironflow.v1.TestUpcastResponse"\x03\x90\x02\x01\x12d\n\x10CheckEnforcement\x12$.ironflow.v1.CheckEnforcementRequest\x1a%.ironflow.v1.CheckEnforcementResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         struct_pb.desc(),
         timestamp_pb.desc(),
@@ -768,6 +1063,12 @@ _DESC = file_desc(
         "CheckEnforcementResponse": CheckEnforcementResponse,
         "SchemaCheck": SchemaCheck,
         "SchemaTraffic": SchemaTraffic,
+        "ListSchemaHistoryRequest": ListSchemaHistoryRequest,
+        "ListSchemaHistoryResponse": ListSchemaHistoryResponse,
+        "GetSchemaRevisionRequest": GetSchemaRevisionRequest,
+        "GetSchemaRevisionResponse": GetSchemaRevisionResponse,
+        "SchemaHistoryEntry": SchemaHistoryEntry,
+        "SchemaDefinition": SchemaDefinition,
     },
 )
 

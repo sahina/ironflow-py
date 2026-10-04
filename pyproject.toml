@@ -16,7 +16,7 @@ build-backend = "hatchling.build"
 # SemVer (`0.33.0-mirror.1`) and not valid PEP 440, so writing one here would
 # make hatchling reject the file on a branch where nothing Python changed.
 name = "ironflow-py"
-version = "0.41.0"
+version = "0.42.0"
 description = "Ironflow Python SDK — event-driven backend platform client"
 readme = "README.md"
 license = "LicenseRef-Ironflow-EULA"
