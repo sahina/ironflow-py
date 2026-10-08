@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._http import IronflowError, _status_is_retryable
+from .._http import IronflowError, _error_retryable
 from ._step import PublishFn
 from ._transport import Transport
 
@@ -30,7 +30,7 @@ def bind_publish(transport: Transport, run_id: str) -> PublishFn:
             message = payload.get("message") or f"HTTP {reply.status}"
             raise IronflowError(
                 f"publish to {topic!r} failed: {message}", status_code=reply.status,
-                code=payload.get("code") or "PUBLISH_FAILED", retryable=_status_is_retryable(reply.status),
+                code=payload.get("code") or "PUBLISH_FAILED", retryable=_error_retryable(reply.status, payload),
             )
         event_id = payload.get("eventId")
         if not isinstance(event_id, str) or not event_id:

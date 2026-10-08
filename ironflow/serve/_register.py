@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from .._discovery import hydrate_env_from_discovery
-from .._http import DEFAULT_SERVER_URL, IronflowError
+from .._http import DEFAULT_SERVER_URL, IronflowError, _error_retryable
 from ..worker._function import Function, registration_body
 from ..worker._transport import Transport
 from ._handler import index_functions
@@ -29,4 +29,4 @@ async def register(
             # Known limit: Reply.error_code reads a string, Connect errors are {code, message}.
             raise IronflowError(f"register function {fn.id} failed: {reply.status} {reply.body}",
                                 status_code=reply.status, code=reply.error_code,
-                                retryable=reply.status >= 500)
+                                retryable=_error_retryable(reply.status, reply.body))

@@ -13,7 +13,7 @@ from email.utils import format_datetime
 import pytest
 
 from ironflow import IronflowClient
-from ironflow._http import IronflowError
+from ironflow._http import IronflowError, _status_is_retryable
 from tests.harness import Response
 
 
@@ -112,6 +112,44 @@ class TestNonRetryable:
         server.script(Response(status=status), Response(status=200, body={"ok": 1}))
         assert client(server).events_list() == {"ok": 1}
         assert len(server.requests) == 2
+
+
+class TestServerRetrySignal:
+    def test_501_is_not_retryable(self, server) -> None:
+        assert _status_is_retryable(501) is False
+        server.script(Response(status=501), Response(status=200, body={"ok": 1}))
+        with pytest.raises(IronflowError) as exc:
+            client(server).events_list()
+        assert exc.value.retryable is False
+        assert len(server.requests) == 1
+
+    def test_body_retryable_true_wins_over_a_409(self, server) -> None:
+        server.script(Response(status=409, body={"error": "x", "retryable": True}))
+        with pytest.raises(IronflowError) as exc:
+            client(server, max_attempts=1).events_list()
+        assert exc.value.retryable is True
+
+    def test_body_retryable_false_stops_a_get_on_503(self, server) -> None:
+        server.script(
+            Response(status=503, body={"error": "x", "retryable": False}),
+            Response(status=200, body={"ok": 1}),
+        )
+        with pytest.raises(IronflowError) as exc:
+            client(server).events_list()
+        assert exc.value.retryable is False
+        assert len(server.requests) == 1
+
+    def test_body_retry_after_is_used_without_a_header(self, server) -> None:
+        server.script(Response(status=429, body={"error": "x", "retryable": True, "retry_after": 2}))
+        with pytest.raises(IronflowError) as exc:
+            client(server, max_attempts=1).events_list()
+        assert exc.value.retry_after == 2.0
+
+    def test_header_retry_after_wins_over_the_body(self, server) -> None:
+        server.script(Response(status=429, headers={"Retry-After": "7"}, body={"error": "x", "retry_after": 2}))
+        with pytest.raises(IronflowError) as exc:
+            client(server, max_attempts=1).events_list()
+        assert exc.value.retry_after == 7.0
 
 
 class TestWriteMethodsNotRetried:

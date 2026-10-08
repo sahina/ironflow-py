@@ -24,9 +24,8 @@ import ironflow
 Requires Python 3.10+.
 
 The first PyPI release was v0.33.1; v0.33.0 was tagged but not published.
-The polling worker documented below landed on `main` after the v0.39.0 tag and
-ships with the next release, not in any published wheel up to 0.39.0. SDK and engine versions track
-each other.
+The polling worker documented below first shipped in v0.40.0. It is not in any
+earlier release. SDK and engine versions track each other.
 
 ## Status
 

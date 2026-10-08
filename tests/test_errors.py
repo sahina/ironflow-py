@@ -89,6 +89,23 @@ class TestErrorFields:
         assert str(exc.value) == "version mismatch"
         assert exc.value.retryable is False
 
+    def test_error_field_body_keeps_server_message(self, server) -> None:
+        """Most REST handlers answer {"error": "..."} with no message field.
+
+        Reading only "message" turned "run not found" into "HTTP 404".
+        """
+        server.script(Response(status=404, body={"error": "run not found"}))
+        with pytest.raises(IronflowError) as exc:
+            IronflowClient(server_url=server.url).events_list()
+        assert str(exc.value) == "run not found"
+        assert exc.value.status_code == 404
+
+    def test_message_wins_over_error_field(self, server) -> None:
+        server.script(Response(status=400, body={"message": "bad limit", "error": "invalid"}))
+        with pytest.raises(IronflowError) as exc:
+            IronflowClient(server_url=server.url).events_list()
+        assert str(exc.value) == "bad limit"
+
     def test_retry_after_exposed_on_error(self, server) -> None:
         server.script(*[Response(status=429, headers={"Retry-After": "7"}) for _ in range(3)])
         c = IronflowClient(server_url=server.url, max_attempts=1)

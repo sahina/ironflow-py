@@ -383,7 +383,15 @@ def _present(headers: Mapping[str, str | None] | None) -> dict[str, str] | None:
 
 
 def _status_is_retryable(status: int) -> bool:
-    return status >= 500 or status in _RETRYABLE_STATUS
+    # 501: the server does not implement the route; a retry hits the same wall.
+    return (status >= 500 and status != 501) or status in _RETRYABLE_STATUS
+
+
+def _error_retryable(status: int, body: object) -> bool:
+    """The server's boolean ``retryable`` wins when the error body carries one."""
+    if isinstance(body, dict) and isinstance(body.get("retryable"), bool):
+        return body["retryable"]
+    return _status_is_retryable(status)
 
 
 def _origin(url: str) -> tuple[str, str, int | None]:
@@ -755,6 +763,8 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
 
         code = ""
         message = f"HTTP {e.code}"
+        parsed_body: object = None
+        body_retry_after: float | None = None
         if 300 <= e.code < 400:
             message = (
                 f"HTTP {e.code}: refused to follow a redirect from {e.url} "
@@ -768,20 +778,26 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
             except (ValueError, RecursionError):
                 message = body_text
             else:
+                parsed_body = parsed
                 if isinstance(parsed, dict):
+                    ra = parsed.get("retry_after")
+                    if isinstance(ra, (int, float)) and not isinstance(ra, bool):
+                        body_retry_after = max(0.0, float(ra))
                     code = str(parsed.get("code", "") or "")
-                    message = str(parsed.get("message", message) or message)
+                    # Most REST handlers write only {"error": "..."}.
+                    message = str(parsed.get("message") or parsed.get("error") or message)
                 else:
                     message = body_text
 
-        retry_after = _parse_retry_after(
+        header_retry_after = _parse_retry_after(
             e.headers.get("Retry-After") if e.headers else None
         )
+        retry_after = header_retry_after if header_retry_after is not None else body_retry_after
         return _TYPED_HTTP_ERRORS.get(e.code, IronflowError)(
             message,
             status_code=e.code,
             code=code,
-            retryable=_status_is_retryable(e.code),
+            retryable=_error_retryable(e.code, parsed_body),
             retry_after=retry_after,
         )
 

@@ -258,6 +258,9 @@ class StreamingWorker(Worker):
                     ) from exc
                 self._log.warning("stream disconnected: %s", exc)
             except IronflowError as exc:
+                if not exc.retryable:
+                    self._log.error("stream registration failed: %s", exc)
+                    raise
                 self._log.warning("stream connection failed: %s", exc)
             if not self._draining.is_set():
                 await self._pause(self._reconnect_delay)

@@ -18,7 +18,7 @@ from importlib import metadata
 from typing import TYPE_CHECKING, Any
 
 from .._discovery import hydrate_env_from_discovery
-from .._http import DEFAULT_SERVER_URL, IronflowError
+from .._http import DEFAULT_SERVER_URL, IronflowError, _error_retryable
 from ._checkpoint import Checkpointer
 from ._duration import Duration, iso_utc, to_seconds
 from ._function import Function, registration_body
@@ -149,6 +149,9 @@ class Worker:
                     except WorkerAuthError:
                         raise
                     except IronflowError as exc:
+                        if not exc.retryable:
+                            self._log.error("registration failed: %s", exc)
+                            raise
                         self._log.warning("registration failed: %s", exc)
                         await self._pause(self._reconnect_delay)
                         continue
@@ -280,7 +283,7 @@ class Worker:
         if reply.status in (401, 403):
             raise WorkerAuthError(f"{what}: unauthorized ({reply.status})", status_code=reply.status)
         raise IronflowError(f"{what} failed: {reply.status} {reply.body}", status_code=reply.status,
-                            code=reply.error_code, retryable=reply.status >= 500)
+                            code=reply.error_code, retryable=_error_retryable(reply.status, reply.body))
 
     async def _register(self) -> None:
         await self._register_functions()

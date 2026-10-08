@@ -55,6 +55,20 @@ def test_transient_statuses_are_retryable(loop: asyncio.AbstractEventLoop, engin
     assert e.value.retryable is True and e.value.status_code == status
 
 
+def test_a_501_reply_is_not_retryable(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
+    engine.fail("publish", 501, {"message": "not implemented"})
+    with pytest.raises(IronflowError) as e:
+        run(loop, publisher(engine)("t", {}, None))
+    assert e.value.retryable is False and e.value.status_code == 501
+
+
+def test_the_body_retryable_flag_wins_over_the_status(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
+    engine.fail("publish", 503, {"message": "gone", "retryable": False})
+    with pytest.raises(IronflowError) as e:
+        run(loop, publisher(engine)("t", {}, None))
+    assert e.value.retryable is False
+
+
 def test_a_success_reply_without_an_event_id_is_an_error(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
     engine.fail("publish", 200, {})
     with pytest.raises(IronflowError, match="eventId"):
