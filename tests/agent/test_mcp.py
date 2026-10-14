@@ -70,15 +70,14 @@ def test_validation(kwargs, code) -> None:
 
 
 def test_missing_server_url(monkeypatch) -> None:
-    for k in ("IRONFLOW_URL", "IRONFLOW_SERVER_URL"):
-        monkeypatch.delenv(k, raising=False)
+    monkeypatch.delenv("IRONFLOW_SERVER_URL", raising=False)
     with pytest.raises(AgentError) as e:
         asyncio.run(expose_mcp(name="d", callback_url="http://x", tools=[echo]))
     assert e.value.code == "AGENT_MCP_MISSING_SERVER_URL"
 
 
 def test_missing_api_key(monkeypatch) -> None:
-    monkeypatch.setenv("IRONFLOW_URL", "http://engine")
+    monkeypatch.setenv("IRONFLOW_SERVER_URL", "http://engine")
     monkeypatch.delenv("IRONFLOW_API_KEY", raising=False)
     with pytest.raises(AgentError) as e:
         asyncio.run(expose_mcp(name="d", callback_url="http://x", tools=[echo]))
@@ -130,7 +129,7 @@ def test_environment_reaches_the_built_client(monkeypatch, configured, env_var, 
         return client
 
     monkeypatch.setattr(rpc_mod, "AsyncIronflowRPC", make)
-    monkeypatch.setenv("IRONFLOW_URL", "http://engine")
+    monkeypatch.setenv("IRONFLOW_SERVER_URL", "http://engine")
     monkeypatch.setenv("IRONFLOW_API_KEY", "ifkey_x")
     if env_var is None:
         monkeypatch.delenv("IRONFLOW_ENV", raising=False)

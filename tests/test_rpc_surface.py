@@ -167,6 +167,7 @@ def test_module_exports() -> None:
         "NO_TIMEOUT",
         "PayloadTooLargeError",
         "PreconditionFailedError",
+        "PreconditionRequiredError",
         "REDACTED_MARKER_KEY",
         "ReadinessResponse",
         "ServerCapabilities",

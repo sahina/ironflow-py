@@ -18,7 +18,12 @@ from importlib import metadata
 from typing import TYPE_CHECKING, Any
 
 from .._discovery import hydrate_env_from_discovery
-from .._http import DEFAULT_SERVER_URL, IronflowError, _error_retryable
+from .._http import (
+    DEFAULT_SERVER_URL,
+    IronflowError,
+    _error_retryable,
+    configured_server_url,
+)
 from ._checkpoint import Checkpointer
 from ._duration import Duration, iso_utc, to_seconds
 from ._function import Function, registration_body
@@ -87,7 +92,7 @@ class Worker:
         self._upcasters = upcasters
         hydrate_env_from_discovery()
         self._transport = Transport(
-            server_url or os.environ.get("IRONFLOW_SERVER_URL") or DEFAULT_SERVER_URL,
+            server_url or configured_server_url() or DEFAULT_SERVER_URL,
             api_key or os.environ.get("IRONFLOW_API_KEY") or None,
             environment or os.environ.get("IRONFLOW_ENV") or "default",
         )
@@ -257,6 +262,10 @@ class Worker:
             self._heartbeat_task.cancel()
             await asyncio.gather(self._heartbeat_task, return_exceptions=True)
         await asyncio.gather(*(r.stop() for r in self._runners), return_exceptions=True)
+        if self._runner_tasks:
+            # Let run() return first: an Acquire in flight releases its late grant
+            # there. A cancel would lose the grant until the lease expires.
+            await asyncio.wait(self._runner_tasks, timeout=self._cleanup_timeout)
         for task in self._runner_tasks:
             task.cancel()
         if self._runner_tasks:

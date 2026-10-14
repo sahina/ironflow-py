@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from .._discovery import hydrate_env_from_discovery
+from .._http import configured_server_url
 from ..worker._function import Function
 from ._handler import handle, index_functions
 from ._response import env
@@ -31,7 +32,7 @@ def serve(
         raise ValueError("duplicate webhook id")
     # Resolve once. "" (not None) passed on means "explicitly unset" to handle().
     key = env(signing_key, "IRONFLOW_SIGNING_KEY") or ""
-    server = env(server_url, "IRONFLOW_SERVER_URL") or ""
+    server = (server_url if server_url is not None else configured_server_url()) or ""
     token = env(api_key, "IRONFLOW_API_KEY")
     # handle() gets the value without the "default" fallback: RunInfo.environment
     # must stay None when nothing is set, or agent memory sends "default" and a

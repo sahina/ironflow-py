@@ -120,3 +120,34 @@ def test_runners_stop_concurrently(loop: asyncio.AbstractEventLoop, engine: Fake
 
         run(loop, go())
     assert overlap[0] == 2 and w.state == "stopped"
+
+
+def test_shutdown_lets_run_return_before_cancel(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
+    """run() releases a lease that was granted while stop() ran (ADR 0120). A cancel
+    straight after stop() would cut that off and hold the lease until it expires."""
+    released = []
+
+    class FakeRunner:
+        def __init__(self, p: Any, *_: Any) -> None:
+            self.p = p
+            self.stopping = asyncio.Event()
+
+        async def run(self) -> None:
+            await self.stopping.wait()
+            await asyncio.sleep(0.05)  # the late grant, then its Release
+            released.append(self.p.name)
+
+        async def stop(self) -> None:
+            self.stopping.set()
+
+    with mock.patch("ironflow.projection._runner.ProjectionRunner", FakeRunner):
+        w = fast_worker(engine, functions=[], projections=[proj("a")])
+
+        async def go() -> None:
+            task = asyncio.ensure_future(w.start())
+            await asyncio.sleep(0.05)
+            await w.stop()
+            await asyncio.wait_for(task, 2)
+
+        run(loop, go())
+    assert released == ["a"]

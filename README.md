@@ -39,7 +39,7 @@ generated clients.
 
 **Two clients, two protocols, neither a superset of the other.** `IronflowClient`
 speaks REST and retries idempotent methods. `IronflowRPC` / `AsyncIronflowRPC`
-speak ConnectRPC and reach 97 capabilities REST does not serve — webhook
+speak ConnectRPC and reach 101 capabilities REST does not serve — webhook
 management, agent tools, time travel, pub/sub consumer groups, function
 versioning, executable deployments, raw SQL, and environment lookup/key
 rotation — including four server streams. `IronflowRPC` retries only the unary methods the protos annotate
@@ -51,10 +51,11 @@ return and keyword-only query parameters; routes it does not annotate still retu
 and take no query kwargs. `TypedDict` is a type-checker construct only — there is **no
 runtime validation**. Headers declared by a route, including `If-Match`,
 `If-None-Match`, and `Idempotency-Key`, are generated as typed keyword arguments.
-`BaseClient.request()` remains the escape hatch for undeclared headers. WebSocket and
-watch endpoints (`/ws`, config watch, KV watch) have no generated methods at all and
-`request()` cannot reach them either; poll the corresponding read method, use a
-ConnectRPC subscription, or use the Go or JavaScript SDK for a live watch.
+`BaseClient.request()` remains the escape hatch for undeclared headers. The `/ws`
+endpoint has no generated method and `request()` cannot reach it; use a ConnectRPC
+subscription for a live event feed. KV and config watch are hand-written async
+iterators, `watch_kv(bucket, *, key=None)` and `watch_config(name)`. They need the
+`watch` extra: `pip install 'ironflow-py[watch]'`.
 
 ### Pull worker
 
@@ -163,7 +164,7 @@ well-formed request runs. Pass
 `webhooks=[Webhook(...)]` to serve `POST /webhooks/{id}`.
 
 - **Short functions only.** The engine gives each push request at most the push
-  timeout (10s by default), or the function's `timeout_ms` if lower. After that
+  timeout (10s by default), or the function's `timeout` if lower. After that
   it retries while your handler may still be running. Use the pull worker for
   long work.
 - **Push or pull, not both.** Do not serve one function id from a push app and a

@@ -71,4 +71,4 @@ class MemoryConfig:
     stream_id: str
     projection: str
     entity_type: str = "agent"
-    backend: Any = None  # a MemoryBackend; None builds one from IRONFLOW_URL / IRONFLOW_API_KEY
+    backend: Any = None  # a MemoryBackend; None builds one from IRONFLOW_SERVER_URL / IRONFLOW_API_KEY

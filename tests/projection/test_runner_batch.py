@@ -7,12 +7,20 @@ from typing import Any
 import pytest
 from connectrpc.code import Code
 from connectrpc.errors import ConnectError
-from protobuf.wkt import Struct
+from protobuf.wkt import Struct, Value
 
-from ironflow._gen.projection_pb import GetProjectionResponse
+from ironflow._gen.projection_pb import (
+    GetProjectionResponse,
+    PollProjectionEventsResponse,
+    SaveProjectionStateResponse,
+)
 from ironflow._gen.projection_pb import ProjectionEvent as PE
 from ironflow.projection import ProjectionEvent, create_projection
-from ironflow.projection._runner import ProjectionRunner, _event_from_proto
+from ironflow.projection._runner import (
+    ProjectionAuthError,
+    ProjectionRunner,
+    _event_from_proto,
+)
 from tests.projection.fake_service import FakeProjectionService
 from tests.worker.conftest import run
 
@@ -42,6 +50,114 @@ def test_managed_saves_each_partition(loop: asyncio.AbstractEventLoop) -> None:
     assert saves["__global__"].last_event_seq == 3 and saves["__global__"].last_event_id == "e3"
     assert saves["p1"].state.to_python() == {"count": 1}
     assert r._state == {"count": 12}
+
+
+@pytest.mark.parametrize(("fail", "expected"), [
+    (False, [("a", 1, 1), ("b", 2, 1), ("a", 3, 2)]),
+    # The second save fails: the cursor stays at seq 1, so b@2 and a@3 are redelivered.
+    (True, [("a", 1, 1), ("b", 2, 1)]),
+])
+def test_managed_saves_runs_in_seq_order(
+    loop: asyncio.AbstractEventLoop, fail: bool, expected: list[tuple[str, int, int]],
+) -> None:
+    svc = FakeProjectionService()
+    if fail:
+        svc.script["save_projection_state"] = [SaveProjectionStateResponse(), ConnectError(Code.UNAVAILABLE, "down")]
+    flush = runner(counter(), svc)._flush([ev(3, "a"), ev(1, "a"), ev(2, "b")])  # out of order on purpose
+    if fail:
+        with pytest.raises(ConnectError):
+            run(loop, flush)
+    else:
+        run(loop, flush)
+    assert [
+        (s.partition_key, s.last_event_seq, s.state.to_python()["count"])
+        for s in svc.requests("save_projection_state")
+    ] == expected
+
+
+def test_managed_partitions_resume_across_batches(loop: asyncio.AbstractEventLoop) -> None:
+    svc = FakeProjectionService()
+    svc.script["get_projection"] = [
+        GetProjectionResponse(state=Struct.from_python({"count": 40})),
+        GetProjectionResponse(state=Struct.from_python({"count": 90})),
+    ]
+    run(loop, runner(counter(), svc)._flush([ev(1, "a"), ev(2, "a"), ev(3, "b")]))
+    first = svc.requests("save_projection_state")
+    assert [s.state.to_python() for s in first] == [{"count": 42}, {"count": 91}]
+    svc.script["get_projection"] = [GetProjectionResponse(state=s.state) for s in first]
+    run(loop, runner(counter(), svc)._flush([ev(4, "a"), ev(5, "b")]))
+    assert [s.state.to_python() for s in svc.requests("save_projection_state")] == [
+        {"count": 42}, {"count": 91}, {"count": 43}, {"count": 92},
+    ]
+    assert [(r.name, r.partition) for r in svc.requests("get_projection")] == [
+        ("c", "a"), ("c", "b"), ("c", "a"), ("c", "b"),
+    ]
+
+
+@pytest.mark.parametrize(("response", "expected"), [
+    (GetProjectionResponse(), {"initial": True}),
+    (GetProjectionResponse(state=Struct.from_python({})), {"initial": True}),
+    (GetProjectionResponse(state_value=Value.from_python([1, 2])), [1, 2]),
+    (GetProjectionResponse(state_value=Value.from_python(0)), 0),
+    (GetProjectionResponse(state_value=Value.from_python(False)), False),
+])
+def test_managed_partition_preserves_saved_state(
+    loop: asyncio.AbstractEventLoop, response: GetProjectionResponse, expected: Any,
+) -> None:
+    svc = FakeProjectionService()
+    svc.script["get_projection"] = [response]
+    proj = create_projection(name="c", events=["inc"], initial_state=lambda: {"initial": True},
+                             handler=lambda s, e, c: {"loaded": s})
+    run(loop, runner(proj, svc)._flush([ev(1, "a")]))
+    [saved] = svc.requests("save_projection_state")
+    assert saved.state.to_python() == {"loaded": expected}
+
+
+@pytest.mark.parametrize("code", [Code.NOT_FOUND, Code.UNAVAILABLE, Code.UNAUTHENTICATED, Code.PERMISSION_DENIED])
+def test_managed_partition_load_failure_does_not_save(loop: asyncio.AbstractEventLoop, code: Code) -> None:
+    svc = FakeProjectionService()
+    error = ConnectError(code, "partition load failed")
+    # Partition a loads fine, b fails: nothing may be saved, or the cursor skips b's events.
+    svc.script["get_projection"] = [GetProjectionResponse(), error]
+    handled: list[str] = []
+
+    def h(s: Any, e: Any, c: Any) -> Any:
+        handled.append(e.id)
+        return s
+
+    proj = create_projection(name="c", events=["inc"], initial_state=dict, handler=h)
+    with pytest.raises(ConnectError):
+        run(loop, runner(proj, svc)._flush([ev(1, "a"), ev(2, "b")]))
+    assert handled == []
+    assert svc.requests("save_projection_state") == []
+    assert [r.partition for r in svc.requests("get_projection")] == ["a", "b"]
+
+
+@pytest.mark.parametrize("code", [Code.UNAUTHENTICATED, Code.PERMISSION_DENIED])
+@pytest.mark.parametrize("transport", ["poll", "stream"])
+def test_partition_load_auth_error_stops_runner(
+    loop: asyncio.AbstractEventLoop, code: Code, transport: str,
+) -> None:
+    svc = FakeProjectionService()
+    svc.script["get_projection"] = [GetProjectionResponse(), ConnectError(code, "partition load denied")]
+    event = PE(id="e1", name="inc", seq=1, data=Struct.from_python({"n": 1}),
+               metadata=Struct.from_python({"__partition": "a"}))
+    if transport == "poll":
+        svc.streams = [ConnectError(Code.UNIMPLEMENTED, "poll only")]
+        svc.script["poll_projection_events"] = [PollProjectionEventsResponse(events=[event])]
+    else:
+        svc.streams = [[event]]
+    handled: list[str] = []
+
+    def h(s: Any, e: Any, c: Any) -> Any:
+        handled.append(e.id)
+        return s
+
+    proj = create_projection(name="c", events=["inc"], initial_state=dict, handler=h, batch_size=1)
+    with pytest.raises(ProjectionAuthError):
+        run(loop, asyncio.wait_for(runner(proj, svc).run(), 1))
+    assert handled == []
+    assert svc.requests("save_projection_state") == []
 
 
 def test_state_is_copied_per_handler_call(loop: asyncio.AbstractEventLoop) -> None:
@@ -82,6 +198,16 @@ def test_handler_error_means_no_save(loop: asyncio.AbstractEventLoop) -> None:
     with pytest.raises(ValueError):
         run(loop, r._flush([ev(1)]))
     assert svc.requests("save_projection_state") == []
+
+
+def test_managed_empty_global_state_means_initial_state(loop: asyncio.AbstractEventLoop) -> None:
+    # A handler that returned {} leaves {} in memory; the next batch starts from initial_state().
+    svc = FakeProjectionService()
+    r = runner(counter(), svc)
+    r._state = {}
+    run(loop, r._flush([ev(1)]))
+    [saved] = svc.requests("save_projection_state")
+    assert saved.state.to_python() == {"count": 1}
 
 
 def test_managed_handler_returning_none_fails(loop: asyncio.AbstractEventLoop) -> None:
@@ -155,6 +281,15 @@ def test_load_state_not_found_means_initial_state(loop: asyncio.AbstractEventLoo
     r._state = {"count": 5}
     run(loop, r._load_state())
     assert r._state == {"count": 0}  # first run: no server row yet
+
+
+def test_load_state_empty_object_means_initial_state(loop: asyncio.AbstractEventLoop) -> None:
+    svc = FakeProjectionService()
+    svc.script["get_projection"] = [GetProjectionResponse(state=Struct.from_python({}))]
+    r = runner(counter(), svc)
+    r._state = {"count": 5}
+    run(loop, r._load_state())
+    assert r._state == {"count": 0}
 
 
 def test_failed_reload_after_failed_save_keeps_committed_state(loop: asyncio.AbstractEventLoop) -> None:

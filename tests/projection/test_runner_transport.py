@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 import pytest
@@ -90,6 +91,29 @@ def test_stream_error_reconnects(loop: asyncio.AbstractEventLoop) -> None:
     svc.streams = [[frame(1), ConnectError(Code.UNAVAILABLE, "reset")], [frame(2)]]
     run(loop, run_until(make(svc, seen=seen), lambda: seen == ["e1", "e2"]))
     assert len(svc.requests("stream_projection_events")) >= 2
+
+
+def test_any_received_frame_resets_the_reconnect_backoff(
+    loop: asyncio.AbstractEventLoop, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger="t")
+    svc = FakeProjectionService()
+    drop = ConnectError(Code.UNAVAILABLE, "reset")
+    # two early drops, then a stream that worked (a heartbeat counts) before dropping
+    svc.streams = [drop, drop, [HEARTBEAT, drop], ConnectError(Code.UNIMPLEMENTED, "no stream")]
+    r = make(svc)
+    delays: list[float] = []
+    sleep = r._sleep
+
+    async def record(seconds: float) -> None:
+        delays.append(seconds)
+        await sleep(seconds)
+
+    r._sleep = record  # type: ignore[method-assign]
+    run(loop, run_until(r, lambda: len(svc.requests("stream_projection_events")) == 4))
+    assert delays[:3] == [r.reconnect_base, r.reconnect_max, r.reconnect_base]
+    levels = [rec.levelno for rec in caplog.records if "stream failed" in rec.getMessage()]
+    assert levels == [logging.INFO] * 3
 
 
 def test_flush_failure_reconnects_for_redelivery(
@@ -228,7 +252,9 @@ def test_startup_retries_a_failed_state_load(loop: asyncio.AbstractEventLoop) ->
     svc.streams = [[frame(1)]]
     r = make(svc, handler=lambda s, e, c: {"count": s["count"] + 1}, initial_state=lambda: {"count": 0})
     run(loop, run_until(r, lambda: r._state == {"count": 42}))
-    assert len(svc.requests("register_projection")) == 2  # register + load are retried together
+    # The load runs after the lease grant, so only the load is retried (ADR 0120).
+    assert len(svc.requests("register_projection")) == 1
+    assert len(svc.requests("get_projection")) == 2
     [save] = svc.requests("save_projection_state")
     assert save.state.to_python() == {"count": 42}  # built on the server's state, not initial_state()
 
@@ -239,6 +265,31 @@ def test_startup_retries_a_failed_register(loop: asyncio.AbstractEventLoop) -> N
     svc.streams = [[frame(1)]]
     run(loop, run_until(make(svc, seen=seen), lambda: seen == ["e1"]))
     assert len(svc.requests("register_projection")) == 3
+
+
+def test_register_invalid_argument_stops_the_runner(
+    loop: asyncio.AbstractEventLoop, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A config error does not fix itself: stop instead of retrying.
+    svc = FakeProjectionService()
+    svc.script["register_projection"] = [ConnectError(Code.UNAVAILABLE, "503"), ConnectError(Code.INVALID_ARGUMENT, "events is required")]
+    with caplog.at_level(logging.WARNING, logger="t"):
+        run(loop, asyncio.wait_for(make(svc).run(), 1))
+    assert len(svc.requests("register_projection")) == 2
+    assert svc.requests("stream_projection_events") == []
+    assert [r.levelno for r in caplog.records] == [logging.WARNING, logging.ERROR]
+
+
+def test_register_retry_escalates_to_error_from_the_third_failure(
+    loop: asyncio.AbstractEventLoop, caplog: pytest.LogCaptureFixture
+) -> None:
+    svc, seen = FakeProjectionService(), []
+    svc.script["register_projection"] = [ConnectError(Code.UNAVAILABLE, "503")] * 4
+    svc.streams = [[frame(1)]]
+    with caplog.at_level(logging.WARNING, logger="t"):
+        run(loop, run_until(make(svc, seen=seen), lambda: seen == ["e1"]))
+    levels = [r.levelno for r in caplog.records if "register failed" in r.getMessage()]
+    assert levels == [logging.WARNING, logging.WARNING, logging.ERROR, logging.ERROR]
 
 
 def test_stop_during_startup_retry_returns(loop: asyncio.AbstractEventLoop) -> None:
@@ -309,3 +360,70 @@ def test_nothing_after_a_failed_flush_is_saved_or_acked(loop: asyncio.AbstractEv
     run(loop, go())
     assert [a.last_event_seq for a in acks] == [1]
     assert seen == ["e1"]  # B never reached the handler: it is redelivered from the cursor
+
+
+def _failure_counts(caplog: pytest.LogCaptureFixture) -> list[tuple[int, int]]:
+    out = []
+    for rec in caplog.records:
+        m = re.search(r"stream failed \((\d+)\)", rec.getMessage())
+        if m:
+            out.append((int(m.group(1)), rec.levelno))
+    return out
+
+
+def test_a_batch_failure_after_heartbeats_still_escalates(
+    loop: asyncio.AbstractEventLoop, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger="t")
+    svc = FakeProjectionService()
+    svc.streams = [[HEARTBEAT, frame(1)] for _ in range(8)]  # every stream opens, then the handler fails
+
+    def boom(e: Any, c: Any) -> None:
+        raise RuntimeError("handler boom")
+
+    run(loop, run_until(make(svc, handler=boom), lambda: len(_failure_counts(caplog)) >= 4))
+    counts = _failure_counts(caplog)
+    assert [n for n, _ in counts[:4]] == [1, 2, 3, 4]
+    assert [lvl for _, lvl in counts[:4]] == [logging.INFO, logging.INFO, logging.ERROR, logging.ERROR]
+
+
+def test_a_save_failure_after_heartbeats_still_escalates(
+    loop: asyncio.AbstractEventLoop, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger="t")
+    svc = FakeProjectionService()
+    svc.script["save_projection_state"] = [ConnectError(Code.UNAVAILABLE, "save 503")] * 8
+    svc.streams = [[HEARTBEAT, frame(1)] for _ in range(8)]
+    r = make(svc, handler=lambda s, e, c: s, initial_state=dict)
+    run(loop, run_until(r, lambda: len(_failure_counts(caplog)) >= 3))
+    assert [n for n, _ in _failure_counts(caplog)[:3]] == [1, 2, 3]
+    assert _failure_counts(caplog)[2][1] == logging.ERROR
+
+
+def test_a_successful_batch_resets_the_backoff(
+    loop: asyncio.AbstractEventLoop, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Rare failures between good batches on a stream that stays up must not escalate."""
+    caplog.set_level(logging.INFO, logger="t")
+    svc = FakeProjectionService()
+    svc.streams = [[frame(1), 0.03, frame(2)] for _ in range(8)]  # e1 succeeds, then e2 fails
+
+    def fail_e2(e: Any, c: Any) -> None:
+        if e.seq == 2:
+            raise RuntimeError("handler boom")
+
+    run(loop, run_until(make(svc, handler=fail_e2), lambda: len(_failure_counts(caplog)) >= 4))
+    assert [n for n, _ in _failure_counts(caplog)[:4]] == [1, 1, 1, 1]
+
+
+def test_the_flush_timer_is_armed_once_per_batch(loop: asyncio.AbstractEventLoop) -> None:
+    svc = FakeProjectionService()
+    # Frames arrive faster than flush_interval; a timer re-armed on every frame never fires.
+    svc.streams = [[frame(1), 0.06, frame(2), 0.06, frame(3), 0.06, frame(4)]]
+    run(loop, run_until(_slow(make(svc)), lambda: svc.requests("ack_projection_events")))
+    assert svc.requests("ack_projection_events")[0].last_event_seq < 4
+
+
+def _slow(r: ProjectionRunner) -> ProjectionRunner:
+    r.flush_interval = 0.1
+    return r

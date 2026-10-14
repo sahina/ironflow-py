@@ -15,6 +15,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from .._discovery import hydrate_env_from_discovery
+from .._http import configured_server_url
 from ..worker._function import Function
 from ..worker._protocol import CompletedStep
 from ..worker._publish import bind_publish
@@ -92,7 +93,7 @@ async def handle(
     if path.startswith("/webhooks/") and path[len("/webhooks/"):]:
         return await handle_webhook(
             {w.id: w for w in webhooks}, path[len("/webhooks/"):], method=method, path=path,
-            headers=headers, body=body, server_url=env(server_url, "IRONFLOW_SERVER_URL"),
+            headers=headers, body=body, server_url=server_url if server_url is not None else configured_server_url(),
             api_key=env(api_key, "IRONFLOW_API_KEY"),
             environment=env(environment, "IRONFLOW_ENV") or "default",
         )
@@ -116,7 +117,7 @@ async def handle(
         return error_response(404, "FUNCTION_NOT_FOUND", f"function not found: {req['function_id']}")
 
     ctx = ExecutionContext(req["run_id"], _memo(req.get("steps") or []), fn.step_timeout)
-    server = env(server_url, "IRONFLOW_SERVER_URL")
+    server = server_url if server_url is not None else configured_server_url()
     if server:
         ctx.publish = _publisher(
             server, env(api_key, "IRONFLOW_API_KEY"), env(environment, "IRONFLOW_ENV") or "default", req["run_id"])

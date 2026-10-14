@@ -100,7 +100,6 @@ def test_no_memory_configured() -> None:
 
 
 def test_no_backend(monkeypatch) -> None:
-    monkeypatch.delenv("IRONFLOW_URL", raising=False)
     monkeypatch.delenv("IRONFLOW_SERVER_URL", raising=False)
 
     async def body(ctx):
@@ -166,7 +165,7 @@ def test_rpc_backend_passes_the_environment(monkeypatch) -> None:
 
     built: dict = {}
     monkeypatch.setattr(rpc_mod, "AsyncIronflowRPC", lambda **kw: built.update(kw) or FakeRPC())
-    monkeypatch.setenv("IRONFLOW_URL", "http://engine")
+    monkeypatch.setenv("IRONFLOW_SERVER_URL", "http://engine")
     backend = rpc_backend("staging")
     assert isinstance(backend, _RPCBackend)
     backend._rpc()

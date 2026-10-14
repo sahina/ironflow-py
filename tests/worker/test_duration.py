@@ -70,7 +70,7 @@ def test_parse_timestamp_accepts_go_rfc3339(raw: str) -> None:
 
 def test_parse_when_rejects_naive_datetime() -> None:
     with pytest.raises(ValueError, match="timezone-aware"):
-        parse_when(datetime(2030, 1, 1))  # noqa: DTZ001
+        parse_when(datetime(2030, 1, 1))
 
 
 def test_parse_when_rejects_string_without_offset() -> None:

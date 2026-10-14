@@ -4,7 +4,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from .._discovery import hydrate_env_from_discovery
-from .._http import DEFAULT_SERVER_URL, IronflowError, _error_retryable
+from .._http import (
+    DEFAULT_SERVER_URL,
+    IronflowError,
+    _error_retryable,
+    configured_server_url,
+)
 from ..worker._function import Function, registration_body
 from ..worker._transport import Transport
 from ._handler import index_functions
@@ -18,7 +23,7 @@ async def register(
     """Register ``functions`` as push functions served at ``endpoint_url``. Call once per deploy."""
     hydrate_env_from_discovery()
     transport = Transport(
-        env(server_url, "IRONFLOW_SERVER_URL") or DEFAULT_SERVER_URL,
+        (server_url if server_url is not None else configured_server_url()) or DEFAULT_SERVER_URL,
         env(api_key, "IRONFLOW_API_KEY"),
         env(environment, "IRONFLOW_ENV") or "default",
     )

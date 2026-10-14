@@ -16,7 +16,7 @@ from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, DE
 from protobuf import DescService
 
 from . import projection_pb
-from .projection_pb import AckProjectionEventsRequest, AckProjectionEventsResponse, CancelRebuildRequest, CancelRebuildResponse, CreateSQLProjectionRequest, CreateSQLProjectionResponse, GetProjectionRequest, GetProjectionResponse, GetProjectionRevisionRequest, GetProjectionRevisionResponse, GetProjectionStatusRequest, GetProjectionStatusResponse, GetRebuildJobRequest, GetRebuildJobResponse, ListProjectionHistoryRequest, ListProjectionHistoryResponse, ListProjectionsRequest, ListProjectionsResponse, PauseProjectionRequest, PauseProjectionResponse, PollProjectionEventsRequest, PollProjectionEventsResponse, ProjectionEvent, QuerySQLProjectionRequest, QuerySQLProjectionResponse, RebuildProjectionRequest, RebuildProjectionResponse, RegisterProjectionRequest, RegisterProjectionResponse, ReportRebuildProgressRequest, ReportRebuildProgressResponse, ResumeProjectionRequest, ResumeProjectionResponse, SaveProjectionStateRequest, SaveProjectionStateResponse, StreamProjectionEventsRequest, UnregisterProjectionRequest, UnregisterProjectionResponse, WaitForEventRequest, WaitProjectionCatchupBatchRequest, WaitProjectionCatchupBatchResponse, WaitProjectionCatchupRequest, WaitProjectionCatchupResponse, WaitProjectionCatchupStreamResponse
+from .projection_pb import AckProjectionEventsRequest, AckProjectionEventsResponse, AcquireProjectionLeaseRequest, AcquireProjectionLeaseResponse, CancelRebuildRequest, CancelRebuildResponse, CreateSQLProjectionRequest, CreateSQLProjectionResponse, GetProjectionRequest, GetProjectionResponse, GetProjectionRevisionRequest, GetProjectionRevisionResponse, GetProjectionStatusRequest, GetProjectionStatusResponse, GetRebuildJobRequest, GetRebuildJobResponse, ListProjectionHistoryRequest, ListProjectionHistoryResponse, ListProjectionsRequest, ListProjectionsResponse, PauseProjectionRequest, PauseProjectionResponse, PollProjectionEventsRequest, PollProjectionEventsResponse, ProjectionEvent, QuerySQLProjectionRequest, QuerySQLProjectionResponse, RebuildProjectionRequest, RebuildProjectionResponse, RegisterProjectionRequest, RegisterProjectionResponse, ReleaseProjectionLeaseRequest, ReleaseProjectionLeaseResponse, RenewProjectionLeaseRequest, RenewProjectionLeaseResponse, ReportRebuildProgressRequest, ReportRebuildProgressResponse, ResumeProjectionRequest, ResumeProjectionResponse, SaveProjectionStateRequest, SaveProjectionStateResponse, StreamProjectionEventsRequest, UnregisterProjectionRequest, UnregisterProjectionResponse, WaitForEventRequest, WaitProjectionCatchupBatchRequest, WaitProjectionCatchupBatchResponse, WaitProjectionCatchupRequest, WaitProjectionCatchupResponse, WaitProjectionCatchupStreamResponse
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Iterable, Iterator, Mapping
@@ -73,6 +73,19 @@ class ProjectionService(Protocol):
         """
         Cursor advance (external mode)
         """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def acquire_projection_lease(self, request: AcquireProjectionLeaseRequest, ctx: RequestContext[AcquireProjectionLeaseRequest, AcquireProjectionLeaseResponse], /) -> AcquireProjectionLeaseResponse:
+        """
+        Exclusive runner lease (ADR 0120). One runner holds the lease; the other
+        replicas wait as standbys. Requests that carry the lease are fenced.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def renew_projection_lease(self, request: RenewProjectionLeaseRequest, ctx: RequestContext[RenewProjectionLeaseRequest, RenewProjectionLeaseResponse], /) -> RenewProjectionLeaseResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def release_projection_lease(self, request: ReleaseProjectionLeaseRequest, ctx: RequestContext[ReleaseProjectionLeaseRequest, ReleaseProjectionLeaseResponse], /) -> ReleaseProjectionLeaseResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     async def get_projection(self, request: GetProjectionRequest, ctx: RequestContext[GetProjectionRequest, GetProjectionResponse], /) -> GetProjectionResponse:
@@ -244,6 +257,36 @@ class ProjectionServiceASGIApplication(ConnectASGIApplication[ProjectionService]
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.ack_projection_events,
+                ),
+                "/ironflow.v1.ProjectionService/AcquireProjectionLease": Endpoint.unary(
+                    method=MethodInfo(
+                        name="AcquireProjectionLease",
+                        service_name="ironflow.v1.ProjectionService",
+                        input=AcquireProjectionLeaseRequest,
+                        output=AcquireProjectionLeaseResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.acquire_projection_lease,
+                ),
+                "/ironflow.v1.ProjectionService/RenewProjectionLease": Endpoint.unary(
+                    method=MethodInfo(
+                        name="RenewProjectionLease",
+                        service_name="ironflow.v1.ProjectionService",
+                        input=RenewProjectionLeaseRequest,
+                        output=RenewProjectionLeaseResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.renew_projection_lease,
+                ),
+                "/ironflow.v1.ProjectionService/ReleaseProjectionLease": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ReleaseProjectionLease",
+                        service_name="ironflow.v1.ProjectionService",
+                        input=ReleaseProjectionLeaseRequest,
+                        output=ReleaseProjectionLeaseResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.release_projection_lease,
                 ),
                 "/ironflow.v1.ProjectionService/GetProjection": Endpoint.unary(
                     method=MethodInfo(
@@ -590,6 +633,70 @@ class ProjectionServiceClient(ConnectClient):
                 service_name="ironflow.v1.ProjectionService",
                 input=AckProjectionEventsRequest,
                 output=AckProjectionEventsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def acquire_projection_lease(
+        self,
+        request: AcquireProjectionLeaseRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> AcquireProjectionLeaseResponse:
+        """
+        Exclusive runner lease (ADR 0120). One runner holds the lease; the other
+        replicas wait as standbys. Requests that carry the lease are fenced.
+        """
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="AcquireProjectionLease",
+                service_name="ironflow.v1.ProjectionService",
+                input=AcquireProjectionLeaseRequest,
+                output=AcquireProjectionLeaseResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def renew_projection_lease(
+        self,
+        request: RenewProjectionLeaseRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> RenewProjectionLeaseResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RenewProjectionLease",
+                service_name="ironflow.v1.ProjectionService",
+                input=RenewProjectionLeaseRequest,
+                output=RenewProjectionLeaseResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def release_projection_lease(
+        self,
+        request: ReleaseProjectionLeaseRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> ReleaseProjectionLeaseResponse:
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ReleaseProjectionLease",
+                service_name="ironflow.v1.ProjectionService",
+                input=ReleaseProjectionLeaseRequest,
+                output=ReleaseProjectionLeaseResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,
@@ -981,6 +1088,19 @@ class ProjectionServiceSync(Protocol):
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
+    def acquire_projection_lease(self, request: AcquireProjectionLeaseRequest, ctx: RequestContext[AcquireProjectionLeaseRequest, AcquireProjectionLeaseResponse], /) -> AcquireProjectionLeaseResponse:
+        """
+        Exclusive runner lease (ADR 0120). One runner holds the lease; the other
+        replicas wait as standbys. Requests that carry the lease are fenced.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def renew_projection_lease(self, request: RenewProjectionLeaseRequest, ctx: RequestContext[RenewProjectionLeaseRequest, RenewProjectionLeaseResponse], /) -> RenewProjectionLeaseResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def release_projection_lease(self, request: ReleaseProjectionLeaseRequest, ctx: RequestContext[ReleaseProjectionLeaseRequest, ReleaseProjectionLeaseResponse], /) -> ReleaseProjectionLeaseResponse:
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
     def get_projection(self, request: GetProjectionRequest, ctx: RequestContext[GetProjectionRequest, GetProjectionResponse], /) -> GetProjectionResponse:
         """
         Query API
@@ -1148,6 +1268,36 @@ class ProjectionServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.ack_projection_events,
+                ),
+                "/ironflow.v1.ProjectionService/AcquireProjectionLease": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="AcquireProjectionLease",
+                        service_name="ironflow.v1.ProjectionService",
+                        input=AcquireProjectionLeaseRequest,
+                        output=AcquireProjectionLeaseResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.acquire_projection_lease,
+                ),
+                "/ironflow.v1.ProjectionService/RenewProjectionLease": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="RenewProjectionLease",
+                        service_name="ironflow.v1.ProjectionService",
+                        input=RenewProjectionLeaseRequest,
+                        output=RenewProjectionLeaseResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.renew_projection_lease,
+                ),
+                "/ironflow.v1.ProjectionService/ReleaseProjectionLease": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ReleaseProjectionLease",
+                        service_name="ironflow.v1.ProjectionService",
+                        input=ReleaseProjectionLeaseRequest,
+                        output=ReleaseProjectionLeaseResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.release_projection_lease,
                 ),
                 "/ironflow.v1.ProjectionService/GetProjection": EndpointSync.unary(
                     method=MethodInfo(
@@ -1487,6 +1637,67 @@ class ProjectionServiceClientSync(ConnectClientSync):
                 service_name="ironflow.v1.ProjectionService",
                 input=AckProjectionEventsRequest,
                 output=AckProjectionEventsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def acquire_projection_lease(
+        self,
+        request: AcquireProjectionLeaseRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> AcquireProjectionLeaseResponse:
+        """
+        Exclusive runner lease (ADR 0120). One runner holds the lease; the other
+        replicas wait as standbys. Requests that carry the lease are fenced.
+        """
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="AcquireProjectionLease",
+                service_name="ironflow.v1.ProjectionService",
+                input=AcquireProjectionLeaseRequest,
+                output=AcquireProjectionLeaseResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def renew_projection_lease(
+        self,
+        request: RenewProjectionLeaseRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> RenewProjectionLeaseResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="RenewProjectionLease",
+                service_name="ironflow.v1.ProjectionService",
+                input=RenewProjectionLeaseRequest,
+                output=RenewProjectionLeaseResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def release_projection_lease(
+        self,
+        request: ReleaseProjectionLeaseRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> ReleaseProjectionLeaseResponse:
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ReleaseProjectionLease",
+                service_name="ironflow.v1.ProjectionService",
+                input=ReleaseProjectionLeaseRequest,
+                output=ReleaseProjectionLeaseResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

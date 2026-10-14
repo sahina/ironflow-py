@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 _MAX_BYTES = 64 * 1024
-_URL_VARS = ("IRONFLOW_URL", "IRONFLOW_SERVER_URL", "IRONFLOW_API_KEY")
+_URL_VARS = ("IRONFLOW_SERVER_URL", "IRONFLOW_API_KEY")
 
 
 def _read(path: Path) -> bytes | None:
@@ -58,7 +58,7 @@ def discover(
             return {}
         if not isinstance(doc, dict) or doc.get("version") != 1 or not _loopback_http(doc.get("url")):
             return {}
-        out = {"IRONFLOW_URL": doc["url"], "IRONFLOW_SERVER_URL": doc["url"]}
+        out = {"IRONFLOW_SERVER_URL": doc["url"]}
         key, environment = doc.get("api_key"), doc.get("environment")
         if isinstance(key, str) and key:
             out["IRONFLOW_API_KEY"] = key
@@ -72,7 +72,7 @@ _done = False
 
 
 def hydrate_env_from_discovery() -> None:
-    """Run once per process, before the first read of IRONFLOW_URL / _SERVER_URL / _API_KEY. Never at import."""
+    """Run once per process, before the first read of IRONFLOW_SERVER_URL / _API_KEY. Never at import."""
     global _done
     if _done:
         return

@@ -37,24 +37,26 @@ class CommandDedup(Generic[T]):
     """Claim-first command idempotency.
 
     ``try_claim`` reserves the command id before any handler work. The winner
-    gets ``None`` and proceeds; a loser gets the prior entry without re-running
-    the handler::
+    gets ``None`` and proceeds; a later caller gets the prior entry, which may
+    still be pending. Recover pending claims through idempotent effects::
 
         dedup = client.command_dedup("order-commands")
-        prior = dedup.try_claim(command_id, {"orderId": order_id})
+        prior = dedup.try_claim(command_id, {"status": "claimed"})
         if prior is not None:
-            return prior  # duplicate: return the cached result
+            if prior.get("status") == "done":
+                return prior["result"]
+            raise RuntimeError("Command is pending; reconcile its effects before retrying")
+
         try:
-            result = run_handler()
-            dedup.finalize(command_id, result)
-            return result
+            result = run_handler()  # Effects must support idempotent retries.
         except Exception:
-            dedup.release(command_id)
+            dedup.release(command_id)  # Only the claim winner reaches here.
             raise
+        dedup.finalize(command_id, {"status": "done", "result": result})
+        return result
 
     The returned entry is the winner's initial claim until it calls
-    ``finalize``, so give the value type optional fields for data that only
-    exists after the handler runs.
+    ``finalize``, so a status field must tell the claim from a finished result.
 
     Call ``release`` only on failure, before ``finalize`` succeeds. Releasing
     after ``finalize`` deletes the result and lets the command replay.

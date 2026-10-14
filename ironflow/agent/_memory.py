@@ -6,6 +6,7 @@ import os
 from typing import Any, Protocol
 
 from .._discovery import hydrate_env_from_discovery
+from .._http import configured_server_url
 from ..worker import Step
 from ._errors import AgentError
 from ._types import MemoryConfig
@@ -31,7 +32,7 @@ class Memory:
 
     def _require_backend(self) -> MemoryBackend:
         if self._backend is None:
-            raise AgentError("agent memory needs a backend: set IRONFLOW_URL (or IRONFLOW_SERVER_URL) and "
+            raise AgentError("agent memory needs a backend: set IRONFLOW_SERVER_URL and "
                              "IRONFLOW_API_KEY, or pass MemoryConfig(backend=...)", "AGENT_MEMORY_NO_BACKEND")
         return self._backend
 
@@ -103,5 +104,5 @@ class _RPCBackend:
 
 def rpc_backend(environment: str | None = None) -> MemoryBackend | None:
     hydrate_env_from_discovery()
-    url = os.environ.get("IRONFLOW_URL") or os.environ.get("IRONFLOW_SERVER_URL")
+    url = configured_server_url()
     return _RPCBackend(url, os.environ.get("IRONFLOW_API_KEY"), environment) if url else None

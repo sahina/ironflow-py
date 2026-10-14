@@ -30,7 +30,7 @@ def run(doc: object, env: dict[str, str] | None = None, at: str = "/a/b/c") -> d
 
 def test_fills_all_from_nearest_parent():
     assert run(DOC, at="/a") == {
-        "IRONFLOW_URL": DOC["url"], "IRONFLOW_SERVER_URL": DOC["url"],
+        "IRONFLOW_SERVER_URL": DOC["url"],
         "IRONFLOW_API_KEY": "ifkey_x", "IRONFLOW_ENV": "dev",
     }
 
@@ -38,18 +38,18 @@ def test_fills_all_from_nearest_parent():
 def test_nearest_parent_wins_even_when_invalid():
     other = {**DOC, "url": "http://localhost:1"}
     read = files(**{"/a": other, "/a/b": DOC})
-    assert discover({}, CWD, read)["IRONFLOW_URL"] == DOC["url"]
+    assert discover({}, CWD, read)["IRONFLOW_SERVER_URL"] == DOC["url"]
     read = files(**{"/a": other, "/a/b": {**DOC, "version": 2}})
     assert discover({}, CWD, read) == {}
 
 
-@pytest.mark.parametrize("name", ["IRONFLOW_URL", "IRONFLOW_SERVER_URL", "IRONFLOW_API_KEY"])
+@pytest.mark.parametrize("name", ["IRONFLOW_SERVER_URL", "IRONFLOW_API_KEY"])
 def test_any_set_var_is_a_noop(name):
     assert run(DOC, {name: "x"}) == {}
 
 
 def test_empty_var_counts_as_unset():
-    assert run(DOC, {"IRONFLOW_URL": ""})["IRONFLOW_URL"] == DOC["url"]
+    assert run(DOC, {"IRONFLOW_SERVER_URL": ""})["IRONFLOW_SERVER_URL"] == DOC["url"]
 
 
 def test_opt_out():
@@ -66,7 +66,7 @@ def test_bad_url_ignored(url):
 
 @pytest.mark.parametrize("url", ["http://localhost:1", "http://127.9.9.9:1", "http://[::1]:1", "http://LOCALHOST"])
 def test_loopback_urls_accepted(url):
-    assert run({**DOC, "url": url})["IRONFLOW_URL"] == url
+    assert run({**DOC, "url": url})["IRONFLOW_SERVER_URL"] == url
 
 
 @pytest.mark.parametrize("doc", [
@@ -79,7 +79,7 @@ def test_invalid_file_ignored(doc):
 
 def test_api_key_and_environment_optional():
     assert run({"version": 1, "url": DOC["url"]}) == {
-        "IRONFLOW_URL": DOC["url"], "IRONFLOW_SERVER_URL": DOC["url"]}
+        "IRONFLOW_SERVER_URL": DOC["url"]}
 
 
 def test_environment_only_fills_when_unset():
@@ -89,7 +89,7 @@ def test_environment_only_fills_when_unset():
 
 @pytest.fixture()
 def fresh(monkeypatch, tmp_path):
-    for n in ("IRONFLOW_URL", "IRONFLOW_SERVER_URL", "IRONFLOW_API_KEY", "IRONFLOW_ENV", "IRONFLOW_NO_DISCOVERY"):
+    for n in ("IRONFLOW_SERVER_URL", "IRONFLOW_API_KEY", "IRONFLOW_ENV", "IRONFLOW_NO_DISCOVERY"):
         monkeypatch.setenv(n, "")  # records the original so teardown undoes what hydrate sets
         monkeypatch.delenv(n)
     monkeypatch.setattr(_discovery, "_done", False)
@@ -104,11 +104,11 @@ def test_hydrate_sets_only_unset_and_runs_once(fresh, monkeypatch):
     import os
     monkeypatch.setenv("IRONFLOW_ENV", "prod")
     _discovery.hydrate_env_from_discovery()
-    assert os.environ["IRONFLOW_URL"] == DOC["url"]
+    assert os.environ["IRONFLOW_SERVER_URL"] == DOC["url"]
     assert os.environ["IRONFLOW_ENV"] == "prod"
-    monkeypatch.setenv("IRONFLOW_URL", "http://elsewhere")
+    monkeypatch.setenv("IRONFLOW_SERVER_URL", "http://elsewhere")
     _discovery.hydrate_env_from_discovery()
-    assert os.environ["IRONFLOW_URL"] == "http://elsewhere"
+    assert os.environ["IRONFLOW_SERVER_URL"] == "http://elsewhere"
 
 
 def test_worker_picks_up_discovery_file(fresh):

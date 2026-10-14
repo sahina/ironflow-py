@@ -78,6 +78,7 @@ __all__ = [
     "IronflowError",
     "PayloadTooLargeError",
     "PreconditionFailedError",
+    "PreconditionRequiredError",
     "ReadinessResponse",
     "ServerCapabilities",
     "UnsupportedMediaTypeError",
@@ -116,6 +117,11 @@ _DEFAULT_MAX_BACKOFF = 10.0
 _DEFAULT_BACKOFF_FACTOR = 2.0
 
 _log = logging.getLogger("ironflow")
+
+
+def configured_server_url() -> str | None:
+    """IRONFLOW_SERVER_URL, or None when it is unset or blank."""
+    return (os.environ.get("IRONFLOW_SERVER_URL") or "").strip() or None
 
 
 class HealthResponse(TypedDict, total=False):
@@ -172,6 +178,10 @@ class PreconditionFailedError(IronflowError):
     """HTTP 412: an ``If-Match`` / ``If-None-Match`` precondition failed."""
 
 
+class PreconditionRequiredError(IronflowError):
+    """HTTP 428: the write needs ``If-Match`` (the version you read)."""
+
+
 class PayloadTooLargeError(IronflowError):
     """HTTP 413: the upload is over the effective size cap."""
 
@@ -182,6 +192,7 @@ class UnsupportedMediaTypeError(IronflowError):
 
 _TYPED_HTTP_ERRORS: dict[int, type[IronflowError]] = {
     412: PreconditionFailedError,
+    428: PreconditionRequiredError,
     413: PayloadTooLargeError,
     415: UnsupportedMediaTypeError,
 }
@@ -630,6 +641,11 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
             # wait is pure wasted wall-clock.
             is_final = attempt == attempts
             if is_final or not last.retryable:
+                raise last
+            # A conditional write that got a 5xx may have committed (a policy-set
+            # PUT answers 503 after it is saved). The resend would then fail with
+            # a misleading 412, so only a 429, refused before it ran, is resent.
+            if headers and "if-match" in {k.lower() for k in headers} and last.status_code != 429:
                 raise last
 
             # Clamp the server's Retry-After to our own ceiling. Unclamped, one

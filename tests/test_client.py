@@ -225,17 +225,6 @@ class TestAnnotatedGroupRoundTrips:
         assert result["count"] == 2
         assert result["keys"] == ["user:1", "user:2"]
 
-    def test_roles_list_policies(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = {
-            "policies": [
-                {"id": "pol_1", "name": "read-runs", "effect": "allow"},
-            ]
-        }
-        result = mock_server.roles_list_policies("role_ops")
-        assert MockHandler.requests[0]["path"] == "/api/v1/roles/role_ops/policies"
-        assert result["policies"][0]["id"] == "pol_1"
-        assert result["policies"][0]["effect"] == "allow"
-
     def test_users_get(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = {
             "id": "usr_1",
@@ -267,15 +256,6 @@ class TestAnnotatedGroupRoundTrips:
         assert MockHandler.requests[0]["headers"]["X-Ironflow-Environment"] == "default"
         assert result["name"] == "STRIPE_KEY"
         assert result["revision"] == 3
-
-    def test_policies_list(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = [
-            {"id": "pol_1", "name": "deny-prod", "effect": "deny", "role_count": 2}
-        ]
-        result = mock_server.policies_list()
-        assert MockHandler.requests[0]["path"] == "/api/v1/policies"
-        assert result[0]["id"] == "pol_1"
-        assert result[0]["role_count"] == 2
 
     def test_config_get(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = {
@@ -422,42 +402,6 @@ class TestAnnotatedGroupRoundTrips:
         assert MockHandler.requests[2]["method"] == "DELETE"
         assert discarded["result"] == "discarded"
 
-    def test_policies_versions_and_dry_run(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = [
-            {"policy_id": "pol_1", "version": 2, "name": "deny-prod"},
-            {"policy_id": "pol_1", "version": 1, "name": "deny-prod"},
-        ]
-        versions = mock_server.policies_list_versions("pol_1")
-        assert MockHandler.requests[0]["path"] == "/api/v1/policies/pol_1/versions"
-        assert versions[0]["version"] == 2
-
-        # dry-run always answers 200: a compile or eval failure is reported in
-        # the body, not as an HTTP error, so the client never raises for it.
-        MockHandler.response_body = {
-            "matched": False,
-            "compile_error": "undeclared reference to 'nope'",
-            "condition_source": "nope == 1",
-        }
-        dry = mock_server.policies_dry_run({"condition": "nope == 1"})
-        assert MockHandler.requests[1]["path"] == "/api/v1/policies/dry-run"
-        assert dry["matched"] is False
-        assert "undeclared" in dry["compile_error"]
-
-    def test_policy_templates_install(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_body = {
-            "template_id": "tmpl_baseline",
-            "version": "1.0.0",
-            "policies": [{"id": "pol_1", "name": "deny-prod"}],
-            "policies_count": 1,
-        }
-        result = mock_server.policy_templates_install("tmpl_baseline")
-        assert MockHandler.requests[0]["method"] == "POST"
-        assert (
-            MockHandler.requests[0]["path"]
-            == "/api/v1/policy-templates/tmpl_baseline/install"
-        )
-        assert result["policies_count"] == 1
-
     def test_runs_list_streams(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = {"entity_ids": ["order-42", "order-43"]}
         result = mock_server.runs_list_streams("run_1")
@@ -554,44 +498,13 @@ class TestAnnotatedGroupRoundTrips:
             "org_id": "org_platform",
             "name": "platform_auditor",
         }
-        created = mock_server.platform_roles_create(
-            {"name": "auditor", "policy_ids": ["ppol_1"]}
-        )
+        created = mock_server.platform_roles_create({"name": "auditor"})
         # The handler force-prefixes "platform_" onto the name it is given.
         assert MockHandler.requests[1]["body"]["name"] == "auditor"
         assert created["name"] == "platform_auditor"
 
         MockHandler.response_status = 204
         assert mock_server.platform_roles_delete("prole_1") is None
-
-    def test_platform_policies_round_trip(self, mock_server: IronflowClient) -> None:
-        MockHandler.response_status = 201
-        MockHandler.response_body = {
-            "id": "ppol_1",
-            "org_id": "org_platform",
-            "name": "deny-tenant-delete",
-            "effect": "deny",
-            "actions": "tenants:delete",
-            "resources": "*",
-        }
-        created = mock_server.platform_policies_create(
-            {
-                "name": "deny-tenant-delete",
-                "effect": "deny",
-                "actions": "tenants:delete",
-                "resources": "*",
-            }
-        )
-        assert MockHandler.requests[0]["path"] == "/api/v1/platform/policies"
-        assert created["effect"] == "deny"
-
-        MockHandler.response_status = 200
-        MockHandler.response_body = dict(created, actions="tenants:*")
-        updated = mock_server.platform_policies_update(
-            "ppol_1", {"actions": "tenants:*"}
-        )
-        assert MockHandler.requests[1]["method"] == "PUT"
-        assert updated["actions"] == "tenants:*"
 
     def test_platform_tenants_round_trip(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = [

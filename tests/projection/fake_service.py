@@ -6,13 +6,29 @@ import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
+from protobuf.wkt import Duration
+
 from ironflow._gen.projection_pb import (
     AckProjectionEventsResponse,
+    AcquireProjectionLeaseResponse,
     GetProjectionResponse,
     PollProjectionEventsResponse,
+    ProjectionLease,
     RegisterProjectionResponse,
+    ReleaseProjectionLeaseResponse,
+    RenewProjectionLeaseResponse,
     SaveProjectionStateResponse,
 )
+
+
+def granted(epoch: int = 1, ttl: float = 3600.0) -> AcquireProjectionLeaseResponse:
+    """A grant with a TTL so long that no Renew runs in a test that does not ask for one."""
+    return AcquireProjectionLeaseResponse(
+        granted=True,
+        lease=ProjectionLease(token=f"sdk:t{epoch}", epoch=epoch),
+        ttl=Duration(seconds=int(ttl), nanos=int(ttl % 1 * 1e9)),
+    )
+
 
 DEFAULTS: dict[str, Any] = {
     "register_projection": RegisterProjectionResponse,
@@ -20,6 +36,9 @@ DEFAULTS: dict[str, Any] = {
     "poll_projection_events": PollProjectionEventsResponse,
     "save_projection_state": SaveProjectionStateResponse,
     "ack_projection_events": AckProjectionEventsResponse,
+    "acquire_projection_lease": granted,
+    "renew_projection_lease": RenewProjectionLeaseResponse,
+    "release_projection_lease": ReleaseProjectionLeaseResponse,
 }
 
 
@@ -30,8 +49,8 @@ class FakeProjectionService:
         self.script: dict[str, list[Any]] = {}
         self.streams: list[list[Any]] = []  # each entry: frames, exceptions or float pauses for one stream call
 
-    def _next(self, method: str) -> Any:
-        self.calls.append((method, None))
+    def _next(self, method: str, request: Any = None) -> Any:
+        self.calls.append((method, request))
         queue = self.script.get(method) or []
         item = queue.pop(0) if queue else DEFAULTS[method]()
         if isinstance(item, BaseException):
@@ -44,9 +63,7 @@ class FakeProjectionService:
 
         async def call(request: Any, **kw: Any) -> Any:
             self.kwargs.append((method, kw))
-            result = self._next(method)
-            self.calls[-1] = (method, request)
-            return result
+            return self._next(method, request)
 
         return call
 
