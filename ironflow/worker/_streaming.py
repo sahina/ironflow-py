@@ -207,7 +207,9 @@ class StreamingWorker(Worker):
     async def _heartbeat_loop(self) -> None:
         while True:
             await asyncio.sleep(self._heartbeat_interval)
-            if self.state != "connected" or not self._registered:
+            # Keep heartbeating while draining: the heartbeat refreshes the
+            # leases of the jobs still running (#2874).
+            if self.state not in ("connected", "draining") or not self._registered:
                 continue
             jobs = [active for active in self._jobs.values() if not active.abandoned]
             message = _message(
@@ -664,7 +666,7 @@ class StreamingWorker(Worker):
         return StepYielded(
             job_id=job["job_id"],
             step_id=info["step_id"],
-            yield_info=yield_info,
+            yield_info=cast(Any, yield_info),  # pyrefly 1.4 drops the Any annotation
             execution_seq=job["execution_seq"],
             lease_token=job["lease_token"],
         )
