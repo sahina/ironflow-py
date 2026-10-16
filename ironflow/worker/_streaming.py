@@ -12,7 +12,7 @@ from collections import deque
 from collections.abc import AsyncIterator, Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 import pyqwest
 from connectrpc.code import Code
@@ -131,6 +131,13 @@ def _job_from_proto(proto: ProtoJobAssignment) -> JobAssignment:
 
 
 _OUTBOX_LIMIT = 256
+
+_YieldOneof: TypeAlias = (
+    Oneof[Literal["sleep"], SleepYield]
+    | Oneof[Literal["wait_event"], WaitEventYield]
+    | Oneof[Literal["invoke_function"], InvokeFunctionYield]
+    | Oneof[Literal["invoke_function_async"], InvokeFunctionAsyncYield]
+)
 
 
 def _payload(value: Any) -> dict[str, Any]:
@@ -621,7 +628,7 @@ class StreamingWorker(Worker):
 
     def _yield_message(self, job: JobAssignment, info: YieldInfo) -> StepYielded:
         if info["type"] == "sleep":
-            yield_info: Any = Oneof(
+            yield_info: _YieldOneof = Oneof(
                 "sleep",
                 SleepYield(
                     until=Timestamp.from_datetime(parse_timestamp(info["until"]))
@@ -666,7 +673,7 @@ class StreamingWorker(Worker):
         return StepYielded(
             job_id=job["job_id"],
             step_id=info["step_id"],
-            yield_info=cast(Any, yield_info),  # pyrefly 1.4 drops the Any annotation
+            yield_info=yield_info,
             execution_seq=job["execution_seq"],
             lease_token=job["lease_token"],
         )

@@ -1,6 +1,6 @@
 """The RPC facade against a real Ironflow server (#1781).
 
-Twelve scenarios, each here because only a live server can prove it:
+Thirteen scenarios, each here because only a live server can prove it:
 
   1. An ordinary unary RPC reaches a real handler and returns a real message.
   2. WebhookService round-trips — the service whose handler registers a
@@ -16,6 +16,7 @@ Twelve scenarios, each here because only a live server can prove it:
  10. KV and config watch see real updates over WebSocket (#2397).
  11. Command dedup claims, finalizes and releases through real KV (#2412).
  12. A MANUAL consumer group redelivers an event after nak (#2412).
+ 13. A subscription replays history, then delivers a live event.
 
 ON 6-8, WHICH THIS FILE PREVIOUSLY DECLARED OUT OF SCOPE
 -------------------------------------------------------
@@ -62,6 +63,7 @@ from ironflow.rpc.v1 import (
     JoinConsumerGroupRequest,
     ListTopicsRequest,
     PublishRequest,
+    SubscribeOptions,
     SubscribeRequest,
     TriggerRequest,
 )
@@ -170,6 +172,37 @@ def test_subscribe_receives_a_published_event(
         f"no event arrived on {topic} within the deadline. The stream opened, so "
         f"this is either a publish that did not land or a delivery path that is "
         f"broken — not a client-side framing problem."
+    )
+
+
+def test_subscribe_replays_history_then_delivers_live(
+    rpc: IronflowRPC, publish_rpc: IronflowRPC
+) -> None:
+    """`replay=N` delivers the last N events, then the stream stays live."""
+    topic = unique("pysdk.replay")
+    for i in range(3):
+        publish_rpc.pubsub.publish(
+            PublishRequest(topic=topic, data_value=Value.from_python(f"r{i}"))
+        )
+
+    received: list[Any] = []
+    publisher = publish_after(publish_rpc, topic, "live", delay=2.0)
+    try:
+        for event in rpc.pubsub.subscribe(
+            SubscribeRequest(pattern=f"topic:{topic}", options=SubscribeOptions(replay=3)),
+            timeout=15.0,
+        ):
+            received.append(event.data_value.to_python())
+            if len(received) == 4:
+                break
+    except IronflowRPCError as err:
+        if err.code != "deadline_exceeded":
+            raise
+    finally:
+        publisher.join(timeout=5)
+
+    assert received == ["r0", "r1", "r2", "live"], (
+        f"got {received}: want 3 replayed events in publish order, then 1 live event"
     )
 
 
