@@ -14,7 +14,7 @@ from urllib.parse import quote, urlencode
 if TYPE_CHECKING:
     from websockets.asyncio.client import ClientConnection
 
-_HINT = "KV/config watch needs the 'watch' extra: pip install 'ironflow[watch]'"
+_HINT = "KV/config watch needs the 'watch' extra: pip install 'ironflow-py[watch]'"
 
 
 @dataclass(frozen=True)
@@ -113,6 +113,7 @@ class _WatchMixin:
         async with aclosing(self._frames(path)) as frames:
             async for f in frames:
                 if f.get("type") == "kv_update":
-                    value = f.get("value")
-                    yield KVWatchEvent(key=f["key"], value=None if value is None else base64.b64decode(value),
+                    value = f.get("value")  # a delete carries "", not null
+                    deleted = value is None or f["operation"] == "delete"
+                    yield KVWatchEvent(key=f["key"], value=None if deleted else base64.b64decode(value),
                                        revision=f["revision"], operation=f["operation"], bucket=f["bucket"])

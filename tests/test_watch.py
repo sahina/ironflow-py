@@ -55,7 +55,8 @@ def test_kv_events_decode_base64_and_query() -> None:
     put = {"type": "kv_update", "key": "user.1", "value": base64.b64encode(b"hi").decode(),
            "revision": 1, "operation": "put", "bucket": "s b"}
     empty = {"type": "kv_update", "key": "user.2", "value": "", "revision": 2, "operation": "put", "bucket": "s b"}
-    delete = {"type": "kv_update", "key": "user.1", "revision": 3, "operation": "delete", "bucket": "s b"}
+    # The engine sends "value": "" on a delete (#2949).
+    delete = {"type": "kv_update", "key": "user.1", "value": "", "revision": 3, "operation": "delete", "bucket": "s b"}
 
     async def run(url: str) -> list[KVWatchEvent]:
         return [ev async for ev in IronflowClient(url).watch_kv("s b", key="user.*")]
@@ -151,7 +152,7 @@ def test_missing_extra_hint(monkeypatch: pytest.MonkeyPatch) -> None:
         async for _ in IronflowClient("http://x").watch_config("c"):
             pass
 
-    with pytest.raises(ImportError, match=r"pip install 'ironflow\[watch\]'"):
+    with pytest.raises(ImportError, match=r"pip install 'ironflow-py\[watch\]'"):
         asyncio.run(run())
 
 

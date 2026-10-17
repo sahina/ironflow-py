@@ -15,6 +15,7 @@ path parameter, gets trailing underscores until it is free ("from" becomes
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Mapping
 from typing import Any, BinaryIO, cast
 from urllib.parse import quote
@@ -181,7 +182,7 @@ class IronflowClient(BaseClient):
 
     def debounce_delete_entries(self, env_id: str, fn_id: str, key: str) -> Any:
         """DELETE /api/v1/debounce/entries/{envID}/{fnID}/{key}"""
-        path = f"/api/v1/debounce/entries/{quote(env_id, safe='')}/{quote(fn_id, safe='')}/{quote(key, safe='')}"
+        path = f"/api/v1/debounce/entries/{quote(env_id, safe='')}/{quote(fn_id, safe='')}/{quote(base64.urlsafe_b64encode(key.encode()).decode().rstrip('='), safe='')}"
         return self._request("DELETE", path)
 
     def debounce_list_entries(self) -> list[models.DebounceEntryView]:

@@ -425,6 +425,22 @@ class TestAnnotatedGroupRoundTrips:
         assert MockHandler.requests[0]["path"] == "/api/v1/debounce/entries"
         assert result[0]["period_ms"] == 500
 
+    @pytest.mark.parametrize(
+        ("key", "segment"),
+        [
+            # Not base64url: the raw key drew a 400.
+            ("seed key/é", "c2VlZCBrZXkvw6k"),
+            # Valid base64url by accident: the raw key decoded to other bytes, so
+            # the server answered 204 and cancelled nothing (#2948).
+            ("user123", "dXNlcjEyMw"),
+        ],
+    )
+    def test_debounce_delete_entries_encodes_key(self, mock_server: IronflowClient, key: str, segment: str) -> None:
+        MockHandler.response_status = 204
+        mock_server.debounce_delete_entries("env_default", "fn/1", key)
+        assert MockHandler.requests[0]["method"] == "DELETE"
+        assert MockHandler.requests[0]["path"] == f"/api/v1/debounce/entries/env_default/fn%2F1/{segment}"
+
     # ── groups added by the 22 platform-route registration ───────────────
 
     def test_platform_users_round_trip(self, mock_server: IronflowClient) -> None:
