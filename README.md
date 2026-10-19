@@ -69,6 +69,11 @@ async def process_order(ctx):
 Worker(functions=[process_order]).run()
 ```
 
+The worker long-polls: it asks the server to hold an empty job poll for up to
+`poll_wait` seconds (default 20, capped at 25) and picks a job up as soon as one is
+enqueued. Pass `poll_wait=0` to poll once a second instead. Against a server that
+does not hold polls, the worker keeps the one-second pause between polls.
+
 Replace `Worker` with `StreamingWorker` to keep one ConnectRPC connection open
 for assignments and worker messages. It requires an HTTP/2-capable server endpoint.
 

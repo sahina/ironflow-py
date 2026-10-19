@@ -38,6 +38,7 @@ class FakeEngine:
         self.queue: list[dict[str, Any]] = []
         self._faults: dict[str, list[tuple[int, Any]]] = {}
         self._stalls: dict[str, float] = {}
+        self.poll_wait_header: str | None = None  # Ironflow-Poll-Wait on poll replies
         engine = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -52,6 +53,8 @@ class FakeEngine:
                 status, reply = engine.handle(method, path, query, dict(self.headers), body)
                 data = b"" if reply is None else json.dumps(reply).encode()
                 self.send_response(status)
+                if method == "GET" and path.endswith("/jobs") and engine.poll_wait_header is not None:
+                    self.send_header("Ironflow-Poll-Wait", engine.poll_wait_header)
                 if data:
                     self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))

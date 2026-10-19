@@ -105,7 +105,7 @@ def test_no_escape_hatches_on_any_namespace() -> None:
 
 
 def test_subscribe_bidirectional_is_not_exposed() -> None:
-    """Served, but the handler answers Unimplemented.
+    """Served, but the Python client does not wrap it yet (#2973, PR 2).
 
     Its absence is a promise in the ADR, and it is generated onto
     PubSubServiceClientSync, so this asserts the wrapper is what removes it.

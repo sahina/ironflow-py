@@ -38,8 +38,18 @@ if TYPE_CHECKING:
     from ..upcaster import UpcasterRegistry
 
 
+def _held(reply: Reply) -> bool:
+    try:
+        return int(reply.headers.get("ironflow-poll-wait", "0")) > 0
+    except ValueError:
+        return False
+
+
 class WorkerAuthError(IronflowError):
     """The server rejected the worker's credentials (401 or 403)."""
+
+
+_MAX_POLL_WAIT = 25
 
 
 def _sdk_version() -> str:
@@ -64,7 +74,7 @@ class Worker:
         self, *, functions: Sequence[Function], server_url: str | None = None, api_key: str | None = None,
         environment: str | None = None, worker_id: str | None = None, max_concurrent_jobs: int = 10,
         heartbeat_interval: Duration = 30, reconnect_delay: Duration = 5, checkpoint_interval: Duration = 1,
-        drain_timeout: Duration = 60, labels: Mapping[str, str] | None = None, logger: logging.Logger | None = None,
+        drain_timeout: Duration = 60, poll_wait: float = 20, labels: Mapping[str, str] | None = None, logger: logging.Logger | None = None,
         upcasters: UpcasterRegistry | None = None, projections: Sequence[Projection] = (),
     ) -> None:
         if not functions and not projections:
@@ -77,6 +87,8 @@ class Worker:
             raise ValueError(f"duplicate projection names: {names}")
         if max_concurrent_jobs < 1:
             raise ValueError("max_concurrent_jobs must be at least 1")
+        if poll_wait < 0:
+            raise ValueError("poll_wait must not be negative")
         self._functions = {f.id: f for f in functions}
         self._projections = list(projections)
         self._runners: list[Any] = []
@@ -99,6 +111,8 @@ class Worker:
         self.state = "idle"
         self._jobs: dict[str, _ActiveJob] = {}
         self._idle_poll = 1.0
+        # The server caps a held poll at 25s; the transport times out at 30s.
+        self._poll_wait = int(min(poll_wait, _MAX_POLL_WAIT))
         self._max_backoff = 60.0
         self._report_delays: tuple[float, ...] = (1.0, 2.0, 4.0, 8.0)
         self._cleanup_timeout = 5.0
@@ -354,14 +368,18 @@ class Worker:
                 except asyncio.TimeoutError:
                     pass
                 continue
+            path = f"/api/v1/workers/{self.worker_id}/jobs?available={free}"
+            if self._poll_wait > 0:
+                path += f"&wait={self._poll_wait}"
             try:
-                reply = await self._transport.request(
-                    "GET", f"/api/v1/workers/{self.worker_id}/jobs?available={free}")
+                reply = await self._poll(path)
             except IronflowError as exc:
                 self._log.warning("poll failed: %s", exc)
                 await self._pause(backoff)
                 backoff = min(backoff * 2, self._max_backoff)
                 continue
+            if reply is None:  # draining began while the poll was held
+                return
             if reply.status in (401, 403):
                 raise WorkerAuthError(f"poll: unauthorized ({reply.status})", status_code=reply.status)
             if reply.status == 404:
@@ -376,7 +394,10 @@ class Worker:
                 continue
             backoff = self._reconnect_delay  # reset only on a 2xx (#1673)
             if reply.status == 204:
-                await self._pause(self._idle_poll)
+                # Only a server that held the poll sends this header; without it
+                # (older server, wait=0) the poll returned at once, so pause.
+                if not _held(reply):
+                    await self._pause(self._idle_poll)
                 continue
             try:
                 raws = parse_jobs(reply.body)
@@ -392,6 +413,22 @@ class Worker:
                     self._start_job(parse_job(raw))
                 except ValueError as exc:
                     self._log.error("invalid job assignment: %s", exc)
+
+    async def _poll(self, path: str) -> Reply | None:
+        """GET the job poll; None when draining began first (the held poll is dropped)."""
+        assert self._draining is not None
+        call = asyncio.ensure_future(self._transport.request("GET", path))
+        draining = asyncio.ensure_future(self._draining.wait())
+        try:
+            done, _ = await asyncio.wait({call, draining}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            draining.cancel()
+            if not call.done():
+                call.cancel()
+        if call in done:
+            return call.result()
+        await asyncio.gather(call, return_exceptions=True)
+        return None
 
     # ---- jobs ---------------------------------------------------------------
 

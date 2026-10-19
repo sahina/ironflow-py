@@ -5,12 +5,13 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import pyqwest
 
 from .._http import IronflowError
+from .._skew import SDK_HEADER, sdk_header_value
 
 _NETWORK_ERRORS: tuple[type[BaseException], ...] = (
     OSError, pyqwest.ReadError, pyqwest.WriteError, pyqwest.RemoteProtocolError,
@@ -21,6 +22,7 @@ _NETWORK_ERRORS: tuple[type[BaseException], ...] = (
 class Reply:
     status: int
     body: Any
+    headers: Mapping[str, str] = field(default_factory=dict)  # lower-cased names
 
     @property
     def ok(self) -> bool:
@@ -46,7 +48,7 @@ class Transport:
         self._timeout = request_timeout
 
     def headers(self) -> dict[str, str]:
-        headers = {"Content-Type": "application/json", "X-Ironflow-Environment": self._environment}
+        headers = {"Content-Type": "application/json", "X-Ironflow-Environment": self._environment, SDK_HEADER: sdk_header_value()}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
         return headers
@@ -80,9 +82,10 @@ class Transport:
                 f"{method} {path}: {exc}", code="NETWORK_ERROR", retryable=True,
             ) from exc
         raw = response.content
+        headers = {k.lower(): v for k, v in response.headers.items()}
         if not raw:
-            return Reply(response.status, None)
+            return Reply(response.status, None, headers)
         try:
-            return Reply(response.status, json.loads(raw))
+            return Reply(response.status, json.loads(raw), headers)
         except ValueError:
-            return Reply(response.status, raw.decode(errors="replace"))
+            return Reply(response.status, raw.decode(errors="replace"), headers)

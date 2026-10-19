@@ -65,6 +65,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from typing_extensions import Self, override
 
 from ._command_dedup import _CommandDedupMixin
+from ._skew import SDK_HEADER, sdk_header_value
 from ._watch import _WatchMixin
 
 __all__ = [
@@ -694,6 +695,7 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
             req.add_header("Content-Type", "application/json")
         if self.api_key:
             req.add_header("Authorization", f"Bearer {self.api_key}")
+        req.add_header(SDK_HEADER, sdk_header_value())  # before the caller's, so theirs wins
         for key, value in (headers or {}).items():
             req.add_header(key, value)
 

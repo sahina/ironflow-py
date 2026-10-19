@@ -278,7 +278,8 @@ class StubIronflowService(IronflowService):  # type: ignore[misc]
             raise ConnectError(Code.NOT_FOUND, "run not found")
         return Run(
             id=request.id,
-            status=RunStatus.RUNNING,
+            # "future" plays a server newer than this SDK: an enum number it does not know.
+            status=99 if request.id == "future" else RunStatus.RUNNING,
             event_name="order.created",
             input_value=Value.from_python(False),
         )

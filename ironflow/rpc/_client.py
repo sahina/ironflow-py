@@ -8,8 +8,8 @@ hand-written code belongs in `_runtime.py`, which this imports.
 Each namespace exposes exactly the methods the ledger classifies as `rpc` or
 `stream` for it, and nothing else. The generated `_gen` service clients carry
 32 more methods than the supported surface — REST-delivered capabilities,
-transport plumbing, infra probes, and a `subscribe_bidirectional` the server
-answers with Unimplemented — plus four `execute_*` escape hatches inherited
+transport plumbing, infra probes, and a `subscribe_bidirectional` the Python
+client does not wrap yet — plus four `execute_*` escape hatches inherited
 from `ConnectClientSync`. Wrapping rather than subclassing is what keeps those
 off the public API.
 

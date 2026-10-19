@@ -96,7 +96,7 @@ def full_config_function() -> Function:
         debounce={"period": "5s", "key": "data.customerId", "max_wait": "1m"},
         cancel_on=[{"event": "order.cancelled", "match": "data.orderId"}],
         actor_key="data.customerId", secrets=["STRIPE_KEY"], recording=True, recording_profile="steps",
-        recording_retention="30d", metadata={"team": "payments", "__ironflow_code_hash": "user"},
+        metadata={"team": "payments", "__ironflow_code_hash": "user"},
     )
     async def full(ctx: Any) -> None: ...
 
@@ -113,7 +113,6 @@ def test_registration_body_carries_every_config_field() -> None:
     assert body["secrets"] == ["STRIPE_KEY"]
     assert body["recording"] is True
     assert body["recordingProfile"] == "steps"
-    assert body["recordingRetention"] == "30d"
     # The reserved code-hash key wins over user metadata, as in Node.
     assert body["metadata"] == {"team": "payments", "__ironflow_code_hash": fn.code_hash}
     # step_timeout and schema are SDK-side only.
@@ -131,7 +130,6 @@ def test_registration_body_parses_as_the_proto_request() -> None:
     assert list(req.secrets) == ["STRIPE_KEY"]
     assert req.recording is True
     assert req.recording_profile == "steps"
-    assert req.recording_retention == "30d"
 
 
 @pytest.mark.parametrize("debounce", [{"period": 2}, {"period": 2, "max_wait": 0}])

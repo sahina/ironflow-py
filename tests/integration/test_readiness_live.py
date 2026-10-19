@@ -46,6 +46,7 @@ from ironflow.rpc.v1 import (
     RotateWebhookSecretRequest,
     TriggerBatchRequest,
     TriggerRequest,
+    TriggerSyncRequest,
     UpdateConsumerGroupRequest,
 )
 from ironflow.rpc.v1 import (
@@ -83,6 +84,27 @@ def test_event_emit_batch_and_event_names(rpc: Any, rest: IronflowClient) -> Non
 
     counts = {n["name"]: n["count"] for n in rest.events_list_names()["names"]}
     assert counts.get(a) == 1 and counts.get(b) == 1, (counts.get(a), counts.get(b))
+
+
+def test_event_emit_list_and_get(rpc: Any, rest: IronflowClient) -> None:
+    name = f"pysdk.readiness.emit.{time.time_ns()}"
+    res = rpc.runs.trigger(TriggerRequest(event=name, data=Struct.from_python({"i": 7})))
+    # No function listens on a unique name, so the event is stored with no runs.
+    assert res.event_id and list(res.run_ids) == [], res
+
+    page = rest.events_list(name=name, limit=5)
+    assert page["count"] == 1 and page["limit"] == 5, page
+    assert [e["id"] for e in page["events"]] == [res.event_id]
+
+    got = rest.events_get(res.event_id)
+    assert got["id"] == res.event_id and got["name"] == name and got["data"] == {"i": 7}, got
+
+
+def test_event_emit_sync(rpc: Any, rest: IronflowClient) -> None:
+    name = f"pysdk.readiness.sync.{time.time_ns()}"
+    res = rpc.runs.trigger_sync(TriggerSyncRequest(event=name, timeout_ms=5000))
+    assert res.event_id and list(res.results) == [], res
+    assert rest.events_get(res.event_id)["name"] == name
 
 
 def test_function_at_version(rpc: Any, seed: dict[str, Any]) -> None:

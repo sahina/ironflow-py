@@ -58,6 +58,7 @@ class _WatchMixin:
 
     async def _frames(self, path: str) -> AsyncGenerator[dict[str, Any], None]:
         from ._http import IronflowError
+        from ._skew import SDK_HEADER, sdk_header_value
         try:
             from websockets.asyncio.client import connect
             from websockets.exceptions import (
@@ -68,7 +69,9 @@ class _WatchMixin:
         except ImportError as exc:
             raise ImportError(_HINT) from exc
 
-        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else None
+        headers = {SDK_HEADER: sdk_header_value()}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         try:
             ws: ClientConnection = await connect(_ws_url(self.server_url, path), additional_headers=headers)
         except InvalidStatus as exc:

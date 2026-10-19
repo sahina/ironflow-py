@@ -141,6 +141,9 @@ class ProjectionRunner:
         self._reader: asyncio.Future[None] | None = None
         self._timed: set[asyncio.Future[None]] = set()
         self._flush_failed = False
+        # A failed save may still have landed (only its response was lost), and the reload
+        # after it failed too: load the state before the next stream (#2977).
+        self._reload = False
         self._got_frame = False
         self._progressed = False  # a batch with events succeeded on this stream
         self._stopping: asyncio.Event | None = None
@@ -259,8 +262,9 @@ class ProjectionRunner:
         except Exception as exc:
             if self._is_lost(exc):
                 raise  # the run loop drops the state; a reload here would read the next holder's
+            self._reload = True
             with contextlib.suppress(ProjectionAuthError):  # the flush error below is what counts
-                await self._load_state()
+                self._reload = not await self._load_state()
             raise
 
     async def _flush_external(self, events: list[ProjectionEvent]) -> None:
@@ -448,6 +452,7 @@ class ProjectionRunner:
         async with self._lock:  # a timed flush that waits here then finds nothing to save
             self._pending = []
             self._flush_failed = False
+            self._reload = False  # the next grant loads the state before it streams
             self._state = self._initial()
             self._lease = None
             self._lost = asyncio.Event()
@@ -542,6 +547,13 @@ class ProjectionRunner:
         failures = 0
         while not self._stopping.is_set():
             self._check_lease()
+            # The stream replays from the server cursor, so the state must be the server's too.
+            if self._reload:
+                if not await self._load_state():
+                    failures += 1
+                    await self._sleep(min(self.reconnect_base * 2 ** (failures - 1), self.reconnect_max))
+                    continue
+                self._reload = False
             self._got_frame = False
             self._progressed = False
             self._reader = asyncio.ensure_future(self._read_stream())

@@ -488,7 +488,7 @@ rpcs:
   - path: ironflow.v1.PubSubService/SubscribeBidirectional
     classification: unsupported
     note: >-
-      Served, but internal/server/connect/pubsub_handler.go:407 returns CodeUnimplemented. Never generate a method for it.
+      Served for consumer groups (ADR 0123). The Python client has no wrapper yet. Compose join_consumer_group and ack_event. Do not generate a method.
   - path: ironflow.v1.PubSubService/CreateConsumerGroup
     classification: rpc
     capability: pubsub

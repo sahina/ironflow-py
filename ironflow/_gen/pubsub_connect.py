@@ -17,7 +17,7 @@ from protobuf import DescService
 from protobuf.wkt import Empty
 
 from . import pubsub_pb
-from .pubsub_pb import AckEventRequest, AckEventResponse, ConsumerGroup, CreateConsumerGroupRequest, DeleteConsumerGroupRequest, EmitRequest, EmitResponse, GetConsumerGroupRequest, GetTopicStatsRequest, GetTopicStatsResponse, JoinConsumerGroupRequest, ListConsumerGroupsRequest, ListConsumerGroupsResponse, ListTopicsRequest, ListTopicsResponse, PublishRequest, PublishResponse, SubscribeRequest, SubscriptionAck, SubscriptionEvent, UpdateConsumerGroupRequest
+from .pubsub_pb import AckEventRequest, AckEventResponse, ConsumerGroup, CreateConsumerGroupRequest, DeleteConsumerGroupRequest, EmitRequest, EmitResponse, GetConsumerGroupRequest, GetTopicStatsRequest, GetTopicStatsResponse, JoinConsumerGroupRequest, ListConsumerGroupsRequest, ListConsumerGroupsResponse, ListTopicsRequest, ListTopicsResponse, PublishRequest, PublishResponse, SubscribeBidirectionalRequest, SubscribeBidirectionalResponse, SubscribeRequest, SubscriptionEvent, UpdateConsumerGroupRequest
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Iterable, Iterator, Mapping
@@ -45,10 +45,10 @@ class PubSubService(Protocol):
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
-    def subscribe_bidirectional(self, request: AsyncIterator[SubscriptionAck], ctx: RequestContext[SubscriptionAck, SubscriptionEvent], /) -> AsyncIterator[SubscriptionEvent]:
+    def subscribe_bidirectional(self, request: AsyncIterator[SubscribeBidirectionalRequest], ctx: RequestContext[SubscribeBidirectionalRequest, SubscribeBidirectionalResponse], /) -> AsyncIterator[SubscribeBidirectionalResponse]:
         """
-        SubscribeBidirectional provides bidirectional streaming for manual acks.
-        Client sends ack messages, server sends events.
+        SubscribeBidirectional joins one consumer group and carries its acks on the
+        same stream. The first request must be join.
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -146,8 +146,8 @@ class PubSubServiceASGIApplication(ConnectASGIApplication[PubSubService]):
                     method=MethodInfo(
                         name="SubscribeBidirectional",
                         service_name="ironflow.v1.PubSubService",
-                        input=SubscriptionAck,
-                        output=SubscriptionEvent,
+                        input=SubscribeBidirectionalRequest,
+                        output=SubscribeBidirectionalResponse,
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.subscribe_bidirectional,
@@ -318,22 +318,22 @@ class PubSubServiceClient(ConnectClient):
 
     def subscribe_bidirectional(
         self,
-        request: AsyncIterator[SubscriptionAck],
+        request: AsyncIterator[SubscribeBidirectionalRequest],
         *,
         headers: Headers | Mapping[str, str] | None = None, 
         timeout_ms: int | None = None,
-    ) -> AsyncIterator[SubscriptionEvent]:
+    ) -> AsyncIterator[SubscribeBidirectionalResponse]:
         """
-        SubscribeBidirectional provides bidirectional streaming for manual acks.
-        Client sends ack messages, server sends events.
+        SubscribeBidirectional joins one consumer group and carries its acks on the
+        same stream. The first request must be join.
         """
         return self.execute_bidi_stream(
             request=request,
             method=MethodInfo(
                 name="SubscribeBidirectional",
                 service_name="ironflow.v1.PubSubService",
-                input=SubscriptionAck,
-                output=SubscriptionEvent,
+                input=SubscribeBidirectionalRequest,
+                output=SubscribeBidirectionalResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,
@@ -587,10 +587,10 @@ class PubSubServiceSync(Protocol):
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
-    def subscribe_bidirectional(self, request: Iterator[SubscriptionAck], ctx: RequestContext[SubscriptionAck, SubscriptionEvent], /) -> Iterator[SubscriptionEvent]:
+    def subscribe_bidirectional(self, request: Iterator[SubscribeBidirectionalRequest], ctx: RequestContext[SubscribeBidirectionalRequest, SubscribeBidirectionalResponse], /) -> Iterator[SubscribeBidirectionalResponse]:
         """
-        SubscribeBidirectional provides bidirectional streaming for manual acks.
-        Client sends ack messages, server sends events.
+        SubscribeBidirectional joins one consumer group and carries its acks on the
+        same stream. The first request must be join.
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -686,8 +686,8 @@ class PubSubServiceWSGIApplication(ConnectWSGIApplication):
                     method=MethodInfo(
                         name="SubscribeBidirectional",
                         service_name="ironflow.v1.PubSubService",
-                        input=SubscriptionAck,
-                        output=SubscriptionEvent,
+                        input=SubscribeBidirectionalRequest,
+                        output=SubscribeBidirectionalResponse,
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.subscribe_bidirectional,
@@ -856,22 +856,22 @@ class PubSubServiceClientSync(ConnectClientSync):
         )
     def subscribe_bidirectional(
         self,
-        request: Iterator[SubscriptionAck],
+        request: Iterator[SubscribeBidirectionalRequest],
         *,
         headers: Headers | Mapping[str, str] | None = None, 
         timeout_ms: int | None = None,
-    ) -> Iterator[SubscriptionEvent]:
+    ) -> Iterator[SubscribeBidirectionalResponse]:
         """
-        SubscribeBidirectional provides bidirectional streaming for manual acks.
-        Client sends ack messages, server sends events.
+        SubscribeBidirectional joins one consumer group and carries its acks on the
+        same stream. The first request must be join.
         """
         return self.execute_bidi_stream(
             request=request,
             method=MethodInfo(
                 name="SubscribeBidirectional",
                 service_name="ironflow.v1.PubSubService",
-                input=SubscriptionAck,
-                output=SubscriptionEvent,
+                input=SubscribeBidirectionalRequest,
+                output=SubscribeBidirectionalResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

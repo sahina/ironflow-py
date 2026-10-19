@@ -259,6 +259,26 @@ def test_startup_retries_a_failed_state_load(loop: asyncio.AbstractEventLoop) ->
     assert save.state.to_python() == {"count": 42}  # built on the server's state, not initial_state()
 
 
+def test_reloads_before_the_next_stream_after_a_lost_save_response(loop: asyncio.AbstractEventLoop) -> None:
+    """The save of e1 landed but its response was lost, and the reloads after it failed (#2977)."""
+    svc = FakeProjectionService()
+    svc.script["save_projection_state"] = [ConnectError(Code.UNAVAILABLE, "save response lost")]
+    svc.script["get_projection"] = [
+        GetProjectionResponse(state=Struct.from_python({"count": 0})),
+        ConnectError(Code.UNAVAILABLE, "get 503"),  # the reload inside the failed flush
+        ConnectError(Code.UNAVAILABLE, "get 503"),  # the first reload before the next stream
+        GetProjectionResponse(state=Struct.from_python({"count": 1})),
+    ]
+    svc.streams = [[frame(1)], [frame(2)]]  # the server cursor is past e1, so the replay starts at e2
+    r = make(svc, handler=lambda s, e, c: {"count": s["count"] + 1}, initial_state=lambda: {"count": 0})
+    run(loop, run_until(r, lambda: len(svc.requests("save_projection_state")) == 2))
+    assert svc.requests("save_projection_state")[1].state.to_python() == {"count": 2}
+    methods = [m for m, _ in svc.calls if m in ("get_projection", "stream_projection_events")]
+    assert methods == ["get_projection", "stream_projection_events"] + ["get_projection"] * 3 + [
+        "stream_projection_events"
+    ]
+
+
 def test_startup_retries_a_failed_register(loop: asyncio.AbstractEventLoop) -> None:
     svc, seen = FakeProjectionService(), []
     svc.script["register_projection"] = [ConnectError(Code.UNAVAILABLE, "reg 503"), RuntimeError("reset")]

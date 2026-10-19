@@ -70,7 +70,7 @@ class Function:
         description: str | None = None, step_timeout: Duration | None = None,
         debounce: DebounceConfig | None = None, cancel_on: list[CancelOnSpec] | None = None,
         actor_key: str | None = None, secrets: list[str] | None = None, recording: bool | None = None,
-        recording_profile: RecordingProfile | None = None, recording_retention: str | None = None,
+        recording_profile: RecordingProfile | None = None,
         metadata: dict[str, Any] | None = None, schema: Schema | None = None,
     ) -> None:
         self.id = id
@@ -88,7 +88,6 @@ class Function:
         self.secrets = secrets
         self.recording = recording
         self.recording_profile = recording_profile
-        self.recording_retention = recording_retention
         self.metadata = metadata
         self.schema = schema
         self.code_hash = _code_hash(handler)
@@ -151,7 +150,7 @@ def function(
     concurrency: ConcurrencyConfig | None = None, debounce: DebounceConfig | None = None,
     cancel_on: Sequence[CancelOnSpec] | None = None, actor_key: str | None = None,
     secrets: Sequence[str] | None = None, recording: bool | None = None,
-    recording_profile: RecordingProfile | None = None, recording_retention: str | None = None,
+    recording_profile: RecordingProfile | None = None,
     metadata: dict[str, Any] | None = None, schema: Schema | None = None,
 ) -> Callable[[Handler], Function]:
     """Define a pull-mode function. The handler must be ``async def handler(ctx)``.
@@ -177,7 +176,7 @@ def function(
             step_timeout=step_timeout if step_timeout is not None and to_seconds(step_timeout) > 0 else None,
             debounce=debounce, cancel_on=[s.copy() for s in cancel_on] if cancel_on else None,
             actor_key=actor_key, secrets=list(secrets) if secrets else None, recording=recording,
-            recording_profile=recording_profile, recording_retention=recording_retention,
+            recording_profile=recording_profile,
             metadata=metadata, schema=schema,
         )
 
@@ -257,6 +256,4 @@ def registration_body(
         body["recording"] = fn.recording
     if fn.recording_profile is not None:
         body["recordingProfile"] = fn.recording_profile
-    if fn.recording_retention is not None:
-        body["recordingRetention"] = fn.recording_retention
     return body

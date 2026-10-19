@@ -52,6 +52,7 @@ from .._http import (
     anotify_error,
     notify_error,
 )
+from .._skew import MIN_SERVER_VERSIONS, SDK_HEADER, sdk_header_value
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
@@ -124,11 +125,22 @@ class IronflowRPCError(IronflowError):
         self.details = details
 
     @classmethod
-    def _from_connect(cls, err: ConnectError) -> IronflowRPCError:
+    def _from_connect(cls, err: ConnectError, procedure: str | None = None) -> IronflowRPCError:
         # err.code is a str-valued enum, so `.value` IS the canonical Connect
         # code name ("unavailable", "not_found"). No mapping table to drift.
         code = err.code.value if err.code is not None else ""
+        if code == "unimplemented" and procedure in MIN_SERVER_VERSIONS:
+            return ServerTooOldError(procedure.rsplit("/", 1)[-1], MIN_SERVER_VERSIONS[procedure])
         return cls(str(err), code=code, details=tuple(err.details or ()))
+
+
+class ServerTooOldError(IronflowRPCError):
+    """The server does not implement this call yet; the message names the first version that does."""
+
+    def __init__(self, rpc: str, min_version: str) -> None:
+        super().__init__(
+            f"{rpc} needs Ironflow server >= {min_version}; upgrade the server", code="SERVER_TOO_OLD"
+        )
 
 
 class _ClosedError(IronflowRPCError):
@@ -159,6 +171,11 @@ def _closed_stream(client_name: str) -> _ClosedError:
         f"created it. Read it inside the client's lifetime.",
         code="unavailable",
     )
+
+
+def _procedure(ctx: RequestContext[Any, Any]) -> str | None:
+    method = getattr(ctx, "method", None)  # a test double may carry none
+    return f"/{method.service_name}/{method.name}" if method is not None else None
 
 
 def _error_context(ctx: RequestContext[Any, Any]) -> ErrorContext:
@@ -267,6 +284,7 @@ class _AuthErrorInterceptor:
             ctx.request_headers["authorization"] = self._auth
         if self._environment is not None:
             ctx.request_headers["x-ironflow-environment"] = self._environment
+        ctx.request_headers[SDK_HEADER.lower()] = sdk_header_value()
 
     def _report_sync(self, err: IronflowRPCError, ctx: RequestContext[Any, Any]) -> None:
         if not isinstance(err, _ClosedError):  # use after close is a programming error, not a failed call
@@ -348,7 +366,7 @@ class _AuthErrorInterceptor:
             try:
                 return call_next(request, ctx)
             except ConnectError as err:
-                translated = IronflowRPCError._from_connect(err)
+                translated = IronflowRPCError._from_connect(err, _procedure(ctx))
                 if translated.code not in _RETRYABLE_CODES:
                     raise translated from err
                 wait = next(waits, None)
@@ -373,8 +391,8 @@ class _AuthErrorInterceptor:
         try:
             stream = call_next(request, ctx)
         except ConnectError as err:
-            raise IronflowRPCError._from_connect(err) from err
-        return _translating_iter(stream, self._is_closed, self._client_name)
+            raise IronflowRPCError._from_connect(err, _procedure(ctx)) from err
+        return _translating_iter(stream, self._is_closed, self._client_name, _procedure(ctx))
 
     # ── async ────────────────────────────────────────────────────────────────
 
@@ -390,7 +408,7 @@ class _AuthErrorInterceptor:
             try:
                 return await call_next(request, ctx)
             except ConnectError as err:
-                translated = IronflowRPCError._from_connect(err)
+                translated = IronflowRPCError._from_connect(err, _procedure(ctx))
                 if translated.code not in _RETRYABLE_CODES:
                     raise translated from err
                 wait = next(waits, None)
@@ -540,7 +558,7 @@ def _resuming_iter(
                 yield event
             return
         except ConnectError as err:
-            translated = IronflowRPCError._from_connect(err)
+            translated = IronflowRPCError._from_connect(err, _procedure(ctx))
             if translated.code not in _RETRYABLE_CODES:
                 raise translated from err
             wait = state.wait(ctx, is_closed)
@@ -575,7 +593,7 @@ async def _resuming_aiter(
                 yield event
             return
         except ConnectError as err:
-            translated = IronflowRPCError._from_connect(err)
+            translated = IronflowRPCError._from_connect(err, _procedure(ctx))
             if translated.code not in _RETRYABLE_CODES:
                 raise translated from err
             wait = state.wait(ctx, is_closed)
@@ -592,6 +610,7 @@ def _translating_iter(
     stream: Iterator[RES],
     is_closed: Callable[[], bool],
     client_name: str,
+    procedure: str | None = None,
 ) -> Iterator[RES]:
     """Re-raise a mid-iteration ConnectError as IronflowRPCError.
 
@@ -612,7 +631,7 @@ def _translating_iter(
     try:
         yield from stream
     except ConnectError as err:
-        raise IronflowRPCError._from_connect(err) from err
+        raise IronflowRPCError._from_connect(err, procedure) from err
 
 
 async def _translating_aiter(
@@ -638,7 +657,7 @@ async def _translating_aiter(
         async for item in stream:
             yield item
     except ConnectError as err:
-        raise IronflowRPCError._from_connect(err) from err
+        raise IronflowRPCError._from_connect(err, _procedure(ctx)) from err
     finally:
         aclose = getattr(stream, "aclose", None)
         if aclose is not None:

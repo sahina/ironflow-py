@@ -58,7 +58,57 @@ def test_registers_function_then_worker(loop: asyncio.AbstractEventLoop, engine:
 
 def test_poll_advertises_free_slots(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
     run(loop, run_until(fast_worker(engine, max_concurrent_jobs=3), lambda: engine.calls("poll")))
-    assert engine.calls("poll")[0]["query"] == "available=3"
+    assert engine.calls("poll")[0]["query"] == "available=3&wait=20"
+
+
+def test_poll_wait_is_sent_capped_and_omittable(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
+    for option, query in ((0, "available=10"), (60, "available=10&wait=25")):
+        engine.requests.clear()
+        run(loop, run_until(fast_worker(engine, poll_wait=option), lambda: engine.calls("poll")))
+        assert engine.calls("poll")[0]["query"] == query
+    with pytest.raises(ValueError):
+        fast_worker(engine, poll_wait=-1)
+
+
+@pytest.mark.parametrize("header,pauses", [("20", False), (None, True), ("0", True), ("x", True)])
+def test_idle_pause_only_after_a_204_without_a_held_poll(
+    loop: asyncio.AbstractEventLoop, engine: FakeEngine, header: str | None, pauses: bool,
+) -> None:
+    engine.poll_wait_header = header
+    worker = fast_worker(engine)
+    worker._idle_poll = 0.3
+
+    async def scenario() -> int:
+        task = asyncio.ensure_future(worker.start())
+        await until(lambda: engine.calls("poll"))
+        await asyncio.sleep(0.15)
+        count = len(engine.calls("poll"))
+        await worker.stop()
+        await task
+        return count
+
+    count = run(loop, scenario())
+    assert (count == 1) is pauses
+
+
+def test_drain_ends_a_held_poll_without_an_error(
+    loop: asyncio.AbstractEventLoop, engine: FakeEngine, caplog: pytest.LogCaptureFixture,
+) -> None:
+    engine.poll_wait_header = "20"
+    engine.stall("poll", 5)  # the engine holds the poll like a long-polling server
+    worker = fast_worker(engine)
+
+    async def scenario() -> float:
+        task = asyncio.ensure_future(worker.start())
+        await until(lambda: engine.calls("register"))
+        await asyncio.sleep(0.1)
+        started = asyncio.get_running_loop().time()
+        await worker.drain()
+        await task
+        return asyncio.get_running_loop().time() - started
+
+    assert run(loop, scenario()) < 2
+    assert not [r for r in caplog.records if r.levelname in ("WARNING", "ERROR")]
 
 
 def test_heartbeat_always_sends_jobs_list(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:

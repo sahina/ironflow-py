@@ -67,3 +67,11 @@ def test_per_call_headers_are_merged_over_the_defaults(loop: asyncio.AbstractEve
     headers = {k.lower(): v for k, v in engine.calls("register")[0]["headers"].items()}
     assert headers["x-ironflow-run-id"] == "run_9"
     assert headers["authorization"] == "Bearer ifkey_x" and headers["x-ironflow-environment"] == "staging"
+
+
+def test_sends_the_sdk_header(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
+    from ironflow._skew import sdk_header_value
+
+    run(loop, Transport(engine.url, None, "default").request("POST", "/api/v1/workers/w1/register", {}))
+    headers = {k.lower(): v for k, v in engine.calls("register")[0]["headers"].items()}
+    assert headers["x-ironflow-sdk"] == sdk_header_value()
