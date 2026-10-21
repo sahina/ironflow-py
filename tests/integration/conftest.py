@@ -36,6 +36,7 @@ exit is a stream.Send transport failure.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -116,6 +117,16 @@ def async_rpc_factory(server_url: str, api_key: str) -> Any:
         return AsyncIronflowRPC(server_url=server_url, api_key=api_key, timeout=30.0)
 
     return make
+
+
+@pytest.fixture
+def readiness_seed() -> dict[str, Any]:
+    """The file tests/readiness-live/seed wrote; `make test-readiness-live` sets the path."""
+    path = os.environ.get("IRONFLOW_READINESS_SEED")
+    if not path:
+        pytest.skip("IRONFLOW_READINESS_SEED not set; run `make test-readiness-live`")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 @pytest.fixture(scope="session")

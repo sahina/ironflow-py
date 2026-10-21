@@ -90,13 +90,13 @@ class TestRetryExhausted:
 class TestNonRetryable:
     def test_404_not_retried(self, server) -> None:
         server.script(
-            Response(status=404, body={"code": "NOT_FOUND", "message": "nope"})
+            Response(status=404, body={"code": "not_found", "message": "nope"})
         )
         with pytest.raises(IronflowError) as exc:
             client(server).events_get("missing")
         assert exc.value.retryable is False
         assert exc.value.status_code == 404
-        assert exc.value.code == "NOT_FOUND"
+        assert exc.value.code == "not_found"
         assert len(server.requests) == 1
 
     @pytest.mark.parametrize("status", [400, 401, 403, 404, 409, 422])

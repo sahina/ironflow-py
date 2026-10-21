@@ -31,7 +31,6 @@ async def register(
         reply = await transport.request("POST", "/ironflow.v1.IronflowService/RegisterFunction",
                                         registration_body(fn, mode="push", endpoint_url=endpoint_url))
         if not reply.ok:
-            # Known limit: Reply.error_code reads a string, Connect errors are {code, message}.
             raise IronflowError(f"register function {fn.id} failed: {reply.status} {reply.body}",
                                 status_code=reply.status, code=reply.error_code,
                                 retryable=_error_retryable(reply.status, reply.body))

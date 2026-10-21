@@ -31,7 +31,7 @@ def test_put_sends_raw_bytes_and_keeps_slashes(server):
 
 
 def test_put_retries_replayable_body(server):
-    server.script(Response(503, {"code": "INTERNAL", "message": "x"}), Response(201, {"etag": "e"}))
+    server.script(Response(503, {"code": "internal", "message": "x"}), Response(201, {"etag": "e"}))
     client(server).files_update_buckets_objects("docs", "a", io.BytesIO(b"abc"), content_type="text/plain")
     assert [r["raw"] for r in server.requests] == [b"abc", b"abc"]
 
@@ -129,11 +129,11 @@ def test_bad_bucket_names_are_rejected_before_sending(server, bad):
 def test_sign_calls_are_retried_but_move_is_not(server):
     signed = {"url": "u", "expiresAt": "t"}
     server.script(
-        Response(503, {"code": "INTERNAL", "message": "x"}),
+        Response(503, {"code": "internal", "message": "x"}),
         Response(200, signed),
-        Response(503, {"code": "INTERNAL", "message": "x"}),
+        Response(503, {"code": "internal", "message": "x"}),
         Response(200, signed),
-        Response(503, {"code": "INTERNAL", "message": "x"}),
+        Response(503, {"code": "internal", "message": "x"}),
     )
     c = client(server)
     assert c.files_buckets_signed_urls_upload("b", {"path": "x"}) == signed

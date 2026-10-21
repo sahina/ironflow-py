@@ -263,7 +263,7 @@ class StreamingWorker(Worker):
             except ConnectError as exc:
                 if exc.code in (Code.UNAUTHENTICATED, Code.PERMISSION_DENIED):
                     raise WorkerAuthError(
-                        f"stream authentication failed: {exc}"
+                        f"stream authentication failed: {exc}", code=exc.code.value
                     ) from exc
                 self._log.warning("stream disconnected: %s", exc)
             except IronflowError as exc:

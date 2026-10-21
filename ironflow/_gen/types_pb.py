@@ -134,7 +134,7 @@ class ConcurrencyConfig(Message[_ConcurrencyConfigFields]):
             int32 limit = 1;
             ```
         key:
-            JSON path for grouping (e.g., "event.data.customerId")
+            Path into the event data for grouping (e.g., "customerId" or "customer.id"). Do not prefix "event.data.".
 
             ```proto
             string key = 2;

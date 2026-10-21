@@ -23,6 +23,7 @@ from .._http import (
     IronflowError,
     _error_retryable,
     configured_server_url,
+    connect_code_for_status,
 )
 from ._checkpoint import Checkpointer
 from ._duration import Duration, iso_utc, to_seconds
@@ -47,6 +48,23 @@ def _held(reply: Reply) -> bool:
 
 class WorkerAuthError(IronflowError):
     """The server rejected the worker's credentials (401 or 403)."""
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int = 0,
+        code: str = "",
+        retryable: bool = False,
+        retry_after: float | None = None,
+    ) -> None:
+        # `unauthenticated` for 401, `permission_denied` for 403, as every other SDK error.
+        super().__init__(
+            message,
+            status_code=status_code,
+            code=code or (connect_code_for_status(status_code) if status_code else ""),
+            retryable=retryable,
+            retry_after=retry_after,
+        )
 
 
 _MAX_POLL_WAIT = 25

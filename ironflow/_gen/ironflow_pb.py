@@ -1956,7 +1956,7 @@ class FunctionHistoryEntry(Message[_FunctionHistoryEntryFields]):
             string function_id = 3;
             ```
         function_snapshot:
-            The function config as it was BEFORE this change
+            The function config as it is AFTER this change
 
             ```proto
             optional ironflow.v1.Function function_snapshot = 4;

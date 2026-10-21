@@ -161,6 +161,74 @@ def test_apikey_roles(server_url: str, admin: IronflowClient) -> None:
     assert admin.api_keys_get(key["id"])["role_ids"] == [admin_role]
 
 
+def test_platform_policy_set(server_url: str, admin: IronflowClient) -> None:
+    """platform-policy-set (#3003): the platform org's own set, and the break-glass for a tenant's."""
+    deny_delete = 'package ironflow.authz\n\ndeny contains "no deletes" if input.request.action == "runs:delete"\n'
+    deny_cancel = 'package ironflow.authz\n\ndeny contains "no cancels" if input.request.action == "runs:cancel"\n'
+    v1 = {"modules": {"platform.rego": deny_delete}, "mode": "monitor"}
+    v2 = {"modules": {"platform.rego": deny_delete, "more.rego": deny_cancel}, "mode": "monitor"}
+    delete_input = {"request": {"action": "runs:delete"}, "subject": {}}
+    cancel_input = {"request": {"action": "runs:cancel"}, "subject": {}}
+    p = IronflowClient(server_url, api_key=login(server_url))
+
+    empty = p.platform_policy_set_list()
+    assert empty["version"] == 0 and empty["modules"] == {}
+
+    # validate and dry-run store nothing.
+    assert p.platform_policy_set_create_validate(v1)["valid"] is True
+    assert status_of(lambda: p.platform_policy_set_create_validate({"modules": {"bad.rego": "package ironflow.authz\n\ndeny contains {\n"}})) == 400
+    deny = p.platform_policy_set_create_dry_run({"set": v1, "input": delete_input})
+    assert deny["decision"] == "deny" and "no deletes" in deny["reasons"]
+    assert p.platform_policy_set_create_dry_run({"set": v1, "input": cancel_input})["decision"] == "allow"
+    assert p.platform_policy_set_list()["version"] == 0
+
+    tenant_version = admin.policy_set_list()["version"]
+    put1 = p.platform_policy_set_update(v1, if_match="0")
+    assert (put1["version"], put1["mode"], put1["modules"]) == (1, "monitor", v1["modules"])
+    assert status_of(lambda: p.platform_policy_set_update(v2, if_match="0")) == 412
+    put2 = p.platform_policy_set_update(v2, if_match="1")
+    assert put2["version"] == 2 and put2["modules"] == v2["modules"]
+    assert p.platform_policy_set_list()["modules"] == v2["modules"]
+
+    versions = p.platform_policy_set_list_versions()["versions"]
+    assert sorted(v["version"] for v in versions) == [1, 2]
+    one = p.platform_policy_set_get("1")
+    assert one["version"] == 1 and one["modules"] == v1["modules"]
+    assert status_of(lambda: p.platform_policy_set_get("99")) == 404
+    rolled = p.platform_policy_set_create_rollback("1", if_match="2")
+    assert (rolled["version"], rolled["mode"], rolled["modules"]) == (3, "monitor", v1["modules"])
+    active = p.platform_policy_set_create_dry_run({"input": cancel_input})
+    assert active["decision"] == "allow" and active["version"] == 3
+    # The platform set is not the tenant's.
+    assert admin.policy_set_list()["version"] == tenant_version
+
+    # Break-glass: an organization's enforce-mode set goes to monitor, as a new version.
+    org = "org_default"
+    enforced = admin.policy_set_update({"modules": {"tenant.rego": deny_delete}, "mode": "enforce"}, if_match=str(tenant_version))
+    assert enforced["mode"] == "enforce"
+    switched = p.platform_policy_set_create(org, {"reason": "platform-policy-set live test"})
+    assert switched["mode"] == "monitor" and switched["version"] == enforced["version"] + 1
+    assert switched["modules"] == enforced["modules"]
+    assert admin.policy_set_list()["mode"] == "monitor"
+    assert status_of(lambda: p.platform_policy_set_create(org, {})) == 400
+    assert status_of(lambda: p.platform_policy_set_create("org_platform", {"reason": "x"})) == 400
+    assert status_of(lambda: p.platform_policy_set_create("org_does_not_exist", {"reason": "x"})) == 404
+    # A tenant admin key has no platform policy access.
+    assert status_of(admin.platform_policy_set_list) == 403
+
+    # The row also names the ifplatform_ key, not only the platform login token.
+    platform_key = admin.api_keys_create({"name": unique("policy-"), "platform": True, "role_ids": ["role_platform_admin"]})
+    assert platform_key["key"].startswith("ifplatform_")
+    by_key = IronflowClient(server_url, api_key=platform_key["key"])
+    assert by_key.platform_policy_set_list()["version"] == 3
+    assert by_key.platform_policy_set_get("1")["modules"] == v1["modules"]
+    dry = by_key.platform_policy_set_create_dry_run({"input": delete_input})
+    assert dry["decision"] == "deny" and dry["version"] == 3
+    assert by_key.platform_policy_set_create_validate(v1)["valid"] is True
+    admin.api_keys_delete(platform_key["id"])
+    assert status_of(by_key.platform_policy_set_list) == 401
+
+
 def test_openapi_spec(server_url: str, api_key: str) -> None:
     status, headers, body = raw(server_url, "GET", "/api/v1/openapi.json", token=api_key)
     assert status == 200 and headers.get("Content-Type", "").startswith("application/json")

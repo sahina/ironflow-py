@@ -80,12 +80,12 @@ class TestMalformedResponses:
 class TestErrorFields:
     def test_structured_error_body(self, server) -> None:
         server.script(
-            Response(status=409, body={"code": "CONFLICT", "message": "version mismatch"})
+            Response(status=409, body={"code": "already_exists", "message": "version mismatch"})
         )
         with pytest.raises(IronflowError) as exc:
             IronflowClient(server_url=server.url).events_list()
         assert exc.value.status_code == 409
-        assert exc.value.code == "CONFLICT"
+        assert exc.value.code == "already_exists"
         assert str(exc.value) == "version mismatch"
         assert exc.value.retryable is False
 
@@ -98,6 +98,7 @@ class TestErrorFields:
         with pytest.raises(IronflowError) as exc:
             IronflowClient(server_url=server.url).events_list()
         assert str(exc.value) == "run not found"
+        assert exc.value.code == "not_found"  # a body with no code gets the Connect code of its status
         assert exc.value.status_code == 404
 
     def test_message_wins_over_error_field(self, server) -> None:
@@ -120,3 +121,78 @@ class TestErrorFields:
         from ironflow.client import IronflowError as viaclient
 
         assert top is viaclient is viahttp
+
+
+class TestConnectCodeContract:
+    """One condition, one code on every transport (#3054): the lowercase Connect code."""
+
+    def test_rest_not_found_answers_not_found(self, server) -> None:
+        server.script(Response(status=404, body={"code": "not_found", "message": "gone"}))
+        with pytest.raises(IronflowError) as exc:
+            IronflowClient(server_url=server.url).events_list()
+        assert exc.value.code == "not_found"
+
+    @pytest.mark.parametrize(
+        ("status", "code"),
+        [
+            (400, "invalid_argument"), (401, "unauthenticated"), (403, "permission_denied"),
+            (404, "not_found"), (409, "already_exists"), (412, "failed_precondition"),
+            (402, "failed_precondition"), (408, "deadline_exceeded"), (429, "resource_exhausted"), (500, "internal"),
+            (501, "unimplemented"), (503, "unavailable"), (504, "deadline_exceeded"), (507, "failed_precondition"),
+        ],
+    )
+    def test_code_less_body_gets_the_connect_code_of_its_status(self, server, status, code) -> None:
+        server.script(Response(status=status, body={"error": "nope"}))
+        with pytest.raises(IronflowError) as exc:
+            IronflowClient(server_url=server.url, max_attempts=1).events_list()
+        assert exc.value.code == code
+
+    def test_capitalised_generic_code_from_an_older_server_is_normalised(self, server) -> None:
+        server.script(Response(status=404, body={"code": "NOT_FOUND", "message": "gone"}))
+        with pytest.raises(IronflowError) as exc:
+            IronflowClient(server_url=server.url).events_list()
+        assert exc.value.code == "not_found"
+        server.script(Response(status=403, body={"code": "SIGNED_URLS_DISABLED", "message": "off"}))
+        with pytest.raises(IronflowError) as exc:
+            IronflowClient(server_url=server.url).events_list()
+        assert exc.value.code == "SIGNED_URLS_DISABLED"  # a domain code keeps its name
+
+
+class TestWorkerReplyErrorCode:
+    """Reply.error_code feeds IronflowError.code on the pull-worker and serve paths."""
+
+    @pytest.mark.parametrize(
+        ("status", "body", "want"),
+        [
+            (404, {"error": "worker not registered", "message": "x", "code": "not_found"}, "not_found"),
+            (404, {"error": "worker not registered"}, "not_found"),
+            (409, {"error": "STALE_EXECUTION", "message": "superseded"}, "STALE_EXECUTION"),
+            (403, {"error": "forbidden"}, "permission_denied"),  # a message, not a fence code
+            (503, {"code": "unavailable", "message": "x"}, "unavailable"),
+        ],
+    )
+    def test_error_code(self, status, body, want) -> None:
+        from ironflow.worker._transport import Reply
+
+        assert Reply(status=status, body=body).error_code == want
+
+
+def test_worker_auth_error_carries_the_connect_code() -> None:
+    from ironflow.worker import WorkerAuthError
+
+    assert WorkerAuthError("x", status_code=401).code == "unauthenticated"
+    assert WorkerAuthError("x", status_code=403).code == "permission_denied"
+
+
+def test_a_refused_redirect_has_no_connect_code(server) -> None:
+    server.script(Response(status=302, body={}, headers={"Location": "http://elsewhere.invalid/"}))
+    with pytest.raises(IronflowError) as exc:
+        IronflowClient(server_url=server.url, max_attempts=1).events_list()
+    assert exc.value.code == ""
+
+
+def test_a_fence_code_wins_over_a_code_a_shared_writer_adds() -> None:
+    from ironflow.worker._transport import Reply
+
+    reply = Reply(status=409, body={"error": "STALE_EXECUTION", "message": "x", "code": "already_exists"})
+    assert reply.error_code == "STALE_EXECUTION"

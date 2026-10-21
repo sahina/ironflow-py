@@ -4,18 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
 import pyqwest
 
-from .._http import IronflowError
+from .._http import IronflowError, connect_code_for_status, normalize_error_code
 from .._skew import SDK_HEADER, sdk_header_value
 
 _NETWORK_ERRORS: tuple[type[BaseException], ...] = (
     OSError, pyqwest.ReadError, pyqwest.WriteError, pyqwest.RemoteProtocolError,
 )
+
+
+_FENCE_CODE = re.compile(r"[A-Z][A-Z0-9_]+")
 
 
 @dataclass(frozen=True)
@@ -30,10 +34,18 @@ class Reply:
 
     @property
     def error_code(self) -> str:
+        """The body's `code` (a Connect or domain code), else a fence code in `error`
+        (`{"error": "STALE_EXECUTION", ...}`), else the Connect code of the status."""
         if isinstance(self.body, dict):
-            code = self.body.get("error")
-            return code if isinstance(code, str) else ""
-        return ""
+            fence = self.body.get("error")
+            # A fence code is SHOUTING_SNAKE (STALE_EXECUTION); any other `error` is a message.
+            # It is checked first so a `code` added by a shared writer cannot hide it.
+            if isinstance(fence, str) and _FENCE_CODE.fullmatch(fence):
+                return fence
+            code = self.body.get("code")
+            if isinstance(code, str) and code:
+                return normalize_error_code(code)
+        return connect_code_for_status(self.status) if self.status >= 400 else ""
 
 
 class Transport:

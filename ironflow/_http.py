@@ -139,6 +139,7 @@ class ReadinessResponse(TypedDict, total=False):
 
     status: str
     issues: dict[str, str]
+    warnings: dict[str, str]
 
 
 class ServerCapabilities(TypedDict):
@@ -397,6 +398,49 @@ def _present(headers: Mapping[str, str | None] | None) -> dict[str, str] | None:
 def _status_is_retryable(status: int) -> bool:
     # 501: the server does not implement the route; a retry hits the same wall.
     return (status >= 500 and status != 501) or status in _RETRYABLE_STATUS
+
+
+#: Generic codes a server released before #3054 sent in capitals, mapped to the
+#: Connect code they name. A domain code (BUCKET_NOT_EMPTY) is not in the table.
+_LEGACY_GENERIC_CODES = {
+    "INVALID": "invalid_argument", "FORBIDDEN": "permission_denied", "NOT_FOUND": "not_found",
+    "CONFLICT": "already_exists", "INTERNAL": "internal",
+}
+
+
+def normalize_error_code(code: str) -> str:
+    """The Connect code for a capitalised generic code; any other code unchanged."""
+    return _LEGACY_GENERIC_CODES.get(code, code)
+
+
+# Keep in step with restErrorCode (sdk/go/ironflow/errors.go), connectCodeForStatus
+# (sdk/js/core/src/errors.ts) and errorenvelope.httpCode (internal/errorenvelope).
+def connect_code_for_status(status: int) -> str:
+    """The Connect code the protocol maps an HTTP status to.
+
+    The code of a failure whose body names none (an older server, a proxy). The
+    same table as the server's ``errorenvelope.httpCode``; 409 is
+    ``already_exists`` because ``aborted`` always arrives in the body.
+    """
+    if status == 401:
+        return "unauthenticated"
+    if status == 403:
+        return "permission_denied"
+    if status == 404:
+        return "not_found"
+    if status in (408, 504):
+        return "deadline_exceeded"
+    if status in (402, 412, 507):
+        return "failed_precondition"
+    if status == 409:
+        return "already_exists"
+    if status == 429:
+        return "resource_exhausted"
+    if status == 501:
+        return "unimplemented"
+    if status == 503:
+        return "unavailable"
+    return "internal" if status >= 500 else "invalid_argument"
 
 
 def _error_retryable(status: int, body: object) -> bool:
@@ -814,7 +858,7 @@ class BaseClient(_WatchMixin, _CommandDedupMixin):
         return _TYPED_HTTP_ERRORS.get(e.code, IronflowError)(
             message,
             status_code=e.code,
-            code=code,
+            code=normalize_error_code(code) or (connect_code_for_status(e.code) if e.code >= 400 else ""),
             retryable=_error_retryable(e.code, parsed_body),
             retry_after=retry_after,
         )

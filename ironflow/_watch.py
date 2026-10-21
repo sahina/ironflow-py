@@ -57,7 +57,7 @@ class _WatchMixin:
     api_key: str | None
 
     async def _frames(self, path: str) -> AsyncGenerator[dict[str, Any], None]:
-        from ._http import IronflowError
+        from ._http import IronflowError, connect_code_for_status
         from ._skew import SDK_HEADER, sdk_header_value
         try:
             from websockets.asyncio.client import connect
@@ -76,7 +76,8 @@ class _WatchMixin:
             ws: ClientConnection = await connect(_ws_url(self.server_url, path), additional_headers=headers)
         except InvalidStatus as exc:
             status = exc.response.status_code
-            raise IronflowError(f"watch handshake rejected: HTTP {status}", status_code=status) from exc
+            raise IronflowError(f"watch handshake rejected: HTTP {status}", status_code=status,
+                                code=connect_code_for_status(status) if status >= 400 else "") from exc
         except (OSError, asyncio.TimeoutError, WebSocketException) as exc:
             raise IronflowError(f"watch connection failed: {exc}") from exc
         try:

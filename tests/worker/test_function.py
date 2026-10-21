@@ -55,7 +55,7 @@ def test_registration_body_maps_to_connect_json() -> None:
     @function(
         id="agent", name="Agent", triggers=[{"event": "a"}, {"cron": "0 * * * *"}],
         retry={"max_attempts": 3, "initial_delay": "1s", "backoff_factor": 2.0, "max_delay": 60},
-        timeout="10m", concurrency={"limit": 2, "key": "event.data.user"},
+        timeout="10m", concurrency={"limit": 2, "key": "user"},
     )
     async def agent(ctx: Any) -> None: ...
 
@@ -66,7 +66,7 @@ def test_registration_body_maps_to_connect_json() -> None:
     assert body["preferredMode"] == "EXECUTION_MODE_PULL"
     assert body["retry"] == {"maxAttempts": 3, "initialDelayMs": 1000, "backoffFactor": 2.0, "maxDelayMs": 60000}
     assert body["timeoutMs"] == 600000
-    assert body["concurrency"] == {"limit": 2, "key": "event.data.user"}
+    assert body["concurrency"] == {"limit": 2, "key": "user"}
     assert len(body["metadata"]["__ironflow_code_hash"]) == 16
 
 
