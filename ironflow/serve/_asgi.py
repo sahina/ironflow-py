@@ -34,11 +34,9 @@ def serve(
     key = env(signing_key, "IRONFLOW_SIGNING_KEY") or ""
     server = (server_url if server_url is not None else configured_server_url()) or ""
     token = env(api_key, "IRONFLOW_API_KEY")
-    # handle() gets the value without the "default" fallback: RunInfo.environment
-    # must stay None when nothing is set, or agent memory sends "default" and a
-    # key scoped to another environment gets 403 (#2471).
+    # "" means unset: RunInfo.environment must stay None, or agent memory names
+    # an environment and a key scoped to another one gets 403 (#2471).
     run_env = env(environment, "IRONFLOW_ENV") or ""
-    environ = run_env or "default"
 
     async def app(scope: dict[str, Any], receive: Receive, send: Send) -> None:
         if scope["type"] == "lifespan":
@@ -68,7 +66,8 @@ def serve(
             signing_key=key, upcasters=upcasters, webhooks=hooks, server_url=server,
             api_key=token, environment=run_env,
         )
-        out["x-ironflow-environment"] = environ
+        if run_env:
+            out["x-ironflow-environment-id"] = run_env
         await send({"type": "http.response.start", "status": status,
                     "headers": [(k.encode("latin-1"), v.encode()) for k, v in out.items()]})
         await send({"type": "http.response.body", "body": body})

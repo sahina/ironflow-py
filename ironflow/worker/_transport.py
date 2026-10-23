@@ -50,7 +50,7 @@ class Reply:
 
 class Transport:
     def __init__(
-        self, server_url: str, api_key: str | None, environment: str,
+        self, server_url: str, api_key: str | None, environment: str | None,
         client: pyqwest.Client | None = None, request_timeout: float = 30.0,
     ) -> None:
         self._base = server_url.rstrip("/")
@@ -60,7 +60,9 @@ class Transport:
         self._timeout = request_timeout
 
     def headers(self) -> dict[str, str]:
-        headers = {"Content-Type": "application/json", "X-Ironflow-Environment": self._environment, SDK_HEADER: sdk_header_value()}
+        headers = {"Content-Type": "application/json", SDK_HEADER: sdk_header_value()}
+        if self._environment:
+            headers["X-Ironflow-Environment-ID"] = self._environment
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
         return headers

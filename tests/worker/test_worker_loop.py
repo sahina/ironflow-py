@@ -50,7 +50,7 @@ def test_registers_function_then_worker(loop: asyncio.AbstractEventLoop, engine:
     assert routes.index("register_function") < routes.index("register") < routes.index("poll")
     rf = engine.calls("register_function")[0]
     assert rf["body"]["preferredMode"] == "EXECUTION_MODE_PULL"
-    assert {k.lower(): v for k, v in rf["headers"].items()}["x-ironflow-environment"] == "staging"
+    assert {k.lower(): v for k, v in rf["headers"].items()}["x-ironflow-environment-id"] == "staging"
     reg = engine.calls("register")[0]["body"]
     assert reg["function_ids"] == ["fn"] and reg["max_concurrent_jobs"] == 10
     assert reg["version"]["runtime"].startswith("python-")

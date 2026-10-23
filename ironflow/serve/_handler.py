@@ -68,7 +68,7 @@ def _memo(steps: list[dict[str, Any]]) -> list[CompletedStep]:
     return out
 
 
-def _publisher(server_url: str, api_key: str | None, environment: str, run_id: str) -> PublishFn:
+def _publisher(server_url: str, api_key: str | None, environment: str | None, run_id: str) -> PublishFn:
     """Builds the Transport per publish, lazily: most executions never publish (same per-call pattern as _webhook.py)."""
     async def publish(topic: str, data: Any, idempotency_key: str | None) -> dict[str, Any]:
         return await bind_publish(Transport(server_url, api_key, environment), run_id)(topic, data, idempotency_key)
@@ -95,7 +95,7 @@ async def handle(
             {w.id: w for w in webhooks}, path[len("/webhooks/"):], method=method, path=path,
             headers=headers, body=body, server_url=server_url if server_url is not None else configured_server_url(),
             api_key=env(api_key, "IRONFLOW_API_KEY"),
-            environment=env(environment, "IRONFLOW_ENV") or "default",
+            environment=env(environment, "IRONFLOW_ENV") or None,
         )
     # ponytail: re-indexed per request; O(functions), trivial next to running a handler.
     fns = index_functions(functions)
@@ -120,7 +120,7 @@ async def handle(
     server = server_url if server_url is not None else configured_server_url()
     if server:
         ctx.publish = _publisher(
-            server, env(api_key, "IRONFLOW_API_KEY"), env(environment, "IRONFLOW_ENV") or "default", req["run_id"])
+            server, env(api_key, "IRONFLOW_API_KEY"), env(environment, "IRONFLOW_ENV") or None, req["run_id"])
     outcome = await run_function(
         fn, raw_event=req["event"], upcasters=upcasters, ctx=ctx,
         run=RunInfo(id=req["run_id"], function_id=fn.id, attempt=req.get("attempt", 1),

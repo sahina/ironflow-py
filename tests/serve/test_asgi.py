@@ -47,12 +47,12 @@ def test_chunked_body_completes_with_env_header() -> None:
     sent = drive(serve([fn], signing_key="", environment="staging"), http(), body_chunks(raw, 3))
     start, body = sent
     assert start["status"] == 200
-    assert (b"x-ironflow-environment", b"staging") in start["headers"]
+    assert (b"x-ironflow-environment-id", b"staging") in start["headers"]
     assert json.loads(body["body"])["result"] == "ok"
 
 
 def test_unset_environment_reaches_the_run_as_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    """#2471: the "default" fallback is for the response header only, not for RunInfo."""
+    """#2471: an unset environment stays None in RunInfo and sends no response header."""
     monkeypatch.delenv("IRONFLOW_ENV", raising=False)
 
     @function(id="env-fn", triggers=[{"event": "e"}])
@@ -62,7 +62,7 @@ def test_unset_environment_reaches_the_run_as_none(monkeypatch: pytest.MonkeyPat
     raw = json.dumps({"run_id": "r", "function_id": "env-fn", "event": EVENT}).encode()
     start, body = drive(serve([env_fn], signing_key=""), http(), body_chunks(raw, 1))
     assert start["status"] == 200
-    assert (b"x-ironflow-environment", b"default") in start["headers"]
+    assert b"x-ironflow-environment-id" not in [k for k, _ in start["headers"]]
     assert json.loads(body["body"])["result"] is None
 
 

@@ -40,7 +40,7 @@ async def _settle(value: Any) -> Any:
 
 async def handle_webhook(
     hooks: Mapping[str, Webhook], hook_id: str, *, method: str, path: str, headers: Mapping[str, str],
-    body: bytes, server_url: str | None, api_key: str | None, environment: str,
+    body: bytes, server_url: str | None, api_key: str | None, environment: str | None,
 ) -> Response:
     hook = hooks.get(hook_id)
     if hook is None:

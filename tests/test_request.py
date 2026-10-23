@@ -86,19 +86,19 @@ class TestHeaders:
 
     def test_generated_required_environment_header_is_sent(self, server) -> None:
         server.script(Response(body={"name": "api-token"}))
-        client(server).secrets_get("api-token", x_ironflow_environment="staging")
+        client(server).secrets_get("api-token", x_ironflow_environment_id="staging")
 
-        assert server.requests[0]["headers"].get("X-Ironflow-Environment") == "staging"
+        assert {k.lower(): v for k, v in server.requests[0]["headers"].items()}.get("x-ironflow-environment-id") == "staging"
 
     def test_custom_headers_sent(self, server) -> None:
         server.script(Response(body={}))
         client(server).request(
             "GET",
             "/api/v1/secrets",
-            headers={"X-Ironflow-Environment": "staging", "If-Match": 'W/"3"'},
+            headers={"X-Ironflow-Environment-ID": "staging", "If-Match": 'W/"3"'},
         )
         sent = server.requests[0]["headers"]
-        assert sent.get("X-Ironflow-Environment") == "staging"
+        assert {k.lower(): v for k, v in sent.items()}.get("x-ironflow-environment-id") == "staging"
         assert sent.get("If-Match") == 'W/"3"'
 
     def test_auth_header_still_applied(self, server) -> None:

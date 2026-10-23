@@ -283,7 +283,7 @@ class _AuthErrorInterceptor:
         if self._auth is not None:
             ctx.request_headers["authorization"] = self._auth
         if self._environment is not None:
-            ctx.request_headers["x-ironflow-environment"] = self._environment
+            ctx.request_headers["x-ironflow-environment-id"] = self._environment
         ctx.request_headers[SDK_HEADER.lower()] = sdk_header_value()
 
     def _report_sync(self, err: IronflowRPCError, ctx: RequestContext[Any, Any]) -> None:
@@ -768,7 +768,7 @@ class _Coordinator:
         on_error: ErrorHook | None = None,
         environment: str | None = None,
     ) -> None:
-        # environment is sent as X-Ironflow-Environment; None sends no header.
+        # environment is sent as X-Ironflow-Environment-ID; None sends no header.
         # The client does not read IRONFLOW_ENV (#2471).
         from pyqwest import SyncClient
 
@@ -835,7 +835,7 @@ class _AsyncCoordinator:
         on_error: ErrorHook | None = None,
         environment: str | None = None,
     ) -> None:
-        # environment is sent as X-Ironflow-Environment; None sends no header.
+        # environment is sent as X-Ironflow-Environment-ID; None sends no header.
         # The client does not read IRONFLOW_ENV (#2471).
         from pyqwest import Client
 

@@ -54,8 +54,8 @@ class AgentContext:
         classify(result)
         return result  # type: ignore[no-any-return]
 
-    async def approve(self, name: str, *, payload: Any = None, ttl: Duration = "7d") -> ApproveResult:
-        return await _approve.approve(self.step, self.run.id, name, payload=payload, ttl=ttl)
+    async def approve(self, event: str, *, payload: Any = None, ttl: Duration = "7d") -> ApproveResult:
+        return await _approve.approve(self.step, self.run.id, event, payload=payload, ttl=ttl)
 
     async def spawn(self, name: str, *, function_id: str, input: Any = None, wait: bool = True,
                     timeout: Duration = 30) -> SpawnResult:

@@ -97,7 +97,7 @@ def test_apikey_environment_and_tool_scopes(tenant: dict[str, Any]) -> None:
 
     def org_in(key: str, env: str) -> Any:
         """The client has no environment setting, so name the environment in a header."""
-        return as_key(key).request("GET", f"/api/v1/orgs/{org_id}", headers={"X-Ironflow-Environment": env})
+        return as_key(key).request("GET", f"/api/v1/orgs/{org_id}", headers={"X-Ironflow-Environment-ID": env})
 
     scoped = admin.api_keys_create({"name": f"scoped-{SUFFIX}", "env_id": staging["id"], "tool_scopes": scopes})
     assert bound(scoped) and bound(admin.api_keys_get(scoped["id"]))

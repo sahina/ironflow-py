@@ -12,6 +12,11 @@ from ironflow import IronflowClient, models
 from ironflow.client import IronflowError
 
 
+def _sent(request: dict) -> dict[str, str]:
+    """urllib capitalizes header names; HTTP names are case-insensitive."""
+    return {k.lower(): v for k, v in request["headers"].items()}
+
+
 class MockHandler(BaseHTTPRequestHandler):
     """Mock HTTP handler that records requests and returns configurable responses."""
 
@@ -111,7 +116,7 @@ class TestRequestMechanics:
 
     def test_post_sends_body(self, mock_server: IronflowClient) -> None:
         MockHandler.response_body = {"run_ids": ["r1"]}
-        mock_server.secrets_create(body={"name": "test", "value": "value"}, x_ironflow_environment="default")
+        mock_server.secrets_create(body={"name": "test", "value": "value"}, x_ironflow_environment_id="env_default")
         assert MockHandler.requests[0]["method"] == "POST"
         assert MockHandler.requests[0]["body"]["name"] == "test"
 
@@ -157,9 +162,9 @@ class TestEndpointCoverage:
         assert MockHandler.requests[0]["path"] == "/api/v1/apikeys"
 
     def test_secrets_list(self, mock_server: IronflowClient) -> None:
-        mock_server.secrets_list(x_ironflow_environment="default")
+        mock_server.secrets_list(x_ironflow_environment_id="env_default")
         assert MockHandler.requests[0]["path"] == "/api/v1/secrets"
-        assert MockHandler.requests[0]["headers"]["X-Ironflow-Environment"] == "default"
+        assert _sent(MockHandler.requests[0])["x-ironflow-environment-id"] == "env_default"
 
     def test_config_get(self, mock_server: IronflowClient) -> None:
         mock_server.config_get("my-config")
@@ -251,9 +256,9 @@ class TestAnnotatedGroupRoundTrips:
             "description": "billing",
             "revision": 3,
         }
-        result = mock_server.secrets_get("STRIPE_KEY", x_ironflow_environment="default")
+        result = mock_server.secrets_get("STRIPE_KEY", x_ironflow_environment_id="env_default")
         assert MockHandler.requests[0]["path"] == "/api/v1/secrets/STRIPE_KEY"
-        assert MockHandler.requests[0]["headers"]["X-Ironflow-Environment"] == "default"
+        assert _sent(MockHandler.requests[0])["x-ironflow-environment-id"] == "env_default"
         assert result["name"] == "STRIPE_KEY"
         assert result["revision"] == 3
 
@@ -325,10 +330,10 @@ class TestAnnotatedGroupRoundTrips:
         MockHandler.response_body = [
             {"lane_id": "lane_1", "environment_id": "env_default", "max_concurrent": 4}
         ]
-        result = mock_server.capacity_list_lanes(env="env_default", limit=1)
+        result = mock_server.capacity_list_lanes(env_id="env_default", limit=1)
         assert MockHandler.requests[0]["path"].startswith("/api/v1/capacity/lanes?")
         query = parse_qs(urlparse(MockHandler.requests[0]["path"]).query)
-        assert query["env"] == ["env_default"]
+        assert query["env_id"] == ["env_default"]
         assert query["limit"] == ["1"]
         assert result[0]["lane_id"] == "lane_1"
 
@@ -382,15 +387,15 @@ class TestAnnotatedGroupRoundTrips:
             "limit": 50,
             "offset": 0,
         }
-        listed = mock_server.outbox_list_dead_letter(env="env_default", limit=50)
+        listed = mock_server.outbox_list_dead_letter(env_id="env_default", limit=50)
         query = parse_qs(urlparse(MockHandler.requests[0]["path"]).query)
-        assert query["env"] == ["env_default"]
+        assert query["env_id"] == ["env_default"]
         assert listed["items"][0]["attempts"] == 5
 
         # requeue and discard answer 200 with a body, NOT 204 — both write
         # {"event_id","result"}. A 204 annotation would have typed these None.
         MockHandler.response_body = {"event_id": "evt_1", "result": "requeued"}
-        requeued = mock_server.outbox_dead_letter_requeue("evt_1", env="env_default")
+        requeued = mock_server.outbox_dead_letter_requeue("evt_1", env_id="env_default")
         assert MockHandler.requests[1]["method"] == "POST"
         assert MockHandler.requests[1]["path"].startswith(
             "/api/v1/outbox/dead-letter/evt_1/requeue?"
@@ -398,7 +403,7 @@ class TestAnnotatedGroupRoundTrips:
         assert requeued["result"] == "requeued"
 
         MockHandler.response_body = {"event_id": "evt_1", "result": "discarded"}
-        discarded = mock_server.outbox_delete_dead_letter("evt_1", env="env_default")
+        discarded = mock_server.outbox_delete_dead_letter("evt_1", env_id="env_default")
         assert MockHandler.requests[2]["method"] == "DELETE"
         assert discarded["result"] == "discarded"
 

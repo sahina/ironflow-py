@@ -124,7 +124,7 @@ class Worker:
         self._transport = Transport(
             server_url or configured_server_url() or DEFAULT_SERVER_URL,
             api_key or os.environ.get("IRONFLOW_API_KEY") or None,
-            environment or os.environ.get("IRONFLOW_ENV") or "default",
+            environment or os.environ.get("IRONFLOW_ENV") or None,
         )
         self.state = "idle"
         self._jobs: dict[str, _ActiveJob] = {}

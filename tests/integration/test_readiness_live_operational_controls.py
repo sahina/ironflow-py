@@ -147,7 +147,7 @@ def test_outbox_dlq(rest: IronflowClient, rpc: Any, server_url: str, api_key: st
     requeue, discard = ops["dlqRequeue"], ops["dlqDiscard"]
 
     def listed() -> dict[str, Any]:
-        return {i["event_id"]: i for i in rest.outbox_list_dead_letter(env="env_default", limit=200)["items"]}
+        return {i["event_id"]: i for i in rest.outbox_list_dead_letter(env_id="env_default", limit=200)["items"]}
 
     rows = listed()
     assert {requeue["eventId"], discard["eventId"]} <= set(rows)
@@ -163,12 +163,12 @@ def test_outbox_dlq(rest: IronflowClient, rpc: Any, server_url: str, api_key: st
     watch.live(rpc)
 
     # Discard drops the row and publishes nothing.
-    result = rest.outbox_delete_dead_letter(discard["eventId"], env="env_default")
+    result = rest.outbox_delete_dead_letter(discard["eventId"], env_id="env_default")
     assert (result["event_id"], result["result"]) == (discard["eventId"], "discarded")
     assert discard["eventId"] not in listed()
 
     # Requeue hands the event to the running outbox worker, which publishes it.
-    result = rest.outbox_dead_letter_requeue(requeue["eventId"], env="env_default")
+    result = rest.outbox_dead_letter_requeue(requeue["eventId"], env_id="env_default")
     assert (result["event_id"], result["result"]) == (requeue["eventId"], "requeued")
     assert requeue["eventId"] not in listed()
     # The seed left no outbox row for the worker to publish, so the only frame
@@ -187,8 +187,8 @@ def test_outbox_dlq(rest: IronflowClient, rpc: Any, server_url: str, api_key: st
 
     # Both rows are gone, so a second action finds nothing.
     for act in (
-        lambda: rest.outbox_delete_dead_letter(discard["eventId"], env="env_default"),
-        lambda: rest.outbox_dead_letter_requeue(requeue["eventId"], env="env_default"),
+        lambda: rest.outbox_delete_dead_letter(discard["eventId"], env_id="env_default"),
+        lambda: rest.outbox_dead_letter_requeue(requeue["eventId"], env_id="env_default"),
     ):
         with pytest.raises(IronflowError) as exc:
             act()

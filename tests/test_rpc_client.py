@@ -416,7 +416,7 @@ def test_environment_is_sent_on_every_call(client_cls: Any) -> None:
         finally:
             close(client)
 
-        assert srv.service.seen_headers[0]["x-ironflow-environment"] == "staging"
+        assert srv.service.seen_headers[0]["x-ironflow-environment-id"] == "staging"
 
 
 def test_no_environment_sends_no_header_even_with_ironflow_env(
@@ -431,4 +431,4 @@ def test_no_environment_sends_no_header_even_with_ironflow_env(
         finally:
             close(client)
 
-        assert "x-ironflow-environment" not in srv.service.seen_headers[0]
+        assert "x-ironflow-environment-id" not in srv.service.seen_headers[0]

@@ -18,26 +18,26 @@ def test_sends_worker_headers(loop: asyncio.AbstractEventLoop, engine: FakeEngin
     assert reply.ok and reply.body == {"status": "registered"}
     headers = {k.lower(): v for k, v in engine.calls("register")[0]["headers"].items()}
     assert headers["authorization"] == "Bearer ifkey_x"
-    assert headers["x-ironflow-environment"] == "staging"
+    assert headers["x-ironflow-environment-id"] == "staging"
     assert headers["content-type"] == "application/json"
     assert engine.calls("register")[0]["body"] == {"function_ids": ["fn"]}
 
 
 def test_no_auth_header_without_key(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
-    run(loop, Transport(engine.url, None, "default").request("POST", "/api/v1/workers/w1/register", {}))
+    run(loop, Transport(engine.url, None, None).request("POST", "/api/v1/workers/w1/register", {}))
     assert "authorization" not in {k.lower() for k in engine.calls("register")[0]["headers"]}
 
 
 def test_status_is_returned_not_raised(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
     engine.fail("poll", 409, {"error": "STALE_EXECUTION", "message": "x"})
     engine.registered.add("w1")
-    reply = run(loop, Transport(engine.url, None, "default").request("GET", "/api/v1/workers/w1/jobs?available=1"))
+    reply = run(loop, Transport(engine.url, None, None).request("GET", "/api/v1/workers/w1/jobs?available=1"))
     assert reply.status == 409 and not reply.ok and reply.error_code == "STALE_EXECUTION"
 
 
 def test_204_has_no_body(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
     engine.registered.add("w1")
-    reply = run(loop, Transport(engine.url, None, "default").request("GET", "/api/v1/workers/w1/jobs?available=1"))
+    reply = run(loop, Transport(engine.url, None, None).request("GET", "/api/v1/workers/w1/jobs?available=1"))
     assert reply.status == 204 and reply.body is None
 
 
@@ -66,12 +66,18 @@ def test_per_call_headers_are_merged_over_the_defaults(loop: asyncio.AbstractEve
     run(loop, t.request("POST", "/api/v1/workers/w1/register", {}, headers={"X-Ironflow-Run-ID": "run_9"}))
     headers = {k.lower(): v for k, v in engine.calls("register")[0]["headers"].items()}
     assert headers["x-ironflow-run-id"] == "run_9"
-    assert headers["authorization"] == "Bearer ifkey_x" and headers["x-ironflow-environment"] == "staging"
+    assert headers["authorization"] == "Bearer ifkey_x" and headers["x-ironflow-environment-id"] == "staging"
+
+
+def test_unset_environment_sends_no_header(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
+    run(loop, Transport(engine.url, None, None).request("POST", "/api/v1/workers/w1/register", {}))
+    headers = {k.lower(): v for k, v in engine.calls("register")[0]["headers"].items()}
+    assert "x-ironflow-environment-id" not in headers
 
 
 def test_sends_the_sdk_header(loop: asyncio.AbstractEventLoop, engine: FakeEngine) -> None:
     from ironflow._skew import sdk_header_value
 
-    run(loop, Transport(engine.url, None, "default").request("POST", "/api/v1/workers/w1/register", {}))
+    run(loop, Transport(engine.url, None, None).request("POST", "/api/v1/workers/w1/register", {}))
     headers = {k.lower(): v for k, v in engine.calls("register")[0]["headers"].items()}
     assert headers["x-ironflow-sdk"] == sdk_header_value()

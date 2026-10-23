@@ -396,11 +396,11 @@ def test_publish_step_posts_with_the_run_id(loop: asyncio.AbstractEventLoop, eng
 @pytest.mark.parametrize("configured,env_var,want", [
     ("staging", "qa", "staging"),
     (None, "qa", "qa"),
-    (None, None, "default"),
+    (None, None, None),
 ])
 def test_run_info_carries_the_worker_environment(
     loop: asyncio.AbstractEventLoop, engine: FakeEngine, monkeypatch: pytest.MonkeyPatch,
-    configured: str | None, env_var: str | None, want: str,
+    configured: str | None, env_var: str | None, want: str | None,
 ) -> None:
     """#2471: the run's outbound calls reuse the environment the worker polls with."""
     if env_var is None:

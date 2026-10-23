@@ -25,7 +25,7 @@ async def register(
     transport = Transport(
         (server_url if server_url is not None else configured_server_url()) or DEFAULT_SERVER_URL,
         env(api_key, "IRONFLOW_API_KEY"),
-        env(environment, "IRONFLOW_ENV") or "default",
+        env(environment, "IRONFLOW_ENV") or None,
     )
     for fn in index_functions(functions).values():
         reply = await transport.request("POST", "/ironflow.v1.IronflowService/RegisterFunction",

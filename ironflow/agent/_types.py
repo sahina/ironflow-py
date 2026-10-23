@@ -58,6 +58,8 @@ class ApproveResult:
     approver: str | None = None
     payload: Any = None
     reason: str | None = None
+    #: Authenticated emitter of the approval event, set by the engine. Unlike ``approver``, the caller cannot choose it.
+    emitted_by: str = ""
 
 
 @dataclass(frozen=True)

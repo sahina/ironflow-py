@@ -30,31 +30,31 @@ def test_secret_crud() -> None:
     env = tenant["environment"]["id"]
     name = f"PY_KEY_{SUFFIX}"
 
-    created = client.secrets_create({"name": name, "value": "v1-sensitive", "description": "billing"}, x_ironflow_environment=env)
+    created = client.secrets_create({"name": name, "value": "v1-sensitive", "description": "billing"}, x_ironflow_environment_id=env)
     assert (created["name"], created["description"]) == (name, "billing")
     assert created["created_at"] and created["updated_at"] and created["revision"] > 0
     assert "value" not in created
-    got = client.secrets_get(name, x_ironflow_environment=env)
+    got = client.secrets_get(name, x_ironflow_environment_id=env)
     assert (got["name"], got["description"], got["revision"]) == (name, "billing", created["revision"])
     assert "value" not in got
 
-    updated = client.secrets_update(name, {"value": "v2-sensitive", "description": "rotated"}, x_ironflow_environment=env)
+    updated = client.secrets_update(name, {"value": "v2-sensitive", "description": "rotated"}, x_ironflow_environment_id=env)
     assert updated["description"] == "rotated" and updated["revision"] > created["revision"]
     assert "value" not in updated
 
     renamed = f"PY_RENAMED_{SUFFIX}"
-    patched = client.secrets_patch(name, {"name": renamed, "description": "moved"}, x_ironflow_environment=env)
+    patched = client.secrets_patch(name, {"name": renamed, "description": "moved"}, x_ironflow_environment_id=env)
     assert (patched["name"], patched["description"]) == (renamed, "moved")
     with pytest.raises(IronflowError) as old:
-        client.secrets_get(name, x_ironflow_environment=env)
+        client.secrets_get(name, x_ironflow_environment_id=env)
     assert old.value.status_code == 404
 
-    listed = client.secrets_list(x_ironflow_environment=env)
+    listed = client.secrets_list(x_ironflow_environment_id=env)
     assert [s["name"] for s in listed] == [renamed]
     assert listed[0]["description"] == "moved" and "value" not in listed[0]
 
-    client.secrets_delete(renamed, x_ironflow_environment=env)
+    client.secrets_delete(renamed, x_ironflow_environment_id=env)
     with pytest.raises(IronflowError) as gone:
-        client.secrets_get(renamed, x_ironflow_environment=env)
+        client.secrets_get(renamed, x_ironflow_environment_id=env)
     assert gone.value.status_code == 404
-    assert client.secrets_list(x_ironflow_environment=env) == []
+    assert client.secrets_list(x_ironflow_environment_id=env) == []

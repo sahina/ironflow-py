@@ -149,6 +149,9 @@ class Event:
     source: str | None = None
     idempotency_key: str | None = None
     metadata: dict[str, Any] | None = None
+    #: Authenticated emitter the engine recorded, e.g. ``apikey:<id>`` or ``user:<id>``. Set by the
+    #: engine from the caller's credential, so the event body cannot change it. Empty when absent.
+    emitted_by: str = ""
 
     @classmethod
     def from_wire(cls, raw: Mapping[str, Any]) -> Event:
@@ -158,6 +161,7 @@ class Event:
             timestamp=parse_timestamp(raw["timestamp"]), version=raw.get("version", 1),
             source=raw.get("source"), idempotency_key=raw.get("idempotencyKey", raw.get("idempotency_key")),
             metadata=metadata if isinstance(metadata, dict) else None,
+            emitted_by=raw.get("emittedBy") or "",
         )
 
 

@@ -119,6 +119,13 @@ def test_wait_for_event_memoized_returns_event(loop: asyncio.AbstractEventLoop) 
     assert ev.timestamp.tzinfo is not None
 
 
+def test_wait_for_event_reads_emitted_by(loop: asyncio.AbstractEventLoop) -> None:
+    out = {"id": "ev_9", "name": "order.approved", "data": {}, "timestamp": "2026-09-24T10:00:00Z"}
+    step = Step(ctx_with({"run_1:a:0": {**out, "emittedBy": "apikey:k1"}, "run_1:b:0": out}))
+    assert run(loop, step.wait_for_event("a", event="order.approved")).emitted_by == "apikey:k1"
+    assert run(loop, step.wait_for_event("b", event="order.approved")).emitted_by == ""
+
+
 def test_wait_for_event_rejects_empty_event(loop: asyncio.AbstractEventLoop) -> None:
     with pytest.raises(ValueError):
         run(loop, Step(ctx_with()).wait_for_event("w", event="  "))
