@@ -132,7 +132,6 @@ def test_transport_only_rpcs_are_not_exposed() -> None:
         "poll_projection_events",
         "ack_projection_events",
         "save_projection_state",
-        "report_rebuild_progress",
     }
     assert transport <= {a for a in dir(ProjectionServiceClientSync) if not a.startswith("_")}
 

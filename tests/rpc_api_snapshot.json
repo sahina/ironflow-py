@@ -195,8 +195,6 @@
   "ReleaseProjectionLeaseResponse",
   "RenewProjectionLeaseRequest",
   "RenewProjectionLeaseResponse",
-  "ReportRebuildProgressRequest",
-  "ReportRebuildProgressResponse",
   "ResumeProjectionRequest",
   "ResumeProjectionResponse",
   "ResumeRunRequest",

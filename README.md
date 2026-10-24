@@ -414,8 +414,8 @@ full coverage details.
 ## Dependencies
 
 The direct runtime requirements are `connectrpc~=0.12.1`, meaning at least
-0.12.1 and below 0.13, and `pyqwest>=0.10,<0.11`. ConnectRPC requires
-`protobuf-py>=0.3.0`. These bring in native dependencies:
+0.12.1 and below 0.13, `protobuf-py>=0.3,<0.7`, `pyqwest>=0.10,<0.11` and
+`typing_extensions>=4.4`. These bring in native dependencies:
 
 ```text
 connectrpc ─┬─ protobuf-py ── protobuf-py-ext   (native, CPython only)

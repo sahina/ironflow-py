@@ -221,8 +221,8 @@ class DebounceConfig(Message[_DebounceConfigFields]):
             int32 period_ms = 1;
             ```
         key:
-            JSON-path expression for the debounce group key (e.g. "userId",
-            "data.customerId"). Empty-payload events use a global sentinel.
+            Path inside the event data for the debounce group key (e.g. "userId",
+            "customer.id"); no "data." prefix. Empty-payload events use a global sentinel.
             See internal/eventpath for path syntax.
 
             ```proto

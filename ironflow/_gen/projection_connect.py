@@ -16,7 +16,7 @@ from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, DE
 from protobuf import DescService
 
 from . import projection_pb
-from .projection_pb import AckProjectionEventsRequest, AckProjectionEventsResponse, AcquireProjectionLeaseRequest, AcquireProjectionLeaseResponse, CancelRebuildRequest, CancelRebuildResponse, CreateSQLProjectionRequest, CreateSQLProjectionResponse, GetProjectionRequest, GetProjectionResponse, GetProjectionRevisionRequest, GetProjectionRevisionResponse, GetProjectionStatusRequest, GetProjectionStatusResponse, GetRebuildJobRequest, GetRebuildJobResponse, ListProjectionHistoryRequest, ListProjectionHistoryResponse, ListProjectionsRequest, ListProjectionsResponse, PauseProjectionRequest, PauseProjectionResponse, PollProjectionEventsRequest, PollProjectionEventsResponse, ProjectionEvent, QuerySQLProjectionRequest, QuerySQLProjectionResponse, RebuildProjectionRequest, RebuildProjectionResponse, RegisterProjectionRequest, RegisterProjectionResponse, ReleaseProjectionLeaseRequest, ReleaseProjectionLeaseResponse, RenewProjectionLeaseRequest, RenewProjectionLeaseResponse, ReportRebuildProgressRequest, ReportRebuildProgressResponse, ResumeProjectionRequest, ResumeProjectionResponse, SaveProjectionStateRequest, SaveProjectionStateResponse, StreamProjectionEventsRequest, UnregisterProjectionRequest, UnregisterProjectionResponse, WaitForEventRequest, WaitProjectionCatchupBatchRequest, WaitProjectionCatchupBatchResponse, WaitProjectionCatchupRequest, WaitProjectionCatchupResponse, WaitProjectionCatchupStreamResponse
+from .projection_pb import AckProjectionEventsRequest, AckProjectionEventsResponse, AcquireProjectionLeaseRequest, AcquireProjectionLeaseResponse, CancelRebuildRequest, CancelRebuildResponse, CreateSQLProjectionRequest, CreateSQLProjectionResponse, GetProjectionRequest, GetProjectionResponse, GetProjectionRevisionRequest, GetProjectionRevisionResponse, GetProjectionStatusRequest, GetProjectionStatusResponse, GetRebuildJobRequest, GetRebuildJobResponse, ListProjectionHistoryRequest, ListProjectionHistoryResponse, ListProjectionsRequest, ListProjectionsResponse, PauseProjectionRequest, PauseProjectionResponse, PollProjectionEventsRequest, PollProjectionEventsResponse, ProjectionEvent, QuerySQLProjectionRequest, QuerySQLProjectionResponse, RebuildProjectionRequest, RebuildProjectionResponse, RegisterProjectionRequest, RegisterProjectionResponse, ReleaseProjectionLeaseRequest, ReleaseProjectionLeaseResponse, RenewProjectionLeaseRequest, RenewProjectionLeaseResponse, ResumeProjectionRequest, ResumeProjectionResponse, SaveProjectionStateRequest, SaveProjectionStateResponse, StreamProjectionEventsRequest, UnregisterProjectionRequest, UnregisterProjectionResponse, WaitForEventRequest, WaitProjectionCatchupBatchRequest, WaitProjectionCatchupBatchResponse, WaitProjectionCatchupRequest, WaitProjectionCatchupResponse, WaitProjectionCatchupStreamResponse
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Iterable, Iterator, Mapping
@@ -110,9 +110,6 @@ class ProjectionService(Protocol):
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     async def cancel_rebuild(self, request: CancelRebuildRequest, ctx: RequestContext[CancelRebuildRequest, CancelRebuildResponse], /) -> CancelRebuildResponse:
-        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
-
-    async def report_rebuild_progress(self, request: ReportRebuildProgressRequest, ctx: RequestContext[ReportRebuildProgressRequest, ReportRebuildProgressResponse], /) -> ReportRebuildProgressResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     async def pause_projection(self, request: PauseProjectionRequest, ctx: RequestContext[PauseProjectionRequest, PauseProjectionResponse], /) -> PauseProjectionResponse:
@@ -347,16 +344,6 @@ class ProjectionServiceASGIApplication(ConnectASGIApplication[ProjectionService]
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.cancel_rebuild,
-                ),
-                "/ironflow.v1.ProjectionService/ReportRebuildProgress": Endpoint.unary(
-                    method=MethodInfo(
-                        name="ReportRebuildProgress",
-                        service_name="ironflow.v1.ProjectionService",
-                        input=ReportRebuildProgressRequest,
-                        output=ReportRebuildProgressResponse,
-                        idempotency_level=IdempotencyLevel.UNKNOWN,
-                    ),
-                    function=svc.report_rebuild_progress,
                 ),
                 "/ironflow.v1.ProjectionService/PauseProjection": Endpoint.unary(
                     method=MethodInfo(
@@ -837,26 +824,6 @@ class ProjectionServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
-    async def report_rebuild_progress(
-        self,
-        request: ReportRebuildProgressRequest,
-        *,
-        headers: Headers | Mapping[str, str] | None = None, 
-        timeout_ms: int | None = None,
-    ) -> ReportRebuildProgressResponse:
-        return await self.execute_unary(
-            request=request,
-            method=MethodInfo(
-                name="ReportRebuildProgress",
-                service_name="ironflow.v1.ProjectionService",
-                input=ReportRebuildProgressRequest,
-                output=ReportRebuildProgressResponse,
-                idempotency_level=IdempotencyLevel.UNKNOWN,
-            ),
-            headers=headers,
-            timeout_ms=timeout_ms,
-        )
-
     async def pause_projection(
         self,
         request: PauseProjectionRequest,
@@ -1125,9 +1092,6 @@ class ProjectionServiceSync(Protocol):
     def cancel_rebuild(self, request: CancelRebuildRequest, ctx: RequestContext[CancelRebuildRequest, CancelRebuildResponse], /) -> CancelRebuildResponse:
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
-    def report_rebuild_progress(self, request: ReportRebuildProgressRequest, ctx: RequestContext[ReportRebuildProgressRequest, ReportRebuildProgressResponse], /) -> ReportRebuildProgressResponse:
-        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
-
     def pause_projection(self, request: PauseProjectionRequest, ctx: RequestContext[PauseProjectionRequest, PauseProjectionResponse], /) -> PauseProjectionResponse:
         """
         Pause/Resume
@@ -1358,16 +1322,6 @@ class ProjectionServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.cancel_rebuild,
-                ),
-                "/ironflow.v1.ProjectionService/ReportRebuildProgress": EndpointSync.unary(
-                    method=MethodInfo(
-                        name="ReportRebuildProgress",
-                        service_name="ironflow.v1.ProjectionService",
-                        input=ReportRebuildProgressRequest,
-                        output=ReportRebuildProgressResponse,
-                        idempotency_level=IdempotencyLevel.UNKNOWN,
-                    ),
-                    function=service.report_rebuild_progress,
                 ),
                 "/ironflow.v1.ProjectionService/PauseProjection": EndpointSync.unary(
                     method=MethodInfo(
@@ -1826,25 +1780,6 @@ class ProjectionServiceClientSync(ConnectClientSync):
                 service_name="ironflow.v1.ProjectionService",
                 input=CancelRebuildRequest,
                 output=CancelRebuildResponse,
-                idempotency_level=IdempotencyLevel.UNKNOWN,
-            ),
-            headers=headers,
-            timeout_ms=timeout_ms,
-        )
-    def report_rebuild_progress(
-        self,
-        request: ReportRebuildProgressRequest,
-        *,
-        headers: Headers | Mapping[str, str] | None = None, 
-        timeout_ms: int | None = None,
-    ) -> ReportRebuildProgressResponse:
-        return self.execute_unary(
-            request=request,
-            method=MethodInfo(
-                name="ReportRebuildProgress",
-                service_name="ironflow.v1.ProjectionService",
-                input=ReportRebuildProgressRequest,
-                output=ReportRebuildProgressResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,
