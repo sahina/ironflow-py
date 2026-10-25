@@ -1336,6 +1336,14 @@ class PublishRequest(Message[_PublishRequestFields]):
         idempotency_key:
             Optional idempotency key for deduplication. At most 255 bytes, with no
             whitespace or control characters; anything else is InvalidArgument.
+            Scoped to the environment and topic. The server records the key durably,
+            so a retry deduplicates for IRONFLOW_RUN_RETENTION_DAYS days after the
+            first publish (kept forever when unset or 0), not only inside the
+            stream's two-minute window. One gap remains: the record stays incomplete
+            whenever the server cannot record the publish after the message is stored
+            (a store error, a lost ack, a failed read of the stored ID, or a crash). A
+            retry past the two-minute window then stores the message again, under the
+            same event_id.
 
             ```proto
             string idempotency_key = 3;
@@ -1384,8 +1392,8 @@ class PublishResponse(Message[_PublishResponseFields]):
             uint64 sequence = 2;
             ```
         duplicate:
-            True when the idempotency key matched an earlier publish inside the
-            stream's deduplication window and this publish stored nothing.
+            True when the idempotency key matched an earlier publish and this
+            publish stored nothing.
 
             ```proto
             bool duplicate = 3;

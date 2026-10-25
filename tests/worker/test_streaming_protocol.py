@@ -376,7 +376,9 @@ def test_publish_step_works_on_the_streaming_worker(loop: asyncio.AbstractEventL
     messages = run(loop, scenario())
     result = messages[-1].payload.value
     assert isinstance(result, JobCompleted) and result.output_value.to_python() == "evt_pub_1"
-    assert engine.calls("publish")[0]["body"] == {"topic": "orders", "data": {"a": 1}}
+    sent = engine.calls("publish")[0]["body"]
+    assert sent.pop("idempotencyKey").startswith("step-")
+    assert sent == {"topic": "orders", "data": {"a": 1}}
 
 
 def test_job_assignment_with_an_empty_metadata_struct_is_harmless() -> None:

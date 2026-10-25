@@ -205,7 +205,9 @@ def test_publish_step_posts_to_the_configured_server() -> None:
     finally:
         engine.shutdown()
     assert status == 200 and body["result"] == "evt_pub_1"
-    assert published[0]["body"] == {"topic": "orders", "data": {"a": 1}}
+    body_sent = published[0]["body"]
+    assert body_sent.pop("idempotencyKey").startswith("step-")
+    assert body_sent == {"topic": "orders", "data": {"a": 1}}
     headers = {k.lower(): v for k, v in published[0]["headers"].items()}
     assert headers["x-ironflow-run-id"] == "run_1" and headers["x-ironflow-environment-id"] == "staging"
 

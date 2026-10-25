@@ -18,10 +18,10 @@ if TYPE_CHECKING:
     from protobuf import DescFile
     from protobuf.wkt import Struct, Timestamp
 
-    from .types_pb import CancelOnSpec, ConcurrencyConfig, DebounceConfig, ExecutionMode, RetryConfig, Trigger
+    from .types_pb import CancelOnSpec, CircuitBreakerConfig, ConcurrencyConfig, DebounceConfig, ExecutionMode, RetryConfig, ThrottleConfig, Trigger
 
 
-_ExecutionSnapshotFields: TypeAlias = Literal["triggers", "retry", "timeout_ms", "concurrency", "cancel_on", "debounce", "metadata"]
+_ExecutionSnapshotFields: TypeAlias = Literal["triggers", "retry", "timeout_ms", "concurrency", "cancel_on", "debounce", "metadata", "circuit_breaker", "throttle"]
 
 class ExecutionSnapshot(Message[_ExecutionSnapshotFields]):
     """
@@ -70,9 +70,17 @@ class ExecutionSnapshot(Message[_ExecutionSnapshotFields]):
             ```proto
             optional google.protobuf.Struct metadata = 7;
             ```
+        circuit_breaker:
+            ```proto
+            optional ironflow.v1.CircuitBreakerConfig circuit_breaker = 8;
+            ```
+        throttle:
+            ```proto
+            optional ironflow.v1.ThrottleConfig throttle = 9;
+            ```
     """
 
-    __slots__ = ("triggers", "retry", "timeout_ms", "concurrency", "cancel_on", "debounce", "metadata")
+    __slots__ = ("triggers", "retry", "timeout_ms", "concurrency", "cancel_on", "debounce", "metadata", "circuit_breaker", "throttle")
 
     if TYPE_CHECKING:
 
@@ -86,6 +94,8 @@ class ExecutionSnapshot(Message[_ExecutionSnapshotFields]):
             cancel_on: list[CancelOnSpec] | None = None,
             debounce: DebounceConfig | None = None,
             metadata: Struct | None = None,
+            circuit_breaker: CircuitBreakerConfig | None = None,
+            throttle: ThrottleConfig | None = None,
         ) -> None:
             pass
 
@@ -96,6 +106,8 @@ class ExecutionSnapshot(Message[_ExecutionSnapshotFields]):
         cancel_on: list[CancelOnSpec]
         debounce: DebounceConfig | None
         metadata: Struct | None
+        circuit_breaker: CircuitBreakerConfig | None
+        throttle: ThrottleConfig | None
 
 _DeploymentFields: TypeAlias = Literal["environment_id", "function_id", "deployment_id", "artifact_digest", "snapshot", "mode", "endpoint_url", "created_by", "created_at"]
 
@@ -574,7 +586,7 @@ class FunctionRoutingMode(Enum):
 
 
 _DESC = file_desc(
-    b'\n\x1cironflow/v1/deployment.proto\x12\x0bironflow.v1\x1a\x17ironflow/v1/types.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\xfc\x02\n\x11ExecutionSnapshot\x120\n\x08triggers\x18\x01 \x03(\x0b2\x14.ironflow.v1.TriggerR\x08triggers\x12.\n\x05retry\x18\x02 \x01(\x0b2\x18.ironflow.v1.RetryConfigR\x05retry\x12\x1d\n\ntimeout_ms\x18\x03 \x01(\x05R\ttimeoutMs\x12@\n\x0bconcurrency\x18\x04 \x01(\x0b2\x1e.ironflow.v1.ConcurrencyConfigR\x0bconcurrency\x126\n\tcancel_on\x18\x05 \x03(\x0b2\x19.ironflow.v1.CancelOnSpecR\x08cancelOn\x127\n\x08debounce\x18\x06 \x01(\x0b2\x1b.ironflow.v1.DebounceConfigR\x08debounce\x123\n\x08metadata\x18\x07 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata"\x8b\x03\n\nDeployment\x12%\n\x0eenvironment_id\x18\x01 \x01(\tR\renvironmentId\x12\x1f\n\x0bfunction_id\x18\x02 \x01(\tR\nfunctionId\x12#\n\rdeployment_id\x18\x03 \x01(\tR\x0cdeploymentId\x12\'\n\x0fartifact_digest\x18\x04 \x01(\tR\x0eartifactDigest\x12:\n\x08snapshot\x18\x05 \x01(\x0b2\x1e.ironflow.v1.ExecutionSnapshotR\x08snapshot\x12.\n\x04mode\x18\x06 \x01(\x0e2\x1a.ironflow.v1.ExecutionModeR\x04mode\x12!\n\x0cendpoint_url\x18\x07 \x01(\tR\x0bendpointUrl\x12\x1d\n\ncreated_by\x18\x08 \x01(\tR\tcreatedBy\x129\n\ncreated_at\x18\t \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt"\xd1\x02\n\x19RegisterDeploymentRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12#\n\rdeployment_id\x18\x02 \x01(\tR\x0cdeploymentId\x12\'\n\x0fartifact_digest\x18\x03 \x01(\tR\x0eartifactDigest\x12:\n\x08snapshot\x18\x04 \x01(\x0b2\x1e.ironflow.v1.ExecutionSnapshotR\x08snapshot\x12.\n\x04mode\x18\x05 \x01(\x0e2\x1a.ironflow.v1.ExecutionModeR\x04mode\x12!\n\x0cendpoint_url\x18\x06 \x01(\tR\x0bendpointUrl\x126\n\x17snapshot_schema_version\x18\x07 \x01(\x05R\x15snapshotSchemaVersion"o\n\x1aRegisterDeploymentResponse\x127\n\ndeployment\x18\x01 \x01(\x0b2\x17.ironflow.v1.DeploymentR\ndeployment\x12\x18\n\x07created\x18\x02 \x01(\x08R\x07created"\\\n\x14GetDeploymentRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12#\n\rdeployment_id\x18\x02 \x01(\tR\x0cdeploymentId"P\n\x15GetDeploymentResponse\x127\n\ndeployment\x18\x01 \x01(\x0b2\x17.ironflow.v1.DeploymentR\ndeployment"g\n\x16ListDeploymentsRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x03 \x01(\x05R\x06offset"T\n\x17ListDeploymentsResponse\x129\n\x0bdeployments\x18\x01 \x03(\x0b2\x17.ironflow.v1.DeploymentR\x0bdeployments"E\n"GetFunctionExecutionRoutingRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId"\x89\x03\n#GetFunctionExecutionRoutingResponse\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x124\n\x04mode\x18\x02 \x01(\x0e2 .ironflow.v1.FunctionRoutingModeR\x04mode\x120\n\x14active_deployment_id\x18\x03 \x01(\tR\x12activeDeploymentId\x12)\n\x10routing_revision\x18\x04 \x01(\x03R\x0froutingRevision\x12#\n\rtransition_id\x18\x05 \x01(\tR\x0ctransitionId\x12N\n\x15transition_started_at\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\x13transitionStartedAt\x129\n\nupdated_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt*\xa7\x01\n\x13FunctionRoutingMode\x12%\n!FUNCTION_ROUTING_MODE_UNSPECIFIED\x10\x00\x12 \n\x1cFUNCTION_ROUTING_MODE_LEGACY\x10\x01\x12"\n\x1eFUNCTION_ROUTING_MODE_ADOPTING\x10\x02\x12#\n\x1fFUNCTION_ROUTING_MODE_VERSIONED\x10\x032\xc2\x03\n\x11DeploymentService\x12e\n\x12RegisterDeployment\x12&.ironflow.v1.RegisterDeploymentRequest\x1a\'.ironflow.v1.RegisterDeploymentResponse\x12[\n\rGetDeployment\x12!.ironflow.v1.GetDeploymentRequest\x1a".ironflow.v1.GetDeploymentResponse"\x03\x90\x02\x01\x12a\n\x0fListDeployments\x12#.ironflow.v1.ListDeploymentsRequest\x1a$.ironflow.v1.ListDeploymentsResponse"\x03\x90\x02\x01\x12\x85\x01\n\x1bGetFunctionExecutionRouting\x12/.ironflow.v1.GetFunctionExecutionRoutingRequest\x1a0.ironflow.v1.GetFunctionExecutionRoutingResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x1cironflow/v1/deployment.proto\x12\x0bironflow.v1\x1a\x17ironflow/v1/types.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\x81\x04\n\x11ExecutionSnapshot\x120\n\x08triggers\x18\x01 \x03(\x0b2\x14.ironflow.v1.TriggerR\x08triggers\x12.\n\x05retry\x18\x02 \x01(\x0b2\x18.ironflow.v1.RetryConfigR\x05retry\x12\x1d\n\ntimeout_ms\x18\x03 \x01(\x05R\ttimeoutMs\x12@\n\x0bconcurrency\x18\x04 \x01(\x0b2\x1e.ironflow.v1.ConcurrencyConfigR\x0bconcurrency\x126\n\tcancel_on\x18\x05 \x03(\x0b2\x19.ironflow.v1.CancelOnSpecR\x08cancelOn\x127\n\x08debounce\x18\x06 \x01(\x0b2\x1b.ironflow.v1.DebounceConfigR\x08debounce\x123\n\x08metadata\x18\x07 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12J\n\x0fcircuit_breaker\x18\x08 \x01(\x0b2!.ironflow.v1.CircuitBreakerConfigR\x0ecircuitBreaker\x127\n\x08throttle\x18\t \x01(\x0b2\x1b.ironflow.v1.ThrottleConfigR\x08throttle"\x8b\x03\n\nDeployment\x12%\n\x0eenvironment_id\x18\x01 \x01(\tR\renvironmentId\x12\x1f\n\x0bfunction_id\x18\x02 \x01(\tR\nfunctionId\x12#\n\rdeployment_id\x18\x03 \x01(\tR\x0cdeploymentId\x12\'\n\x0fartifact_digest\x18\x04 \x01(\tR\x0eartifactDigest\x12:\n\x08snapshot\x18\x05 \x01(\x0b2\x1e.ironflow.v1.ExecutionSnapshotR\x08snapshot\x12.\n\x04mode\x18\x06 \x01(\x0e2\x1a.ironflow.v1.ExecutionModeR\x04mode\x12!\n\x0cendpoint_url\x18\x07 \x01(\tR\x0bendpointUrl\x12\x1d\n\ncreated_by\x18\x08 \x01(\tR\tcreatedBy\x129\n\ncreated_at\x18\t \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt"\xd1\x02\n\x19RegisterDeploymentRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12#\n\rdeployment_id\x18\x02 \x01(\tR\x0cdeploymentId\x12\'\n\x0fartifact_digest\x18\x03 \x01(\tR\x0eartifactDigest\x12:\n\x08snapshot\x18\x04 \x01(\x0b2\x1e.ironflow.v1.ExecutionSnapshotR\x08snapshot\x12.\n\x04mode\x18\x05 \x01(\x0e2\x1a.ironflow.v1.ExecutionModeR\x04mode\x12!\n\x0cendpoint_url\x18\x06 \x01(\tR\x0bendpointUrl\x126\n\x17snapshot_schema_version\x18\x07 \x01(\x05R\x15snapshotSchemaVersion"o\n\x1aRegisterDeploymentResponse\x127\n\ndeployment\x18\x01 \x01(\x0b2\x17.ironflow.v1.DeploymentR\ndeployment\x12\x18\n\x07created\x18\x02 \x01(\x08R\x07created"\\\n\x14GetDeploymentRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12#\n\rdeployment_id\x18\x02 \x01(\tR\x0cdeploymentId"P\n\x15GetDeploymentResponse\x127\n\ndeployment\x18\x01 \x01(\x0b2\x17.ironflow.v1.DeploymentR\ndeployment"g\n\x16ListDeploymentsRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x12\x14\n\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n\x06offset\x18\x03 \x01(\x05R\x06offset"T\n\x17ListDeploymentsResponse\x129\n\x0bdeployments\x18\x01 \x03(\x0b2\x17.ironflow.v1.DeploymentR\x0bdeployments"E\n"GetFunctionExecutionRoutingRequest\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId"\x89\x03\n#GetFunctionExecutionRoutingResponse\x12\x1f\n\x0bfunction_id\x18\x01 \x01(\tR\nfunctionId\x124\n\x04mode\x18\x02 \x01(\x0e2 .ironflow.v1.FunctionRoutingModeR\x04mode\x120\n\x14active_deployment_id\x18\x03 \x01(\tR\x12activeDeploymentId\x12)\n\x10routing_revision\x18\x04 \x01(\x03R\x0froutingRevision\x12#\n\rtransition_id\x18\x05 \x01(\tR\x0ctransitionId\x12N\n\x15transition_started_at\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\x13transitionStartedAt\x129\n\nupdated_at\x18\x07 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt*\xa7\x01\n\x13FunctionRoutingMode\x12%\n!FUNCTION_ROUTING_MODE_UNSPECIFIED\x10\x00\x12 \n\x1cFUNCTION_ROUTING_MODE_LEGACY\x10\x01\x12"\n\x1eFUNCTION_ROUTING_MODE_ADOPTING\x10\x02\x12#\n\x1fFUNCTION_ROUTING_MODE_VERSIONED\x10\x032\xc2\x03\n\x11DeploymentService\x12e\n\x12RegisterDeployment\x12&.ironflow.v1.RegisterDeploymentRequest\x1a\'.ironflow.v1.RegisterDeploymentResponse\x12[\n\rGetDeployment\x12!.ironflow.v1.GetDeploymentRequest\x1a".ironflow.v1.GetDeploymentResponse"\x03\x90\x02\x01\x12a\n\x0fListDeployments\x12#.ironflow.v1.ListDeploymentsRequest\x1a$.ironflow.v1.ListDeploymentsResponse"\x03\x90\x02\x01\x12\x85\x01\n\x1bGetFunctionExecutionRouting\x12/.ironflow.v1.GetFunctionExecutionRoutingRequest\x1a0.ironflow.v1.GetFunctionExecutionRoutingResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         types_pb.desc(),
         struct_pb.desc(),

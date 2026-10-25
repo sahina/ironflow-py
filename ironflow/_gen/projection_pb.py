@@ -181,7 +181,7 @@ class PollProjectionEventsRequest(Message[_PollProjectionEventsRequestFields]):
             string partition = 3;
             ```
         lease:
-            Absent: unguarded, as before ADR 0120.
+            Required on a managed or external projection (ADR 0120). Absent: failed_precondition.
 
             ```proto
             optional ironflow.v1.ProjectionLease lease = 4;
@@ -381,7 +381,7 @@ class StreamProjectionEventsRequest(Message[_StreamProjectionEventsRequestFields
             bool accept_heartbeats = 4;
             ```
         lease:
-            Absent: unguarded, as before ADR 0120.
+            Required on a managed or external projection (ADR 0120). Absent: failed_precondition.
 
             ```proto
             optional ironflow.v1.ProjectionLease lease = 5;
@@ -452,7 +452,7 @@ class SaveProjectionStateRequest(Message[_SaveProjectionStateRequestFields]):
             optional google.protobuf.Timestamp last_event_time = 6;
             ```
         lease:
-            Absent: unguarded, as before ADR 0120.
+            Required on a managed or external projection (ADR 0120). Absent: failed_precondition.
 
             ```proto
             optional ironflow.v1.ProjectionLease lease = 8;
@@ -536,7 +536,7 @@ class AckProjectionEventsRequest(Message[_AckProjectionEventsRequestFields]):
             int64 last_event_seq = 3;
             ```
         lease:
-            Absent: unguarded, as before ADR 0120.
+            Required on a managed or external projection (ADR 0120). Absent: failed_precondition.
 
             ```proto
             optional ironflow.v1.ProjectionLease lease = 4;

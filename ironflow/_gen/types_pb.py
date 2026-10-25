@@ -64,7 +64,7 @@ class Trigger(Message[_TriggerFields]):
         expression: str
         cron: str
 
-_RetryConfigFields: TypeAlias = Literal["max_attempts", "initial_delay_ms", "backoff_factor", "max_delay_ms"]
+_RetryConfigFields: TypeAlias = Literal["max_attempts", "initial_delay_ms", "backoff_factor", "max_delay_ms", "on_exhausted"]
 
 class RetryConfig(Message[_RetryConfigFields]):
     """
@@ -74,32 +74,41 @@ class RetryConfig(Message[_RetryConfigFields]):
 
     Attributes:
         max_attempts:
-            Max attempts (default: 3)
+            Total attempts, including the first. Zero means unset: the server's
+            spec.engine.retry.maxAttempts (default: 25) applies when each run is created.
 
             ```proto
             int32 max_attempts = 1;
             ```
         initial_delay_ms:
-            Initial delay in milliseconds (default: 1000)
+            Initial delay in milliseconds. Zero means unset (server default: 1000).
 
             ```proto
             int32 initial_delay_ms = 2;
             ```
         backoff_factor:
-            Backoff factor (default: 2.0)
+            Backoff factor. Zero means unset (server default: 2.0).
 
             ```proto
             double backoff_factor = 3;
             ```
         max_delay_ms:
-            Max delay in milliseconds (default: 300000 = 5 min)
+            Max delay in milliseconds. Zero means unset (server default: 300000 = 5 min).
 
             ```proto
             int32 max_delay_ms = 4;
             ```
+        on_exhausted:
+            What happens when a retryable failure has used every attempt: "pause"
+            holds the run with its completed steps for `ironflow run resume`, "fail"
+            ends it. Empty means unset (server default: "pause").
+
+            ```proto
+            string on_exhausted = 5;
+            ```
     """
 
-    __slots__ = ("max_attempts", "initial_delay_ms", "backoff_factor", "max_delay_ms")
+    __slots__ = ("max_attempts", "initial_delay_ms", "backoff_factor", "max_delay_ms", "on_exhausted")
 
     if TYPE_CHECKING:
 
@@ -110,6 +119,7 @@ class RetryConfig(Message[_RetryConfigFields]):
             initial_delay_ms: int = 0,
             backoff_factor: float = 0,
             max_delay_ms: int = 0,
+            on_exhausted: str = "",
         ) -> None:
             pass
 
@@ -117,6 +127,109 @@ class RetryConfig(Message[_RetryConfigFields]):
         initial_delay_ms: int
         backoff_factor: float
         max_delay_ms: int
+        on_exhausted: str
+
+_CircuitBreakerConfigFields: TypeAlias = Literal["failure_threshold", "open_duration_ms", "max_open_duration_ms"]
+
+class CircuitBreakerConfig(Message[_CircuitBreakerConfigFields]):
+    """
+    CircuitBreakerConfig tunes the push-endpoint circuit breaker. Zero fields
+    mean unset; the server's spec.engine.circuitBreaker defaults apply.
+
+    ```proto
+    message ironflow.v1.CircuitBreakerConfig
+    ```
+
+    Attributes:
+        failure_threshold:
+            Consecutive failed execution attempts that open the circuit (default: 5).
+
+            ```proto
+            int32 failure_threshold = 1;
+            ```
+        open_duration_ms:
+            First open window in milliseconds (default: 60000). Each failed probe
+            doubles the window up to max_open_duration_ms.
+
+            ```proto
+            int32 open_duration_ms = 2;
+            ```
+        max_open_duration_ms:
+            Cap for the doubling open window in milliseconds (default: 600000).
+
+            ```proto
+            int32 max_open_duration_ms = 3;
+            ```
+    """
+
+    __slots__ = ("failure_threshold", "open_duration_ms", "max_open_duration_ms")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            failure_threshold: int = 0,
+            open_duration_ms: int = 0,
+            max_open_duration_ms: int = 0,
+        ) -> None:
+            pass
+
+        failure_threshold: int
+        open_duration_ms: int
+        max_open_duration_ms: int
+
+_ThrottleConfigFields: TypeAlias = Literal["limit", "period_ms", "key"]
+
+class ThrottleConfig(Message[_ThrottleConfigFields]):
+    """
+    ThrottleConfig is a soft start-rate limit: at most `limit` runs start per
+    `period_ms` (per key value when `key` is set). Runs over the limit wait in
+    the queue; they are never dropped.
+
+    ```proto
+    message ironflow.v1.ThrottleConfig
+    ```
+
+    Attributes:
+        limit:
+            Runs allowed to start per period. Must be >= 1.
+
+            ```proto
+            int32 limit = 1;
+            ```
+        period_ms:
+            Window length in milliseconds. Must be >= 1000.
+
+            ```proto
+            int32 period_ms = 2;
+            ```
+        key:
+            Optional path into the event data (e.g. "customerId"); empty throttles the
+            whole function. A key that does not resolve fails the run with
+            THROTTLE_KEY_UNRESOLVED.
+
+            ```proto
+            string key = 3;
+            ```
+    """
+
+    __slots__ = ("limit", "period_ms", "key")
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            *,
+            limit: int = 0,
+            period_ms: int = 0,
+            key: str = "",
+        ) -> None:
+            pass
+
+        limit: int
+        period_ms: int
+        key: str
 
 _ConcurrencyConfigFields: TypeAlias = Literal["limit", "key"]
 
@@ -253,7 +366,7 @@ class DebounceConfig(Message[_DebounceConfigFields]):
         key: str
         max_wait_ms: int
 
-_FunctionFields: TypeAlias = Literal["id", "name", "description", "triggers", "retry", "timeout_ms", "concurrency", "preferred_mode", "endpoint_url", "actor_key", "status", "version", "created_at", "updated_at", "recording", "recording_profile", "next_run", "metadata", "debounce", "cancel_on"]
+_FunctionFields: TypeAlias = Literal["id", "name", "description", "triggers", "retry", "timeout_ms", "concurrency", "preferred_mode", "endpoint_url", "actor_key", "status", "version", "created_at", "updated_at", "recording", "recording_profile", "next_run", "metadata", "debounce", "cancel_on", "circuit_breaker", "throttle"]
 
 class Function(Message[_FunctionFields]):
     """
@@ -388,9 +501,21 @@ class Function(Message[_FunctionFields]):
             ```proto
             repeated ironflow.v1.CancelOnSpec cancel_on = 21;
             ```
+        circuit_breaker:
+            Circuit-breaker overrides (optional).
+
+            ```proto
+            optional ironflow.v1.CircuitBreakerConfig circuit_breaker = 24;
+            ```
+        throttle:
+            Start-rate throttle (optional).
+
+            ```proto
+            optional ironflow.v1.ThrottleConfig throttle = 25;
+            ```
     """
 
-    __slots__ = ("id", "name", "description", "triggers", "retry", "timeout_ms", "concurrency", "preferred_mode", "endpoint_url", "actor_key", "status", "version", "created_at", "updated_at", "recording", "recording_profile", "next_run", "metadata", "debounce", "cancel_on")
+    __slots__ = ("id", "name", "description", "triggers", "retry", "timeout_ms", "concurrency", "preferred_mode", "endpoint_url", "actor_key", "status", "version", "created_at", "updated_at", "recording", "recording_profile", "next_run", "metadata", "debounce", "cancel_on", "circuit_breaker", "throttle")
 
     if TYPE_CHECKING:
 
@@ -417,6 +542,8 @@ class Function(Message[_FunctionFields]):
             metadata: Struct | None = None,
             debounce: DebounceConfig | None = None,
             cancel_on: list[CancelOnSpec] | None = None,
+            circuit_breaker: CircuitBreakerConfig | None = None,
+            throttle: ThrottleConfig | None = None,
         ) -> None:
             pass
 
@@ -440,6 +567,8 @@ class Function(Message[_FunctionFields]):
         metadata: Struct | None
         debounce: DebounceConfig | None
         cancel_on: list[CancelOnSpec]
+        circuit_breaker: CircuitBreakerConfig | None
+        throttle: ThrottleConfig | None
 
 _EventFields: TypeAlias = Literal["id", "name", "data", "data_value", "idempotency_key", "source", "timestamp", "metadata", "version", "entity_id", "entity_type", "entity_version", "emitted_by"]
 
@@ -1093,7 +1222,7 @@ class Step(Message[_StepFields]):
         stored_status: str
         child_run_id: str
 
-_ErrorFields: TypeAlias = Literal["message", "code", "stack", "retryable", "details"]
+_ErrorFields: TypeAlias = Literal["message", "code", "stack", "retryable", "details", "retry_after_ms"]
 
 class Error(Message[_ErrorFields]):
     """
@@ -1132,9 +1261,16 @@ class Error(Message[_ErrorFields]):
             ```proto
             optional google.protobuf.Struct details = 5;
             ```
+        retry_after_ms:
+            Delay before the next attempt requested by the handler (RetryAfterError).
+            Zero means use the retry policy's backoff. Capped at the policy's max delay.
+
+            ```proto
+            int64 retry_after_ms = 6;
+            ```
     """
 
-    __slots__ = ("message", "code", "stack", "retryable", "details")
+    __slots__ = ("message", "code", "stack", "retryable", "details", "retry_after_ms")
 
     if TYPE_CHECKING:
 
@@ -1146,6 +1282,7 @@ class Error(Message[_ErrorFields]):
             stack: str = "",
             retryable: bool = False,
             details: Struct | None = None,
+            retry_after_ms: int = 0,
         ) -> None:
             pass
 
@@ -1154,6 +1291,7 @@ class Error(Message[_ErrorFields]):
         stack: str
         retryable: bool
         details: Struct | None
+        retry_after_ms: int
 
 _ErrorInfoFields: TypeAlias = Literal["resource_type", "resource_id", "metadata"]
 
@@ -1416,7 +1554,7 @@ class StepType(Enum):
 
 
 _DESC = file_desc(
-    b'\n\x17ironflow/v1/types.proto\x12\x0bironflow.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto"S\n\x07Trigger\x12\x14\n\x05event\x18\x01 \x01(\tR\x05event\x12\x1e\n\nexpression\x18\x02 \x01(\tR\nexpression\x12\x12\n\x04cron\x18\x03 \x01(\tR\x04cron"\xa3\x01\n\x0bRetryConfig\x12!\n\x0cmax_attempts\x18\x01 \x01(\x05R\x0bmaxAttempts\x12(\n\x10initial_delay_ms\x18\x02 \x01(\x05R\x0einitialDelayMs\x12%\n\x0ebackoff_factor\x18\x03 \x01(\x01R\rbackoffFactor\x12 \n\x0cmax_delay_ms\x18\x04 \x01(\x05R\nmaxDelayMs";\n\x11ConcurrencyConfig\x12\x14\n\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x10\n\x03key\x18\x02 \x01(\tR\x03key":\n\x0cCancelOnSpec\x12\x14\n\x05event\x18\x01 \x01(\tR\x05event\x12\x14\n\x05match\x18\x02 \x01(\tR\x05match"_\n\x0eDebounceConfig\x12\x1b\n\tperiod_ms\x18\x01 \x01(\x05R\x08periodMs\x12\x10\n\x03key\x18\x02 \x01(\tR\x03key\x12\x1e\n\x0bmax_wait_ms\x18\x03 \x01(\x03R\tmaxWaitMs"\xd0\x07\n\x08Function\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription\x120\n\x08triggers\x18\x04 \x03(\x0b2\x14.ironflow.v1.TriggerR\x08triggers\x12.\n\x05retry\x18\x05 \x01(\x0b2\x18.ironflow.v1.RetryConfigR\x05retry\x12\x1d\n\ntimeout_ms\x18\x06 \x01(\x05R\ttimeoutMs\x12@\n\x0bconcurrency\x18\x07 \x01(\x0b2\x1e.ironflow.v1.ConcurrencyConfigR\x0bconcurrency\x12A\n\x0epreferred_mode\x18\x08 \x01(\x0e2\x1a.ironflow.v1.ExecutionModeR\rpreferredMode\x12!\n\x0cendpoint_url\x18\t \x01(\tR\x0bendpointUrl\x12\x1b\n\tactor_key\x18\n \x01(\tR\x08actorKey\x123\n\x06status\x18\x0b \x01(\x0e2\x1b.ironflow.v1.FunctionStatusR\x06status\x12\x18\n\x07version\x18\x0c \x01(\x05R\x07version\x129\n\ncreated_at\x18\r \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x0e \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1c\n\trecording\x18\x0f \x01(\x08R\trecording\x12+\n\x11recording_profile\x18\x16 \x01(\tR\x10recordingProfile\x125\n\x08next_run\x18\x17 \x01(\x0b2\x1a.google.protobuf.TimestampR\x07nextRun\x123\n\x08metadata\x18\x12 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x127\n\x08debounce\x18\x13 \x01(\x0b2\x1b.ironflow.v1.DebounceConfigR\x08debounce\x126\n\tcancel_on\x18\x15 \x03(\x0b2\x19.ironflow.v1.CancelOnSpecR\x08cancelOnJ\x04\x08\x10\x10\x11J\x04\x08\x11\x10\x12J\x04\x08\x14\x10\x15R\x13recording_retentionR\x0epause_behaviorR\x14compensate_on_cancel"\xdd\x03\n\x05Event\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12+\n\x04data\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x0c \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12\'\n\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x12\x16\n\x06source\x18\x05 \x01(\tR\x06source\x128\n\ttimestamp\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x123\n\x08metadata\x18\x07 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12\x18\n\x07version\x18\x08 \x01(\x05R\x07version\x12\x1b\n\tentity_id\x18\t \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\n \x01(\tR\nentityType\x12%\n\x0eentity_version\x18\x0b \x01(\x03R\rentityVersion\x12\x1d\n\nemitted_by\x18\r \x01(\tR\temittedBy"\x8e\x0b\n\x03Run\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n\x0bfunction_id\x18\x02 \x01(\tR\nfunctionId\x12\x19\n\x08event_id\x18\x03 \x01(\tR\x07eventId\x12A\n\x0eexecution_mode\x18\x04 \x01(\x0e2\x1a.ironflow.v1.ExecutionModeR\rexecutionMode\x12\x1b\n\tworker_id\x18\x05 \x01(\tR\x08workerId\x12\x19\n\x08actor_id\x18\x06 \x01(\tR\x07actorId\x12-\n\x05input\x18\x07 \x01(\x0b2\x17.google.protobuf.StructR\x05input\x127\n\x0binput_value\x18\x16 \x01(\x0b2\x16.google.protobuf.ValueR\ninputValue\x12/\n\x06output\x18\x08 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x17 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12(\n\x05error\x18\t \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12.\n\x06status\x18\n \x01(\x0e2\x16.ironflow.v1.RunStatusR\x06status\x12\x18\n\x07attempt\x18\x0b \x01(\x05R\x07attempt\x12!\n\x0cmax_attempts\x18\x0c \x01(\x05R\x0bmaxAttempts\x129\n\nstarted_at\x18\r \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x125\n\x08ended_at\x18\x0e \x01(\x0b2\x1a.google.protobuf.TimestampR\x07endedAt\x129\n\ncreated_at\x18\x11 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x12 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\'\n\x0fpause_requested\x18\x13 \x01(\x08R\x0epauseRequested\x12!\n\x0cpause_reason\x18\x14 \x01(\tR\x0bpauseReason\x12)\n\x10function_version\x18\x15 \x01(\x05R\x0ffunctionVersion\x12(\n\x10resume_from_step\x18\x18 \x01(\tR\x0eresumeFromStep\x12"\n\rparent_run_id\x18\x19 \x01(\tR\x0bparentRunId\x12$\n\x0eparent_step_id\x18\x1a \x01(\tR\x0cparentStepId\x129\n\ntimeout_at\x18\x1b \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimeoutAt\x12%\n\x0eenvironment_id\x18\x1c \x01(\tR\renvironmentId\x12\x18\n\x07version\x18\x1d \x01(\x05R\x07version\x12\x1d\n\nclaimed_by\x18\x1e \x01(\tR\tclaimedBy\x129\n\nclaimed_at\x18\x1f \x01(\x0b2\x1a.google.protobuf.TimestampR\tclaimedAt\x12-\n\x12cancellation_cause\x18  \x01(\tR\x11cancellationCause\x127\n\x0berror_value\x18! \x01(\x0b2\x16.google.protobuf.ValueR\nerrorValue\x12\x1d\n\nevent_name\x18" \x01(\tR\teventNameJ\x04\x08\x0f\x10\x10J\x04\x08\x10\x10\x11R\x0fconcurrency_keyR\x08priority"\x82\x0b\n\x04Step\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x17\n\x07step_id\x18\x03 \x01(\tR\x06stepId\x122\n\tstep_type\x18\x04 \x01(\x0e2\x15.ironflow.v1.StepTypeR\x08stepType\x12\x1a\n\x08sequence\x18\x05 \x01(\x05R\x08sequence\x12/\n\x06status\x18\x06 \x01(\x0e2\x17.ironflow.v1.StepStatusR\x06status\x12-\n\x05input\x18\x07 \x01(\x0b2\x17.google.protobuf.StructR\x05input\x127\n\x0binput_value\x18\x13 \x01(\x0b2\x16.google.protobuf.ValueR\ninputValue\x12\x1d\n\ninput_hash\x18\x08 \x01(\tR\tinputHash\x12/\n\x06output\x18\t \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x14 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12(\n\x05error\x18\n \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x18\n\x07attempt\x18\x0b \x01(\x05R\x07attempt\x12\x1f\n\x0bduration_ms\x18\x0c \x01(\x05R\ndurationMs\x129\n\nstarted_at\x18\r \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x125\n\x08ended_at\x18\x0e \x01(\x0b2\x1a.google.protobuf.TimestampR\x07endedAt\x12@\n\x0foriginal_output\x18\x0f \x01(\x0b2\x17.google.protobuf.StructR\x0eoriginalOutput\x12J\n\x15original_output_value\x18\x15 \x01(\x0b2\x16.google.protobuf.ValueR\x13originalOutputValue\x129\n\npatched_at\x18\x10 \x01(\x0b2\x1a.google.protobuf.TimestampR\tpatchedAt\x12\x1d\n\npatched_by\x18\x11 \x01(\tR\tpatchedBy\x12)\n\x10compensation_for\x18\x12 \x01(\tR\x0fcompensationFor\x12-\n\x10duration_ms_full\x18\x16 \x01(\x03H\x00R\x0edurationMsFull\x88\x01\x01\x12;\n\x0bsleep_until\x18\x17 \x01(\x0b2\x1a.google.protobuf.TimestampR\nsleepUntil\x12&\n\x0fwait_event_name\x18\x18 \x01(\tR\rwaitEventName\x12=\n\x0cwait_timeout\x18\x19 \x01(\x0b2\x1a.google.protobuf.TimestampR\x0bwaitTimeout\x129\n\ncreated_at\x18\x1a \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x1b \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt\x127\n\x0berror_value\x18\x1c \x01(\x0b2\x16.google.protobuf.ValueR\nerrorValue\x12#\n\rstored_status\x18\x1d \x01(\tR\x0cstoredStatus\x12 \n\x0cchild_run_id\x18\x1e \x01(\tR\nchildRunIdB\x13\n\x11_duration_ms_full"\x9c\x01\n\x05Error\x12\x18\n\x07message\x18\x01 \x01(\tR\x07message\x12\x12\n\x04code\x18\x02 \x01(\tR\x04code\x12\x14\n\x05stack\x18\x03 \x01(\tR\x05stack\x12\x1c\n\tretryable\x18\x04 \x01(\x08R\tretryable\x121\n\x07details\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x07details"\xd0\x01\n\tErrorInfo\x12#\n\rresource_type\x18\x01 \x01(\tR\x0cresourceType\x12\x1f\n\x0bresource_id\x18\x02 \x01(\tR\nresourceId\x12@\n\x08metadata\x18\x03 \x03(\x0b2$.ironflow.v1.ErrorInfo.MetadataEntryR\x08metadata\x1a;\n\rMetadataEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x87\x01\n\x0eFunctionStatus\x12\x1f\n\x1bFUNCTION_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n\x16FUNCTION_STATUS_ACTIVE\x10\x01\x12\x1a\n\x16FUNCTION_STATUS_PAUSED\x10\x02\x12\x1c\n\x18FUNCTION_STATUS_ARCHIVED\x10\x03*a\n\rExecutionMode\x12\x1e\n\x1aEXECUTION_MODE_UNSPECIFIED\x10\x00\x12\x17\n\x13EXECUTION_MODE_PUSH\x10\x01\x12\x17\n\x13EXECUTION_MODE_PULL\x10\x02*\xf8\x01\n\tRunStatus\x12\x1a\n\x16RUN_STATUS_UNSPECIFIED\x10\x00\x12\x16\n\x12RUN_STATUS_RUNNING\x10\x02\x12\x18\n\x14RUN_STATUS_COMPLETED\x10\x03\x12\x15\n\x11RUN_STATUS_FAILED\x10\x04\x12\x18\n\x14RUN_STATUS_CANCELLED\x10\x05\x12\x15\n\x11RUN_STATUS_PAUSED\x10\x06\x12#\n\x1fRUN_STATUS_WAITING_FOR_CAPACITY\x10\x07\x12\x16\n\x12RUN_STATUS_WAITING\x10\x08"\x04\x08\x01\x10\x01*\x12RUN_STATUS_PENDING*\x8c\x02\n\nStepStatus\x12\x1b\n\x17STEP_STATUS_UNSPECIFIED\x10\x00\x12\x17\n\x13STEP_STATUS_PENDING\x10\x01\x12\x17\n\x13STEP_STATUS_RUNNING\x10\x02\x12\x19\n\x15STEP_STATUS_COMPLETED\x10\x03\x12\x16\n\x12STEP_STATUS_FAILED\x10\x04\x12\x18\n\x14STEP_STATUS_SLEEPING\x10\x05\x12\x17\n\x13STEP_STATUS_WAITING\x10\x06\x12\x19\n\x15STEP_STATUS_TIMED_OUT\x10\x07\x12\x18\n\x14STEP_STATUS_RETRYING\x10\x08\x12\x14\n\x10STEP_STATUS_DEAD\x10\t*\xa7\x01\n\x08StepType\x12\x19\n\x15STEP_TYPE_UNSPECIFIED\x10\x00\x12\x14\n\x10STEP_TYPE_INVOKE\x10\x01\x12\x13\n\x0fSTEP_TYPE_SLEEP\x10\x02\x12\x1c\n\x18STEP_TYPE_WAIT_FOR_EVENT\x10\x03\x12\x18\n\x14STEP_TYPE_COMPENSATE\x10\x04\x12\x1d\n\x19STEP_TYPE_INVOKE_FUNCTION\x10\x05B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x17ironflow/v1/types.proto\x12\x0bironflow.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto"S\n\x07Trigger\x12\x14\n\x05event\x18\x01 \x01(\tR\x05event\x12\x1e\n\nexpression\x18\x02 \x01(\tR\nexpression\x12\x12\n\x04cron\x18\x03 \x01(\tR\x04cron"\xc6\x01\n\x0bRetryConfig\x12!\n\x0cmax_attempts\x18\x01 \x01(\x05R\x0bmaxAttempts\x12(\n\x10initial_delay_ms\x18\x02 \x01(\x05R\x0einitialDelayMs\x12%\n\x0ebackoff_factor\x18\x03 \x01(\x01R\rbackoffFactor\x12 \n\x0cmax_delay_ms\x18\x04 \x01(\x05R\nmaxDelayMs\x12!\n\x0con_exhausted\x18\x05 \x01(\tR\x0bonExhausted"\x9e\x01\n\x14CircuitBreakerConfig\x12+\n\x11failure_threshold\x18\x01 \x01(\x05R\x10failureThreshold\x12(\n\x10open_duration_ms\x18\x02 \x01(\x05R\x0eopenDurationMs\x12/\n\x14max_open_duration_ms\x18\x03 \x01(\x05R\x11maxOpenDurationMs"U\n\x0eThrottleConfig\x12\x14\n\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x1b\n\tperiod_ms\x18\x02 \x01(\x05R\x08periodMs\x12\x10\n\x03key\x18\x03 \x01(\tR\x03key";\n\x11ConcurrencyConfig\x12\x14\n\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x10\n\x03key\x18\x02 \x01(\tR\x03key":\n\x0cCancelOnSpec\x12\x14\n\x05event\x18\x01 \x01(\tR\x05event\x12\x14\n\x05match\x18\x02 \x01(\tR\x05match"_\n\x0eDebounceConfig\x12\x1b\n\tperiod_ms\x18\x01 \x01(\x05R\x08periodMs\x12\x10\n\x03key\x18\x02 \x01(\tR\x03key\x12\x1e\n\x0bmax_wait_ms\x18\x03 \x01(\x03R\tmaxWaitMs"\xd5\x08\n\x08Function\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12 \n\x0bdescription\x18\x03 \x01(\tR\x0bdescription\x120\n\x08triggers\x18\x04 \x03(\x0b2\x14.ironflow.v1.TriggerR\x08triggers\x12.\n\x05retry\x18\x05 \x01(\x0b2\x18.ironflow.v1.RetryConfigR\x05retry\x12\x1d\n\ntimeout_ms\x18\x06 \x01(\x05R\ttimeoutMs\x12@\n\x0bconcurrency\x18\x07 \x01(\x0b2\x1e.ironflow.v1.ConcurrencyConfigR\x0bconcurrency\x12A\n\x0epreferred_mode\x18\x08 \x01(\x0e2\x1a.ironflow.v1.ExecutionModeR\rpreferredMode\x12!\n\x0cendpoint_url\x18\t \x01(\tR\x0bendpointUrl\x12\x1b\n\tactor_key\x18\n \x01(\tR\x08actorKey\x123\n\x06status\x18\x0b \x01(\x0e2\x1b.ironflow.v1.FunctionStatusR\x06status\x12\x18\n\x07version\x18\x0c \x01(\x05R\x07version\x129\n\ncreated_at\x18\r \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x0e \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1c\n\trecording\x18\x0f \x01(\x08R\trecording\x12+\n\x11recording_profile\x18\x16 \x01(\tR\x10recordingProfile\x125\n\x08next_run\x18\x17 \x01(\x0b2\x1a.google.protobuf.TimestampR\x07nextRun\x123\n\x08metadata\x18\x12 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x127\n\x08debounce\x18\x13 \x01(\x0b2\x1b.ironflow.v1.DebounceConfigR\x08debounce\x126\n\tcancel_on\x18\x15 \x03(\x0b2\x19.ironflow.v1.CancelOnSpecR\x08cancelOn\x12J\n\x0fcircuit_breaker\x18\x18 \x01(\x0b2!.ironflow.v1.CircuitBreakerConfigR\x0ecircuitBreaker\x127\n\x08throttle\x18\x19 \x01(\x0b2\x1b.ironflow.v1.ThrottleConfigR\x08throttleJ\x04\x08\x10\x10\x11J\x04\x08\x11\x10\x12J\x04\x08\x14\x10\x15R\x13recording_retentionR\x0epause_behaviorR\x14compensate_on_cancel"\xdd\x03\n\x05Event\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12+\n\x04data\x18\x03 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x0c \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12\'\n\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x12\x16\n\x06source\x18\x05 \x01(\tR\x06source\x128\n\ttimestamp\x18\x06 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x123\n\x08metadata\x18\x07 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12\x18\n\x07version\x18\x08 \x01(\x05R\x07version\x12\x1b\n\tentity_id\x18\t \x01(\tR\x08entityId\x12\x1f\n\x0bentity_type\x18\n \x01(\tR\nentityType\x12%\n\x0eentity_version\x18\x0b \x01(\x03R\rentityVersion\x12\x1d\n\nemitted_by\x18\r \x01(\tR\temittedBy"\x8e\x0b\n\x03Run\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n\x0bfunction_id\x18\x02 \x01(\tR\nfunctionId\x12\x19\n\x08event_id\x18\x03 \x01(\tR\x07eventId\x12A\n\x0eexecution_mode\x18\x04 \x01(\x0e2\x1a.ironflow.v1.ExecutionModeR\rexecutionMode\x12\x1b\n\tworker_id\x18\x05 \x01(\tR\x08workerId\x12\x19\n\x08actor_id\x18\x06 \x01(\tR\x07actorId\x12-\n\x05input\x18\x07 \x01(\x0b2\x17.google.protobuf.StructR\x05input\x127\n\x0binput_value\x18\x16 \x01(\x0b2\x16.google.protobuf.ValueR\ninputValue\x12/\n\x06output\x18\x08 \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x17 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12(\n\x05error\x18\t \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12.\n\x06status\x18\n \x01(\x0e2\x16.ironflow.v1.RunStatusR\x06status\x12\x18\n\x07attempt\x18\x0b \x01(\x05R\x07attempt\x12!\n\x0cmax_attempts\x18\x0c \x01(\x05R\x0bmaxAttempts\x129\n\nstarted_at\x18\r \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x125\n\x08ended_at\x18\x0e \x01(\x0b2\x1a.google.protobuf.TimestampR\x07endedAt\x129\n\ncreated_at\x18\x11 \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x12 \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\'\n\x0fpause_requested\x18\x13 \x01(\x08R\x0epauseRequested\x12!\n\x0cpause_reason\x18\x14 \x01(\tR\x0bpauseReason\x12)\n\x10function_version\x18\x15 \x01(\x05R\x0ffunctionVersion\x12(\n\x10resume_from_step\x18\x18 \x01(\tR\x0eresumeFromStep\x12"\n\rparent_run_id\x18\x19 \x01(\tR\x0bparentRunId\x12$\n\x0eparent_step_id\x18\x1a \x01(\tR\x0cparentStepId\x129\n\ntimeout_at\x18\x1b \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimeoutAt\x12%\n\x0eenvironment_id\x18\x1c \x01(\tR\renvironmentId\x12\x18\n\x07version\x18\x1d \x01(\x05R\x07version\x12\x1d\n\nclaimed_by\x18\x1e \x01(\tR\tclaimedBy\x129\n\nclaimed_at\x18\x1f \x01(\x0b2\x1a.google.protobuf.TimestampR\tclaimedAt\x12-\n\x12cancellation_cause\x18  \x01(\tR\x11cancellationCause\x127\n\x0berror_value\x18! \x01(\x0b2\x16.google.protobuf.ValueR\nerrorValue\x12\x1d\n\nevent_name\x18" \x01(\tR\teventNameJ\x04\x08\x0f\x10\x10J\x04\x08\x10\x10\x11R\x0fconcurrency_keyR\x08priority"\x82\x0b\n\x04Step\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x15\n\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x17\n\x07step_id\x18\x03 \x01(\tR\x06stepId\x122\n\tstep_type\x18\x04 \x01(\x0e2\x15.ironflow.v1.StepTypeR\x08stepType\x12\x1a\n\x08sequence\x18\x05 \x01(\x05R\x08sequence\x12/\n\x06status\x18\x06 \x01(\x0e2\x17.ironflow.v1.StepStatusR\x06status\x12-\n\x05input\x18\x07 \x01(\x0b2\x17.google.protobuf.StructR\x05input\x127\n\x0binput_value\x18\x13 \x01(\x0b2\x16.google.protobuf.ValueR\ninputValue\x12\x1d\n\ninput_hash\x18\x08 \x01(\tR\tinputHash\x12/\n\x06output\x18\t \x01(\x0b2\x17.google.protobuf.StructR\x06output\x129\n\x0coutput_value\x18\x14 \x01(\x0b2\x16.google.protobuf.ValueR\x0boutputValue\x12(\n\x05error\x18\n \x01(\x0b2\x12.ironflow.v1.ErrorR\x05error\x12\x18\n\x07attempt\x18\x0b \x01(\x05R\x07attempt\x12\x1f\n\x0bduration_ms\x18\x0c \x01(\x05R\ndurationMs\x129\n\nstarted_at\x18\r \x01(\x0b2\x1a.google.protobuf.TimestampR\tstartedAt\x125\n\x08ended_at\x18\x0e \x01(\x0b2\x1a.google.protobuf.TimestampR\x07endedAt\x12@\n\x0foriginal_output\x18\x0f \x01(\x0b2\x17.google.protobuf.StructR\x0eoriginalOutput\x12J\n\x15original_output_value\x18\x15 \x01(\x0b2\x16.google.protobuf.ValueR\x13originalOutputValue\x129\n\npatched_at\x18\x10 \x01(\x0b2\x1a.google.protobuf.TimestampR\tpatchedAt\x12\x1d\n\npatched_by\x18\x11 \x01(\tR\tpatchedBy\x12)\n\x10compensation_for\x18\x12 \x01(\tR\x0fcompensationFor\x12-\n\x10duration_ms_full\x18\x16 \x01(\x03H\x00R\x0edurationMsFull\x88\x01\x01\x12;\n\x0bsleep_until\x18\x17 \x01(\x0b2\x1a.google.protobuf.TimestampR\nsleepUntil\x12&\n\x0fwait_event_name\x18\x18 \x01(\tR\rwaitEventName\x12=\n\x0cwait_timeout\x18\x19 \x01(\x0b2\x1a.google.protobuf.TimestampR\x0bwaitTimeout\x129\n\ncreated_at\x18\x1a \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x1b \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt\x127\n\x0berror_value\x18\x1c \x01(\x0b2\x16.google.protobuf.ValueR\nerrorValue\x12#\n\rstored_status\x18\x1d \x01(\tR\x0cstoredStatus\x12 \n\x0cchild_run_id\x18\x1e \x01(\tR\nchildRunIdB\x13\n\x11_duration_ms_full"\xc2\x01\n\x05Error\x12\x18\n\x07message\x18\x01 \x01(\tR\x07message\x12\x12\n\x04code\x18\x02 \x01(\tR\x04code\x12\x14\n\x05stack\x18\x03 \x01(\tR\x05stack\x12\x1c\n\tretryable\x18\x04 \x01(\x08R\tretryable\x121\n\x07details\x18\x05 \x01(\x0b2\x17.google.protobuf.StructR\x07details\x12$\n\x0eretry_after_ms\x18\x06 \x01(\x03R\x0cretryAfterMs"\xd0\x01\n\tErrorInfo\x12#\n\rresource_type\x18\x01 \x01(\tR\x0cresourceType\x12\x1f\n\x0bresource_id\x18\x02 \x01(\tR\nresourceId\x12@\n\x08metadata\x18\x03 \x03(\x0b2$.ironflow.v1.ErrorInfo.MetadataEntryR\x08metadata\x1a;\n\rMetadataEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x87\x01\n\x0eFunctionStatus\x12\x1f\n\x1bFUNCTION_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n\x16FUNCTION_STATUS_ACTIVE\x10\x01\x12\x1a\n\x16FUNCTION_STATUS_PAUSED\x10\x02\x12\x1c\n\x18FUNCTION_STATUS_ARCHIVED\x10\x03*a\n\rExecutionMode\x12\x1e\n\x1aEXECUTION_MODE_UNSPECIFIED\x10\x00\x12\x17\n\x13EXECUTION_MODE_PUSH\x10\x01\x12\x17\n\x13EXECUTION_MODE_PULL\x10\x02*\xf8\x01\n\tRunStatus\x12\x1a\n\x16RUN_STATUS_UNSPECIFIED\x10\x00\x12\x16\n\x12RUN_STATUS_RUNNING\x10\x02\x12\x18\n\x14RUN_STATUS_COMPLETED\x10\x03\x12\x15\n\x11RUN_STATUS_FAILED\x10\x04\x12\x18\n\x14RUN_STATUS_CANCELLED\x10\x05\x12\x15\n\x11RUN_STATUS_PAUSED\x10\x06\x12#\n\x1fRUN_STATUS_WAITING_FOR_CAPACITY\x10\x07\x12\x16\n\x12RUN_STATUS_WAITING\x10\x08"\x04\x08\x01\x10\x01*\x12RUN_STATUS_PENDING*\x8c\x02\n\nStepStatus\x12\x1b\n\x17STEP_STATUS_UNSPECIFIED\x10\x00\x12\x17\n\x13STEP_STATUS_PENDING\x10\x01\x12\x17\n\x13STEP_STATUS_RUNNING\x10\x02\x12\x19\n\x15STEP_STATUS_COMPLETED\x10\x03\x12\x16\n\x12STEP_STATUS_FAILED\x10\x04\x12\x18\n\x14STEP_STATUS_SLEEPING\x10\x05\x12\x17\n\x13STEP_STATUS_WAITING\x10\x06\x12\x19\n\x15STEP_STATUS_TIMED_OUT\x10\x07\x12\x18\n\x14STEP_STATUS_RETRYING\x10\x08\x12\x14\n\x10STEP_STATUS_DEAD\x10\t*\xa7\x01\n\x08StepType\x12\x19\n\x15STEP_TYPE_UNSPECIFIED\x10\x00\x12\x14\n\x10STEP_TYPE_INVOKE\x10\x01\x12\x13\n\x0fSTEP_TYPE_SLEEP\x10\x02\x12\x1c\n\x18STEP_TYPE_WAIT_FOR_EVENT\x10\x03\x12\x18\n\x14STEP_TYPE_COMPENSATE\x10\x04\x12\x1d\n\x19STEP_TYPE_INVOKE_FUNCTION\x10\x05B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         timestamp_pb.desc(),
         struct_pb.desc(),
@@ -1424,6 +1562,8 @@ _DESC = file_desc(
     {
         "Trigger": Trigger,
         "RetryConfig": RetryConfig,
+        "CircuitBreakerConfig": CircuitBreakerConfig,
+        "ThrottleConfig": ThrottleConfig,
         "ConcurrencyConfig": ConcurrencyConfig,
         "CancelOnSpec": CancelOnSpec,
         "DebounceConfig": DebounceConfig,

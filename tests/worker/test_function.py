@@ -83,9 +83,10 @@ def test_public_exports() -> None:
     import ironflow.worker as w
 
     assert sorted(w.__all__) == sorted([
-        "CancelOnSpec", "Context", "DebounceConfig", "Duration", "Event", "Function", "InvokeAsyncResult",
-        "InvokeError", "NonRetryableError", "PublishResult", "RecordingProfile", "RunInfo",
-        "SchemaValidationError", "Step", "StepError", "StepTimeoutError", "StreamingWorker", "Worker", "WorkerAuthError", "function",
+        "CancelOnSpec", "CircuitBreakerConfig", "Context", "DebounceConfig", "Duration", "Event", "Function",
+        "InvokeAsyncResult", "InvokeError", "NonRetryableError", "OnExhausted", "PublishResult", "RecordingProfile",
+        "RetryAfterError", "RetryConfig", "RunInfo", "SchemaValidationError", "Step", "StepError", "StepTimeoutError",
+        "StreamingWorker", "ThrottleConfig", "Worker", "WorkerAuthError", "function",
     ])
     assert all(hasattr(w, name) for name in w.__all__)
 
@@ -138,6 +139,67 @@ def test_debounce_without_max_wait_omits_it(debounce: Any) -> None:
     async def d(ctx: Any) -> None: ...
 
     assert registration_body(d)["debounce"] == {"periodMs": 2000, "key": ""}
+
+
+def test_registration_body_carries_on_exhausted_circuit_breaker_and_throttle() -> None:
+    @function(
+        id="r", triggers=[{"event": "e"}],
+        retry={"max_attempts": 7, "on_exhausted": "fail"},
+        circuit_breaker={"failure_threshold": 3, "open_duration": "1s", "max_open_duration": "8s"},
+        throttle={"limit": 10, "period": "1m", "key": "customerId"},
+    )
+    async def r(ctx: Any) -> None: ...
+
+    body = registration_body(r)
+    assert body["retry"] == {"maxAttempts": 7, "onExhausted": "fail"}
+    assert body["circuitBreaker"] == {"failureThreshold": 3, "openDurationMs": 1000, "maxOpenDurationMs": 8000}
+    assert body["throttle"] == {"limit": 10, "periodMs": 60000, "key": "customerId"}
+    # The same body is valid proto JSON for RegisterFunctionRequest, field for field.
+    req = RegisterFunctionRequest.from_json(json.dumps(body))
+    assert (req.retry.max_attempts, req.retry.on_exhausted) == (7, "fail")
+    assert req.circuit_breaker is not None
+    assert (req.circuit_breaker.failure_threshold, req.circuit_breaker.open_duration_ms,
+            req.circuit_breaker.max_open_duration_ms) == (3, 1000, 8000)
+    assert req.throttle is not None
+    assert (req.throttle.limit, req.throttle.period_ms, req.throttle.key) == (10, 60000, "customerId")
+
+
+def test_registration_body_sends_only_the_resilience_fields_that_were_set() -> None:
+    @function(
+        id="s", triggers=[{"event": "e"}], retry={"on_exhausted": "pause"},
+        circuit_breaker={"failure_threshold": 2}, throttle={"limit": 1, "period": 1},
+    )
+    async def s(ctx: Any) -> None: ...
+
+    body = registration_body(s)
+    assert body["retry"] == {"onExhausted": "pause"}
+    assert body["circuitBreaker"] == {"failureThreshold": 2}
+    assert body["throttle"] == {"limit": 1, "periodMs": 1000}
+
+    @function(id="u", triggers=[{"event": "e"}])
+    async def u(ctx: Any) -> None: ...
+
+    assert not {"retry", "circuitBreaker", "throttle"} & set(registration_body(u))
+
+
+@pytest.mark.parametrize(("kwargs", "match"), [
+    ({"retry": {"on_exhausted": "explode"}}, "on_exhausted"),
+    ({"circuit_breaker": {"failure_threshold": -1}}, "failure_threshold"),
+    ({"circuit_breaker": {"open_duration": "10s", "max_open_duration": "1s"}}, "max_open_duration"),
+    ({"throttle": {"limit": 0, "period": "1s"}}, "throttle limit"),
+    ({"throttle": {"limit": 1, "period": "500ms"}}, "throttle period"),
+    ({"throttle": {"limit": 1, "period": "1s", "key": "$."}}, "throttle key"),
+    ({"throttle": {"limit": 1, "period": "1s", "key": ".a"}}, "throttle key"),
+    ({"throttle": {"limit": 1, "period": "1s", "key": "a."}}, "throttle key"),
+    ({"throttle": {"limit": 1, "period": "1s", "key": "a..b"}}, "throttle key"),
+])
+def test_rejects_invalid_resilience_config(kwargs: dict[str, Any], match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        function(id="x", triggers=[{"event": "e"}], **kwargs)
+
+
+def test_a_max_open_duration_alone_is_accepted() -> None:
+    function(id="x", triggers=[{"event": "e"}], circuit_breaker={"max_open_duration": "1s"})
 
 
 def test_zero_step_timeout_means_no_default() -> None:

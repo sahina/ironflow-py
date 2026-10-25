@@ -25,6 +25,7 @@ from ironflow._gen.projection_pb import (
 )
 from ironflow.projection import create_projection
 from ironflow.projection._runner import ProjectionRunner, _event_from_proto, _LeaseLost
+from ironflow.rpc._runtime import ServerTooOldError
 from tests.projection.fake_service import FakeProjectionService, granted
 from tests.worker.conftest import run
 
@@ -326,19 +327,19 @@ def test_stream_aborted_drops_pending_frames(
 
 
 @pytest.mark.parametrize("transport", TRANSPORTS)
-def test_old_server_runs_unguarded(
-    loop: asyncio.AbstractEventLoop, caplog: pytest.LogCaptureFixture, transport: str
-) -> None:
-    caplog.set_level(logging.INFO, logger="lease")
+def test_old_server_stops(loop: asyncio.AbstractEventLoop, transport: str) -> None:
     svc = LeaseFake([event("e1", 1)])
     svc.no_lease = True
 
     async def go() -> None:
         r = Runner(svc, transport, "r").start()
-        await wait_for("an unguarded save", lambda: len(svc.saves) == 1)
-        await r.stop()
-        assert all(e == 0 for e in svc.pulls) and svc.saves[0][1] == 0, "no lease on any request"
-        assert logs(caplog, r, "running unguarded") == 1 and svc.acquires == 1
+        assert r.task is not None
+        with pytest.raises(ServerTooOldError) as err:
+            await asyncio.wait_for(r.task, 2)
+        assert err.value.code == "SERVER_TOO_OLD"
+        assert str(err.value) == "AcquireProjectionLease needs Ironflow server >= 0.44.0; upgrade the server"
+        assert svc.pulls == [] and svc.saves == [], "no Poll, Stream, Save or Ack"
+        assert svc.acquires == 1
 
     run(loop, go())
 

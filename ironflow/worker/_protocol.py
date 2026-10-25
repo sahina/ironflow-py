@@ -54,6 +54,8 @@ class _JobAssignmentReq(TypedDict):
 class JobAssignment(_JobAssignmentReq, total=False):
     step_sequence_base: int
     context: JobContext
+    max_attempts: int
+    on_exhausted: str
 
 
 class StepError(TypedDict):
@@ -77,10 +79,14 @@ class StepResult(_StepResultReq, total=False):
     compensation_for: str
 
 
-class JobError(TypedDict):
+class _JobErrorReq(TypedDict):
     message: str
     code: str
     retryable: bool
+
+
+class JobError(_JobErrorReq, total=False):
+    retry_after_ms: int
 
 
 class EventFilter(TypedDict, total=False):
@@ -151,6 +157,10 @@ def parse_job(raw: object) -> JobAssignment:
 
     if "step_sequence_base" in raw:
         _check(raw, "step_sequence_base", int, "job assignment")
+    if "max_attempts" in raw:
+        _check(raw, "max_attempts", int, "job assignment")
+    if "on_exhausted" in raw:
+        _check(raw, "on_exhausted", str, "job assignment")
     if "context" in raw:
         context = raw["context"]
         if not isinstance(context, dict):

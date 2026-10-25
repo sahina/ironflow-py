@@ -9,6 +9,7 @@ become an HTTP 500, which the engine retries and counts as a transport error.
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
@@ -30,6 +31,26 @@ from ._step import (
 
 if TYPE_CHECKING:
     from ..upcaster import UpcasterRegistry
+
+
+def is_terminal(retryable: bool, run: RunInfo) -> bool:
+    """Whether a failure ends the run, so its compensations must run now.
+
+    A non-retryable error is always terminal. A retryable one is terminal only on the last attempt
+    under ``on_exhausted == "fail"``; under ``"pause"`` the run is held for resume and keeps its
+    steps. An empty policy or budget (an engine that predates them) keeps the old rule.
+    """
+    if not retryable:
+        return True
+    return run.on_exhausted == "fail" and run.max_attempts > 0 and run.attempt >= run.max_attempts
+
+
+def retry_after_ms(exc: IronflowError) -> int:
+    """The delay a retryable error asks for, in whole milliseconds, or 0 for none."""
+    seconds = exc.retry_after
+    if not exc.retryable or seconds is None or not math.isfinite(seconds) or seconds <= 0:
+        return 0
+    return math.ceil(seconds * 1000)
 
 
 def upcast_event(raw: Mapping[str, Any], upcasters: UpcasterRegistry | None) -> Event:
@@ -63,9 +84,13 @@ async def run_function(
     except _Yield as signal:
         return {"status": "yielded", "yield": signal.info}
     except IronflowError as exc:
-        if not exc.retryable:
+        if is_terminal(exc.retryable, run):
             await run_compensations(ctx)
-        return {"status": "failed", "error": {"message": str(exc), "code": exc.code or "ERROR",
-                                              "retryable": exc.retryable}}
+        error: dict[str, Any] = {"message": str(exc), "code": exc.code or "ERROR", "retryable": exc.retryable}
+        if delay := retry_after_ms(exc):
+            error["retry_after_ms"] = delay
+        return {"status": "failed", "error": error}
     except Exception as exc:  # noqa: BLE001 - handlers may raise any ordinary exception
+        if is_terminal(True, run):
+            await run_compensations(ctx)
         return {"status": "failed", "error": {"message": str(exc), "code": "ERROR", "retryable": True}}

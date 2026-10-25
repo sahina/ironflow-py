@@ -53,6 +53,15 @@ def _valid(req: Any) -> bool:
             and isinstance(req.get("secrets") or {}, dict))
 
 
+def _budget(raw: Any) -> int:
+    """The run's retry budget; 0 when the engine did not send one."""
+    return raw if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0 else 0
+
+
+def _policy(raw: Any) -> str:
+    return raw if raw in ("pause", "fail") else ""
+
+
 def _memo(steps: list[dict[str, Any]]) -> list[CompletedStep]:
     out: list[CompletedStep] = []
     for s in steps:
@@ -124,7 +133,8 @@ async def handle(
     outcome = await run_function(
         fn, raw_event=req["event"], upcasters=upcasters, ctx=ctx,
         run=RunInfo(id=req["run_id"], function_id=fn.id, attempt=req.get("attempt", 1),
-                    environment=env(environment, "IRONFLOW_ENV") or None),
+                    environment=env(environment, "IRONFLOW_ENV") or None,
+                    max_attempts=_budget(req.get("max_attempts")), on_exhausted=_policy(req.get("on_exhausted"))),
         secrets=req.get("secrets") or {},
         logger=logging.LoggerAdapter(_log, {"run_id": req["run_id"], "function_id": fn.id}),
     )

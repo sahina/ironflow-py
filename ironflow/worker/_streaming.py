@@ -54,6 +54,7 @@ from ._duration import Duration, iso_utc, parse_timestamp, to_seconds
 from ._function import validate_event
 from ._protocol import JobAssignment, StepResult, YieldInfo
 from ._publish import bind_publish
+from ._run import is_terminal, retry_after_ms
 from ._step import (
     Context,
     ExecutionContext,
@@ -127,6 +128,11 @@ def _job_from_proto(proto: ProtoJobAssignment) -> JobAssignment:
         and proto.context.secrets
     ):
         job["context"] = {"secrets": dict(proto.context.secrets)}
+    # Zero and empty mean an engine that predates them; leave the keys out like the REST path does.
+    if proto.max_attempts:
+        job["max_attempts"] = proto.max_attempts
+    if proto.on_exhausted:
+        job["on_exhausted"] = proto.on_exhausted
     return job  # type: ignore[return-value]
 
 
@@ -482,17 +488,20 @@ class StreamingWorker(Worker):
         ctx.on_step_result = step_result
         started = time.monotonic()
         outcome: WorkerMessage
+        run_info = RunInfo(
+            id=job["run_id"],
+            function_id=job["function_id"],
+            attempt=job["attempt"],
+            environment=self._transport._environment,
+            max_attempts=job.get("max_attempts", 0),
+            on_exhausted=job.get("on_exhausted", ""),
+        )
         try:
             secrets = (job.get("context") or {}).get("secrets") or {}
             context = Context(
                 event=await validate_event(fn, self._event_for(job)),
                 step=Step(ctx),
-                run=RunInfo(
-                    id=job["run_id"],
-                    function_id=job["function_id"],
-                    attempt=job["attempt"],
-                    environment=self._transport._environment,
-                ),
+                run=run_info,
                 logger=logging.LoggerAdapter(
                     self._log,
                     {
@@ -558,7 +567,7 @@ class StreamingWorker(Worker):
                     )
                 )
         except IronflowError as exc:
-            comp = await run_compensations(ctx) if not exc.retryable else list[StepResult]()
+            comp = await run_compensations(ctx) if is_terminal(exc.retryable, run_info) else list[StepResult]()
             outcome = _message(
                 (
                     "job_failed",
@@ -568,6 +577,7 @@ class StreamingWorker(Worker):
                             message=str(exc),
                             code=exc.code or "ERROR",
                             retryable=exc.retryable,
+                            retry_after_ms=retry_after_ms(exc),
                         ),
                         steps=[self._executed_step(s) for s in comp],
                         duration_ms=int((time.monotonic() - started) * 1000),
@@ -577,12 +587,14 @@ class StreamingWorker(Worker):
                 )
             )
         except Exception as exc:  # noqa: BLE001 - handler code may raise any ordinary exception
+            comp = await run_compensations(ctx) if is_terminal(True, run_info) else list[StepResult]()
             outcome = _message(
                 (
                     "job_failed",
                     JobFailed(
                         job_id=job["job_id"],
                         error=Error(message=str(exc), code="ERROR", retryable=True),
+                        steps=[self._executed_step(s) for s in comp],
                         duration_ms=int((time.monotonic() - started) * 1000),
                         execution_seq=job["execution_seq"],
                         lease_token=job["lease_token"],

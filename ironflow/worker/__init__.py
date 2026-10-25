@@ -12,9 +12,13 @@ from typing import Any
 from ._duration import Duration
 from ._function import (
     CancelOnSpec,
+    CircuitBreakerConfig,
     DebounceConfig,
     Function,
+    OnExhausted,
     RecordingProfile,
+    RetryConfig,
+    ThrottleConfig,
     function,
 )
 from ._step import (
@@ -24,6 +28,7 @@ from ._step import (
     InvokeError,
     NonRetryableError,
     PublishResult,
+    RetryAfterError,
     RunInfo,
     SchemaValidationError,
     Step,
@@ -33,9 +38,10 @@ from ._step import (
 from ._worker import Worker, WorkerAuthError
 
 __all__ = [
-    "CancelOnSpec", "Context", "DebounceConfig", "Duration", "Event", "Function", "InvokeAsyncResult",
-    "InvokeError", "NonRetryableError", "PublishResult", "RecordingProfile", "RunInfo",
-    "SchemaValidationError", "Step", "StepError", "StepTimeoutError", "StreamingWorker", "Worker", "WorkerAuthError", "function",
+    "CancelOnSpec", "CircuitBreakerConfig", "Context", "DebounceConfig", "Duration", "Event", "Function",
+    "InvokeAsyncResult", "InvokeError", "NonRetryableError", "OnExhausted", "PublishResult", "RecordingProfile",
+    "RetryAfterError", "RetryConfig", "RunInfo", "SchemaValidationError", "Step", "StepError", "StepTimeoutError",
+    "StreamingWorker", "ThrottleConfig", "Worker", "WorkerAuthError", "function",
 ]
 
 

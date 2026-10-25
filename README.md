@@ -121,7 +121,9 @@ child_run_id = handle.run_id
 
 `step.compensate` registers an undo for a step. If the run later fails with a
 non-retryable error, Ironflow runs the registered undos in reverse order. A
-failed undo does not stop the rest.
+failed undo does not stop the rest. A retryable error on the last attempt
+counts too, but only when `retry={"on_exhausted": "fail"}`; with `"pause"` (the
+server default) the run is held for resume and nothing is undone.
 
 ```python
 await ctx.step.run("reserve-seat", reserve)

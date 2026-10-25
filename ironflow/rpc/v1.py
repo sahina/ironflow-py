@@ -290,6 +290,7 @@ from .._gen.timetravel_pb import (
 
 from .._gen.types_pb import (
     CancelOnSpec,
+    CircuitBreakerConfig,
     ConcurrencyConfig,
     DebounceConfig,
     Error,
@@ -304,6 +305,7 @@ from .._gen.types_pb import (
     Step,
     StepStatus,
     StepType,
+    ThrottleConfig,
     Trigger,
 )
 
@@ -348,6 +350,7 @@ __all__ = [
     "CancelRunRequest",
     "CheckEnforcementRequest",
     "CheckEnforcementResponse",
+    "CircuitBreakerConfig",
     "ComponentHealth",
     "ConcurrencyConfig",
     "ConsumerGroup",
@@ -562,6 +565,7 @@ __all__ = [
     "TestUpcastResponse",
     "TestWebhookVerifyConfigRequest",
     "TestWebhookVerifyConfigResponse",
+    "ThrottleConfig",
     "TimeTravelRunStateSnapshot",
     "TimeTravelStepSnapshot",
     "TimeTravelTimelineEvent",

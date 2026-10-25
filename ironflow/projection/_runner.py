@@ -148,11 +148,10 @@ class ProjectionRunner:
         self._progressed = False  # a batch with events succeeded on this stream
         self._stopping: asyncio.Event | None = None
         self._pending: list[ProjectionEvent] = []
-        # The held lease, or None when the runner is unguarded. `_lost` is set when
-        # Renew finds the lease fenced; each grant gets a new event.
+        # The held lease, or None in standby. `_lost` is set when Renew finds the
+        # lease fenced; each grant gets a new event.
         self._lease: ProjectionLease | None = None
         self._ttl = 0.0
-        self._unguarded = False  # the server has no lease RPCs
         self._lost: asyncio.Event | None = None
         self._renewer: asyncio.Future[None] | None = None
 
@@ -294,7 +293,7 @@ class ProjectionRunner:
             raise _LeaseLost(str(exc)) from exc
 
     def _is_lost(self, exc: BaseException) -> bool:
-        # Aborted is the one lease error. An unguarded runner sends no lease, so it never gets it.
+        # Aborted is the one lease error.
         if isinstance(exc, _LeaseLost):
             return True
         return isinstance(exc, ConnectError) and exc.code == Code.ABORTED and self._lease is not None
@@ -304,7 +303,7 @@ class ProjectionRunner:
             raise _LeaseLost("projection lease lost")
 
     async def run(self) -> None:
-        """Run until `stop()`. Raises `ProjectionAuthError` on 401/403."""
+        """Run until `stop()`. Raises `ProjectionAuthError` on 401/403, `ServerTooOldError` on a server without the lease."""
         self._stopping = asyncio.Event()
         self._lost = asyncio.Event()
         self._pending = []
@@ -359,11 +358,9 @@ class ProjectionRunner:
     async def _acquire(self) -> bool:
         """Call Acquire until the server grants the lease (ADR 0120). False when stopped first.
 
-        Returns True at once when the server is older than the lease RPCs (`_unguarded`).
+        Raises `ServerTooOldError` when the server is older than the lease RPCs.
         """
         assert self._stopping is not None
-        if self._unguarded:
-            return not self._stopping.is_set()
         standby = False
         while not self._stopping.is_set():
             try:
@@ -375,11 +372,11 @@ class ProjectionRunner:
             except ConnectError as exc:
                 self._auth(exc)
                 if exc.code == Code.UNIMPLEMENTED:
-                    self._log.warning(
-                        "projection %s: the server has no projection lease, running unguarded", self._p.name
-                    )
-                    self._unguarded = True
-                    return True
+                    # Lazy: importing ironflow.rpc loads every service module.
+                    from .._skew import MIN_SERVER_VERSION_PROJECTION_LEASE
+                    from ..rpc._runtime import ServerTooOldError
+
+                    raise ServerTooOldError("AcquireProjectionLease", MIN_SERVER_VERSION_PROJECTION_LEASE) from exc
                 # A lost grant also lands here: the next tries get granted = false until that lease expires.
                 self._log.warning("projection %s: lease acquire failed, retrying: %s", self._p.name, exc)
             except Exception as exc:  # noqa: BLE001 - retried like a standby answer

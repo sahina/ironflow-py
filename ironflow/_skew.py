@@ -14,9 +14,14 @@ SDK_HEADER = "X-Ironflow-SDK"
 #: scripts/skew/check-min-versions.sh keeps them equal.
 MIN_SERVER_VERSION_SUBSCRIBE_BIDIRECTIONAL = "0.48.0"
 
+#: The first server with the projection runner lease RPCs (ADR 0120). The runner
+#: needs them; the Go and Node SDKs carry the same value.
+MIN_SERVER_VERSION_PROJECTION_LEASE = "0.44.0"
+
 #: Connect procedure -> first server version that serves it.
 MIN_SERVER_VERSIONS = {
     "/ironflow.v1.PubSubService/SubscribeBidirectional": MIN_SERVER_VERSION_SUBSCRIBE_BIDIRECTIONAL,
+    "/ironflow.v1.ProjectionService/AcquireProjectionLease": MIN_SERVER_VERSION_PROJECTION_LEASE,
 }
 
 

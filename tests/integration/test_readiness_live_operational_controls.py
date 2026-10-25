@@ -223,8 +223,9 @@ def test_circuit_breaker_manage(rpc: Any, rest: IronflowClient, server_url: str,
     async def handler(ctx: Any) -> Any:  # never runs: the stub answers for it
         return None
 
-    # One attempt per run, so each failing run settles to failed at once.
-    fn = function(id=fn_id, triggers=[{"event": event}], retry={"max_attempts": 1})(handler)
+    # One attempt per run, and on_exhausted "fail" (the default pauses a retryable 500), so each
+    # failing run settles to failed at once.
+    fn = function(id=fn_id, triggers=[{"event": event}], retry={"max_attempts": 1, "on_exhausted": "fail"})(handler)
 
     def run_to_end(timeout: float) -> Any:
         run_ids = rpc.events.emit(TriggerRequest(event=event)).run_ids

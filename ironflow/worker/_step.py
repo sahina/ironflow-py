@@ -9,6 +9,7 @@ wait_for_event come back as completed steps.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import inspect
 import json
 import logging
@@ -67,11 +68,37 @@ class NonRetryableError(IronflowError):
         super().__init__(message, code=code, retryable=False)
 
 
+class RetryAfterError(IronflowError):
+    """Raise from a handler or step body to retry after ``retry_after`` instead of the computed backoff.
+
+    It is retryable. The engine caps the delay at the retry policy's ``max_delay``. When the run has
+    no attempts left, ``on_exhausted`` decides what happens, as for any retryable error.
+    """
+
+    def __init__(self, message: str, retry_after: Duration, code: str = "RETRY_AFTER") -> None:
+        super().__init__(message, code=code, retryable=True, retry_after=_retry_hint(retry_after))
+
+
+def _retry_hint(value: Duration) -> float | None:
+    # A negative or non-finite delay, such as a rate-limit reset already in the
+    # past, means "no hint" as in the Go and JS SDKs: the engine's backoff
+    # applies instead of the handler raising ValueError on its own error path.
+    if isinstance(value, timedelta):
+        seconds = value.total_seconds()
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        seconds = float(value)
+    else:
+        return to_seconds(value)
+    return seconds if math.isfinite(seconds) and seconds > 0 else None
+
+
 class StepError(IronflowError):
     """A ``step.run`` body raised. The cause is ``__cause__``."""
 
-    def __init__(self, message: str, *, step_id: str, retryable: bool) -> None:
-        super().__init__(message, code="STEP_FAILED", retryable=retryable)
+    def __init__(
+        self, message: str, *, step_id: str, retryable: bool, retry_after: float | None = None,
+    ) -> None:
+        super().__init__(message, code="STEP_FAILED", retryable=retryable, retry_after=retry_after)
         self.step_id = step_id
 
 
@@ -174,6 +201,12 @@ class RunInfo:
     #: with, or serve's ``environment`` / ``IRONFLOW_ENV`` in push mode. ``None``
     #: means no environment header is sent.
     environment: str | None = None
+    #: Total attempts the run may make, the first included. ``0`` when the engine is too old to send it.
+    #: Compare with ``attempt`` to detect the final attempt.
+    max_attempts: int = 0
+    #: What happens once the final attempt fails retryably: ``"pause"`` holds the run for resume (the
+    #: final attempt is not terminal), ``"fail"`` ends it. ``""`` when the engine is too old to send it.
+    on_exhausted: str = ""
 
 
 @dataclass(frozen=True)
@@ -357,7 +390,9 @@ class Step:
 
     async def run(self, name: str, fn: Callable[[], Any], *, timeout: Duration | None = None) -> Any:
         """Run ``fn`` once per run. ``fn`` may be async, sync, or sync returning an awaitable."""
-        step_id = self._next_id(name)
+        return await self._run_as(self._next_id(name), name, fn, timeout)
+
+    async def _run_as(self, step_id: str, name: str, fn: Callable[[], Any], timeout: Duration | None) -> Any:
         if self._ctx.is_completed(step_id):
             return self._ctx.output(step_id)
 
@@ -377,7 +412,9 @@ class Step:
         except Exception as exc:
             retryable = exc.retryable if isinstance(exc, IronflowError) else True
             self._record_failure(step_id, name, started, t0, str(exc), retryable)
-            raise StepError(str(exc), step_id=step_id, retryable=retryable) from exc
+            # A RetryAfterError in the body must still reach the engine through the wrapper.
+            retry_after = exc.retry_after if isinstance(exc, IronflowError) else None
+            raise StepError(str(exc), step_id=step_id, retryable=retryable, retry_after=retry_after) from exc
 
         try:
             encode_json(output)
@@ -424,14 +461,25 @@ class Step:
     async def publish(self, topic: str, data: Any = None, *, idempotency_key: str | None = None) -> PublishResult:
         """Publish to a pub/sub topic as a durable step. Memoized, so a retry does not publish twice.
 
+        Without ``idempotency_key`` the step sends a stable default derived from its step ID, so a
+        retry after a lost completion does not duplicate the message. The server keeps the key for
+        ``IRONFLOW_RUN_RETENTION_DAYS`` days (forever when unset or 0), so a late retry returns the
+        original event ID (ADR 0132). One rare gap: if the server stores the message but cannot
+        record it, a retry after 2 minutes stores a second copy under the same event ID. An explicit
+        key replaces the default.
+
         It does not trigger functions; use the events API for that.
         """
         _check_publish(topic, data)
+        name = f"publish:{topic}"
+        step_id = self._next_id(name)  # once: a second call would shift every later step ID
+        # Hashed: a raw step ID can pass the server's 255-byte key limit or hold whitespace.
+        key = idempotency_key or "step-" + hashlib.sha256(step_id.encode()).hexdigest()
 
         async def send() -> dict[str, Any]:
-            return await self._ctx.publish(topic, data, idempotency_key)
+            return await self._ctx.publish(topic, data, key)
 
-        out = await self.run(f"publish:{topic}", send)
+        out = await self._run_as(step_id, name, send, None)
         event_id = out.get("eventId") if isinstance(out, dict) else None
         if not isinstance(event_id, str) or not event_id:
             # A memoized row from an older or hand-edited run; retrying would replay the same row.

@@ -96,3 +96,50 @@ def test_publish_replay_needs_no_server_url(loop) -> None:
              "output": {"eventId": "evt_old", "sequence": 3}}]
     result = run(loop, Step(ctx_with(rows)).publish("orders", {"a": 1}))
     assert result == PublishResult(event_id="evt_old", sequence=3)
+
+
+def test_default_key_is_stable_across_a_retry_of_the_same_step(loop) -> None:
+    sent, publish = recorder()
+    for _ in range(2):  # the first attempt committed server-side but its completion was lost
+        run(loop, Step(ctx_with(publish=publish)).publish("orders", 1))
+    assert sent[0][2] == sent[1][2]
+    assert sent[0][2].startswith("step-") and len(sent[0][2]) == 69
+
+
+def test_default_keys_differ_for_two_publishes_to_one_topic(loop) -> None:
+    sent, publish = recorder()
+    step = Step(ctx_with(publish=publish))
+    run(loop, step.publish("orders", 1))
+    run(loop, step.publish("orders", 2))
+    assert sent[0][2] != sent[1][2]
+
+
+def test_explicit_key_overrides_the_default(loop) -> None:
+    sent, publish = recorder()
+    run(loop, Step(ctx_with(publish=publish)).publish("orders", 1, idempotency_key="mine"))
+    assert sent[0][2] == "mine"
+
+
+def test_default_key_is_server_safe_for_long_topics_and_spaced_branch_names(loop) -> None:
+    sent, publish = recorder()
+    topic = "t" * 249
+    run(loop, Step(ctx_with(publish=publish)).publish(topic, 1))
+
+    async def branch(s: Step) -> None:
+        await s.publish("orders", 1)
+
+    run(loop, Step(ctx_with(publish=publish)).parallel("fan out", [branch]))
+    assert len(sent) == 2
+    for _, _, key in sent:
+        assert key is not None and len(key.encode()) <= 255 and not any(c.isspace() for c in key)
+
+
+def test_publish_does_not_shift_later_step_ids(loop) -> None:
+    _, publish = recorder()
+    ctx = ctx_with(publish=publish)
+    step = Step(ctx)
+    run(loop, step.publish("orders", 1))
+    run(loop, step.run("after", lambda: 1))
+    run(loop, step.publish("orders", 2))
+    assert [s["id"] for s in ctx.executed] == [
+        "run_1:publish:orders:0", "run_1:after:0", "run_1:publish:orders:1"]

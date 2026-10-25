@@ -14,6 +14,7 @@ from ._step import Event, SchemaValidationError
 Handler = Callable[[Any], Awaitable[Any]]
 Schema = Callable[[Any], Any]
 RecordingProfile = Literal["all", "run_lifecycle", "steps"]
+OnExhausted = Literal["pause", "fail"]
 
 CODE_HASH_META_KEY = "__ironflow_code_hash"
 REDACTED_MARKER_KEY = "$redacted"
@@ -26,10 +27,47 @@ class Trigger(TypedDict, total=False):
 
 
 class RetryConfig(TypedDict, total=False):
+    """Every key is optional and sent only when set; the server fills the rest.
+
+    Server defaults: 25 attempts (the first included), 1s initial delay, 2.0 backoff, 5m max delay,
+    ``on_exhausted="pause"``. ``on_exhausted`` is what happens when a retryable failure has used every
+    attempt: ``"pause"`` holds the run for resume, ``"fail"`` ends it and runs its compensations.
+    """
+
     max_attempts: int
     initial_delay: Duration
     backoff_factor: float
     max_delay: Duration
+    on_exhausted: OnExhausted
+
+
+class CircuitBreakerConfig(TypedDict, total=False):
+    """Push-endpoint circuit breaker overrides; an unset or zero key keeps the server default.
+
+    Defaults: 5 consecutive failed attempts open it, for 60s, doubling per failed probe up to 10m.
+    ``max_open_duration`` must be at least ``open_duration`` when both are set. The server
+    raises a window shorter than the longest probe (21.3s with the default push timeout)
+    to that minimum.
+    """
+
+    failure_threshold: int
+    open_duration: Duration
+    max_open_duration: Duration
+
+
+class _ThrottleReq(TypedDict):
+    limit: int
+    period: Duration
+
+
+class ThrottleConfig(_ThrottleReq, total=False):
+    """Soft start-rate limit: at most ``limit`` runs start per ``period`` (per ``key`` value when set).
+
+    Runs over the limit wait in the queue and are never dropped. Retries and resumed runs are not
+    throttled. ``limit`` is at least 1 and ``period`` at least 1s.
+    """
+
+    key: str
 
 
 class _ConcurrencyReq(TypedDict):
@@ -72,6 +110,7 @@ class Function:
         actor_key: str | None = None, secrets: list[str] | None = None, recording: bool | None = None,
         recording_profile: RecordingProfile | None = None,
         metadata: dict[str, Any] | None = None, schema: Schema | None = None,
+        circuit_breaker: CircuitBreakerConfig | None = None, throttle: ThrottleConfig | None = None,
     ) -> None:
         self.id = id
         self.handler = handler
@@ -90,6 +129,8 @@ class Function:
         self.recording_profile = recording_profile
         self.metadata = metadata
         self.schema = schema
+        self.circuit_breaker = circuit_breaker
+        self.throttle = throttle
         self.code_hash = _code_hash(handler)
 
     def __repr__(self) -> str:
@@ -116,6 +157,38 @@ def _validate_triggers(triggers: Sequence[Trigger]) -> list[Trigger]:
             raise ValueError(f"invalid trigger {dict(trigger)!r}: event or cron must be non-empty")
         out.append(trigger.copy())
     return out
+
+
+def _validate_resilience(
+    retry: RetryConfig | None, circuit_breaker: CircuitBreakerConfig | None, throttle: ThrottleConfig | None,
+) -> None:
+    """Reject settings RegisterFunction would reject, at definition time."""
+    on_exhausted = (retry or {}).get("on_exhausted")
+    if on_exhausted is not None and on_exhausted not in ("pause", "fail"):
+        raise ValueError(f"retry on_exhausted must be 'pause' or 'fail' (got {on_exhausted!r})")
+    if circuit_breaker is not None:
+        threshold = circuit_breaker.get("failure_threshold", 0)
+        if isinstance(threshold, bool) or not isinstance(threshold, int) or threshold < 0:
+            raise ValueError(f"circuit_breaker failure_threshold must be an integer >= 0 (got {threshold!r})")
+        opened = _ms(circuit_breaker.get("open_duration", 0))
+        capped = _ms(circuit_breaker.get("max_open_duration", 0))
+        if opened and capped and capped < opened:
+            raise ValueError("circuit_breaker max_open_duration must be 0 or at least open_duration")
+    if throttle is not None:
+        limit = throttle["limit"]
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError(f"throttle limit must be an integer >= 1 (got {limit!r})")
+        if _ms(throttle["period"]) < 1000:
+            raise ValueError(f"throttle period must be >= 1s (got {to_seconds(throttle['period']):g}s)")
+        key = throttle.get("key")
+        if key:
+            path = key.removeprefix("$.")
+            if not path:
+                raise ValueError("throttle key path is empty")
+            if path.startswith(".") or path.endswith("."):
+                raise ValueError("throttle key path must not start or end with '.'")
+            if ".." in path:
+                raise ValueError("throttle key path must not contain empty segments ('..')")
 
 
 def _validate_config(
@@ -152,6 +225,7 @@ def function(
     secrets: Sequence[str] | None = None, recording: bool | None = None,
     recording_profile: RecordingProfile | None = None,
     metadata: dict[str, Any] | None = None, schema: Schema | None = None,
+    circuit_breaker: CircuitBreakerConfig | None = None, throttle: ThrottleConfig | None = None,
 ) -> Callable[[Handler], Function]:
     """Define a pull-mode function. The handler must be ``async def handler(ctx)``.
 
@@ -165,6 +239,7 @@ def function(
         raise ValueError("function id must be a non-empty string")
     checked = _validate_triggers(triggers)
     _validate_config(step_timeout, debounce, cancel_on, recording_profile)
+    _validate_resilience(retry, circuit_breaker, throttle)
 
     def decorate(handler: Handler) -> Function:
         if not inspect.iscoroutinefunction(handler):
@@ -177,7 +252,7 @@ def function(
             debounce=debounce, cancel_on=[s.copy() for s in cancel_on] if cancel_on else None,
             actor_key=actor_key, secrets=list(secrets) if secrets else None, recording=recording,
             recording_profile=recording_profile,
-            metadata=metadata, schema=schema,
+            metadata=metadata, schema=schema, circuit_breaker=circuit_breaker, throttle=throttle,
         )
 
     return decorate
@@ -233,6 +308,8 @@ def registration_body(
             retry["backoffFactor"] = fn.retry["backoff_factor"]
         if "max_delay" in fn.retry:
             retry["maxDelayMs"] = _ms(fn.retry["max_delay"])
+        if "on_exhausted" in fn.retry:
+            retry["onExhausted"] = fn.retry["on_exhausted"]
         body["retry"] = retry
     if fn.timeout is not None:
         body["timeoutMs"] = _ms(fn.timeout)
@@ -246,6 +323,21 @@ def registration_body(
         if _ms(fn.debounce.get("max_wait", 0)) > 0:
             debounce["maxWaitMs"] = _ms(fn.debounce["max_wait"])
         body["debounce"] = debounce
+    if fn.circuit_breaker:
+        breaker: dict[str, Any] = {}
+        if "failure_threshold" in fn.circuit_breaker:
+            breaker["failureThreshold"] = fn.circuit_breaker["failure_threshold"]
+        if "open_duration" in fn.circuit_breaker:
+            breaker["openDurationMs"] = _ms(fn.circuit_breaker["open_duration"])
+        if "max_open_duration" in fn.circuit_breaker:
+            breaker["maxOpenDurationMs"] = _ms(fn.circuit_breaker["max_open_duration"])
+        if breaker:
+            body["circuitBreaker"] = breaker
+    if fn.throttle:
+        throttle: dict[str, Any] = {"limit": fn.throttle["limit"], "periodMs": _ms(fn.throttle["period"])}
+        if fn.throttle.get("key"):
+            throttle["key"] = fn.throttle["key"]
+        body["throttle"] = throttle
     if fn.cancel_on:
         body["cancelOn"] = [dict(s) for s in fn.cancel_on]
     if fn.actor_key:

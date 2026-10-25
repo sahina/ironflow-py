@@ -172,7 +172,9 @@ class IronflowError(Exception):
         self.status_code = status_code
         self.code = code
         self.retryable = retryable
-        #: Seconds requested by the server's Retry-After header, if any.
+        #: Seconds requested by the server's Retry-After header, if any. When the
+        #: error is raised from a function handler it is also forwarded to the
+        #: engine as a run retry hint (``retry_after_ms``).
         self.retry_after = retry_after
 
 
