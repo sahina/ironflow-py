@@ -65,16 +65,24 @@ def _policy(raw: Any) -> str:
 def _memo(steps: list[dict[str, Any]]) -> list[CompletedStep]:
     out: list[CompletedStep] = []
     for s in steps:
-        # Defensive: the current engine push path (PushExecutor.Execute, executor.go:178-187)
-        # builds CompletedStep only from steps with StepStatusCompleted and never sets
-        # "error" on the wire. Nothing production-side sends a failed memoized step today,
-        # but if one ever arrives, remap it rather than mis-report it as completed.
+        # The engine sends a failed row only for a failed invoke or invokeAsync, so the
+        # parent raises that error instead of invoking it again.
         row: CompletedStep = {"step_id": s["id"], "name": s.get("name", ""), "output": s.get("output"),
                               "status": "failed" if s.get("error") else s.get("status", "completed")}
         if s.get("error"):
-            row["error"] = s["error"]  # engine sends a string; _invoke_error accepts one
+            row["error"] = _decode_error(s["error"])
         out.append(row)
     return out
+
+
+def _decode_error(raw: Any) -> Any:
+    """Push sends the error object as a JSON string; pull sends the object itself."""
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return raw
+    return raw
 
 
 def _publisher(server_url: str, api_key: str | None, environment: str | None, run_id: str) -> PublishFn:

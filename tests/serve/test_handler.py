@@ -66,9 +66,21 @@ def test_completed_wait_step_returns_event_and_resume_is_ignored() -> None:
     assert status == 200 and body["result"] == {"ok": True}
 
 
+def test_failed_invoke_step_from_engine_raises_child_error() -> None:
+    # The engine's push memo: status "failed", the error object as a JSON string.
+    async def h(ctx: Any) -> Any:
+        return await ctx.step.invoke("child", {"a": 1})
+    err = {"message": "invoked function 'child' failed", "function_id": "child",
+           "child_run_id": "run_child", "cause": "child exploded", "retryable": False}
+    status, body = call([fn_of(h)], req(steps=[
+        {"id": "run_1:child:0", "name": "run_1:child:0", "status": "failed", "error": json.dumps(err)}]))
+    assert status == 200 and body["status"] == "failed" and "yield" not in body
+    assert "child exploded" in body["error"]["message"] and "{" not in body["error"]["message"]
+    assert body["error"]["retryable"] is False
+
+
 def test_memoized_step_error_reaches_invoke_error() -> None:
-    # Defensive: no production caller sends a memoized step with "error" today (see
-    # _memo's comment in _handler.py); this proves the remap still behaves if one ever does.
+    # A plain-text error still raises, whatever the status says.
     async def h(ctx: Any) -> Any:
         return await ctx.step.invoke("child", {"a": 1})
     status, body = call([fn_of(h)], req(steps=[
