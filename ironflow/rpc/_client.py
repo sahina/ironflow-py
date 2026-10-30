@@ -19,7 +19,7 @@ greps it to fill the `python` column of sdk-coverage.json.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from typing_extensions import override
 
@@ -32,7 +32,7 @@ from ._runtime import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Iterator
+    from collections.abc import AsyncGenerator, Generator
 
     from .v1 import (
         AckEventRequest,
@@ -698,7 +698,7 @@ class _Projections:
         request: StreamProjectionEventsRequest,
         *,
         timeout: float | _NoTimeout | None = None,
-    ) -> Iterator[ProjectionEvent]:
+    ) -> Generator[ProjectionEvent, None, None]:
         """Server stream.
 
         `timeout` bounds the WHOLE subscription, not the gap between
@@ -712,10 +712,10 @@ class _Projections:
         position, so re-issuing the call resumes it (#1848).
         """
         self._owner._check_open("projections.stream_events")
-        return self._client.stream_projection_events(
+        return cast("Generator[ProjectionEvent, None, None]", self._client.stream_projection_events(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
-        )
+        ))
 
     # rpc: ironflow.v1.ProjectionService/GetProjection
     def get(
@@ -918,7 +918,7 @@ class _Projections:
         request: WaitProjectionCatchupRequest,
         *,
         timeout: float | _NoTimeout | None = None,
-    ) -> Iterator[WaitProjectionCatchupStreamResponse]:
+    ) -> Generator[WaitProjectionCatchupStreamResponse, None, None]:
         """Server stream.
 
         `timeout` bounds the WHOLE subscription, not the gap between
@@ -932,10 +932,10 @@ class _Projections:
         position, so re-issuing the call resumes it (#1848).
         """
         self._owner._check_open("projections.wait_catchup_stream")
-        return self._client.wait_projection_catchup_stream(
+        return cast("Generator[WaitProjectionCatchupStreamResponse, None, None]", self._client.wait_projection_catchup_stream(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
-        )
+        ))
 
 class _Pubsub:
     """Capability namespace `rpc.pubsub`."""
@@ -963,7 +963,7 @@ class _Pubsub:
         request: SubscribeRequest,
         *,
         timeout: float | _NoTimeout | None = None,
-    ) -> Iterator[SubscriptionEvent]:
+    ) -> Generator[SubscriptionEvent, None, None]:
         """Server stream.
 
         `timeout` bounds the WHOLE subscription, not the gap between
@@ -984,10 +984,10 @@ class _Pubsub:
         the connection dropped may arrive twice.
         """
         self._owner._check_open("pubsub.subscribe")
-        return self._client.subscribe(
+        return cast("Generator[SubscriptionEvent, None, None]", self._client.subscribe(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
-        )
+        ))
 
     # rpc: ironflow.v1.PubSubService/CreateConsumerGroup
     def create_consumer_group(
@@ -1060,7 +1060,7 @@ class _Pubsub:
         request: JoinConsumerGroupRequest,
         *,
         timeout: float | _NoTimeout | None = None,
-    ) -> Iterator[SubscriptionEvent]:
+    ) -> Generator[SubscriptionEvent, None, None]:
         """Server stream.
 
         `timeout` bounds the WHOLE subscription, not the gap between
@@ -1074,10 +1074,10 @@ class _Pubsub:
         position, so re-issuing the call resumes it (#1848).
         """
         self._owner._check_open("pubsub.join_consumer_group")
-        return self._client.join_consumer_group(
+        return cast("Generator[SubscriptionEvent, None, None]", self._client.join_consumer_group(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
-        )
+        ))
 
     # rpc: ironflow.v1.PubSubService/AckEvent
     def ack_event(
@@ -2222,7 +2222,7 @@ class _AsyncProjections:
         request: StreamProjectionEventsRequest,
         *,
         timeout: float | _NoTimeout | None = None,
-    ) -> AsyncIterator[ProjectionEvent]:
+    ) -> AsyncGenerator[ProjectionEvent, None]:
         """Server stream.
 
         `timeout` bounds the WHOLE subscription, not the gap between
@@ -2236,10 +2236,10 @@ class _AsyncProjections:
         position, so re-issuing the call resumes it (#1848).
         """
         self._owner._check_open("projections.stream_events")
-        return self._client.stream_projection_events(
+        return cast("AsyncGenerator[ProjectionEvent, None]", self._client.stream_projection_events(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
-        )
+        ))
 
     # rpc: ironflow.v1.ProjectionService/GetProjection
     async def get(
@@ -2442,7 +2442,7 @@ class _AsyncProjections:
         request: WaitProjectionCatchupRequest,
         *,
         timeout: float | _NoTimeout | None = None,
-    ) -> AsyncIterator[WaitProjectionCatchupStreamResponse]:
+    ) -> AsyncGenerator[WaitProjectionCatchupStreamResponse, None]:
         """Server stream.
 
         `timeout` bounds the WHOLE subscription, not the gap between
@@ -2456,10 +2456,10 @@ class _AsyncProjections:
         position, so re-issuing the call resumes it (#1848).
         """
         self._owner._check_open("projections.wait_catchup_stream")
-        return self._client.wait_projection_catchup_stream(
+        return cast("AsyncGenerator[WaitProjectionCatchupStreamResponse, None]", self._client.wait_projection_catchup_stream(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
-        )
+        ))
 
 class _AsyncPubsub:
     """Capability namespace `rpc.pubsub`."""
@@ -2487,7 +2487,7 @@ class _AsyncPubsub:
         request: SubscribeRequest,
         *,
         timeout: float | _NoTimeout | None = None,
-    ) -> AsyncIterator[SubscriptionEvent]:
+    ) -> AsyncGenerator[SubscriptionEvent, None]:
         """Server stream.
 
         `timeout` bounds the WHOLE subscription, not the gap between
@@ -2508,10 +2508,10 @@ class _AsyncPubsub:
         the connection dropped may arrive twice.
         """
         self._owner._check_open("pubsub.subscribe")
-        return self._client.subscribe(
+        return cast("AsyncGenerator[SubscriptionEvent, None]", self._client.subscribe(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
-        )
+        ))
 
     # rpc: ironflow.v1.PubSubService/CreateConsumerGroup
     async def create_consumer_group(
@@ -2584,7 +2584,7 @@ class _AsyncPubsub:
         request: JoinConsumerGroupRequest,
         *,
         timeout: float | _NoTimeout | None = None,
-    ) -> AsyncIterator[SubscriptionEvent]:
+    ) -> AsyncGenerator[SubscriptionEvent, None]:
         """Server stream.
 
         `timeout` bounds the WHOLE subscription, not the gap between
@@ -2598,10 +2598,10 @@ class _AsyncPubsub:
         position, so re-issuing the call resumes it (#1848).
         """
         self._owner._check_open("pubsub.join_consumer_group")
-        return self._client.join_consumer_group(
+        return cast("AsyncGenerator[SubscriptionEvent, None]", self._client.join_consumer_group(
             request,
             timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
-        )
+        ))
 
     # rpc: ironflow.v1.PubSubService/AckEvent
     async def ack_event(

@@ -115,3 +115,21 @@ def test_not_collected_by_pytest(tmp_path: Any) -> None:
     out = subprocess.run([sys.executable, "-m", "pytest", "-q", "-W", "error::pytest.PytestCollectionWarning",
                           str(tmp_path)], capture_output=True, text=True, check=False)
     assert out.returncode == 0, out.stdout + out.stderr
+
+
+@pytest.mark.parametrize("queued", [False, True])
+def test_optional_wait_branch(queued: bool) -> None:
+    @function(id="optional", triggers=[{"event": "start"}])
+    async def optional(ctx: Context) -> Any:
+        return await ctx.step.wait_for_event("reply", event="reply", on_timeout="return-null")
+
+    tc = TestClient([optional])
+    if queued:
+        tc.send_event("reply", None)
+    run = asyncio.run(tc.emit("start", {}))
+    assert run.status == "completed" and run.error is None
+    assert len(run.steps) == 1 and run.steps[0].name == "reply"
+    if queued:
+        assert run.output.name == "reply" and run.output.data is None
+    else:
+        assert run.output is None and run.steps[0].output is None

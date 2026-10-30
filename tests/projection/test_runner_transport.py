@@ -447,3 +447,20 @@ def test_the_flush_timer_is_armed_once_per_batch(loop: asyncio.AbstractEventLoop
 def _slow(r: ProjectionRunner) -> ProjectionRunner:
     r.flush_interval = 0.1
     return r
+
+
+@pytest.mark.parametrize("transport", ["poll", "stream"])
+def test_canonical_entity_identity_reaches_handlers(loop: asyncio.AbstractEventLoop, transport: str) -> None:
+    svc = FakeProjectionService()
+    entity = PE(id="entity", name="inc", seq=41, entity_id="seat-1", entity_type="seat", entity_version=2,
+                data=Struct.from_python({"entityId":"spoof", "entityVersion":999}))
+    if transport == "poll":
+        svc.streams = [ConnectError(Code.UNIMPLEMENTED, "no stream")]
+        svc.script["poll_projection_events"] = [PollProjectionEventsResponse(events=[entity, frame(42)])]
+    else:
+        svc.streams = [[entity, frame(42)]]
+    seen: list[Any] = []
+    runner = make(svc, handler=lambda event, ctx: seen.append(event))
+    run(loop, run_until(runner, lambda: len(seen) == 2))
+    assert (seen[0].entity_id, seen[0].entity_type, seen[0].entity_version, seen[0].seq) == ("seat-1", "seat", 2, 41)
+    assert seen[1].entity_id is None and seen[1].entity_version is None

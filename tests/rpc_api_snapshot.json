@@ -219,6 +219,7 @@
   "SchemaTraffic",
   "ServerCapabilities",
   "Step",
+  "StepAttempt",
   "StepStatus",
   "StepType",
   "StreamEvent",

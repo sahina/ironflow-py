@@ -127,7 +127,7 @@ class Worker:
             environment or os.environ.get("IRONFLOW_ENV") or None,
         )
         self.state = "idle"
-        self._jobs: dict[str, _ActiveJob] = {}
+        self._jobs: dict[tuple[str, int], _ActiveJob] = {}
         self._idle_poll = 1.0
         # The server caps a held poll at 25s; the transport times out at 30s.
         self._poll_wait = int(min(poll_wait, _MAX_POLL_WAIT))
@@ -352,8 +352,8 @@ class Worker:
             body = {
                 "worker_id": self.worker_id,
                 "active_jobs": len(self._jobs),
-                "jobs": [{"job_id": jid, "started_at": j.started_at}
-                         for jid, j in self._jobs.items() if not j.abandoned],
+                "jobs": [{"job_id": j.job["job_id"], "started_at": j.started_at}
+                         for j in self._jobs.values() if not j.abandoned],
             }
             try:
                 reply = await self._transport.request("POST", f"/api/v1/workers/{self.worker_id}/heartbeat", body)
@@ -465,16 +465,18 @@ class Worker:
             self._slot_freed.set()
 
     def _start_job(self, job: JobAssignment) -> None:
-        if job["job_id"] in self._jobs:
+        key = (job["job_id"], job["execution_seq"])
+        if key in self._jobs:
             self._log.warning("duplicate assignment for active job %s; ignoring", job["job_id"])
             return
         active = _ActiveJob(job=job, started_at=iso_utc(datetime.now(timezone.utc)))
-        self._jobs[job["job_id"]] = active
+        self._jobs[key] = active
         active.task = asyncio.ensure_future(self._execute(active))
-        active.task.add_done_callback(lambda _t: self._job_done(job["job_id"]))
+        active.task.add_done_callback(lambda _t: self._job_done(key, active))
 
-    def _job_done(self, job_id: str) -> None:
-        self._jobs.pop(job_id, None)
+    def _job_done(self, key: tuple[str, int], active: _ActiveJob) -> None:
+        if self._jobs.get(key) is active:
+            del self._jobs[key]
         if self._slot_freed is not None:
             self._slot_freed.set()
 

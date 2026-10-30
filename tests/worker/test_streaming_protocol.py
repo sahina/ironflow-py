@@ -489,7 +489,7 @@ def test_refused_job_is_nacked(
             worker.state = "draining"
             worker._draining.set()
         if full:
-            worker._jobs["held"] = object()  # type: ignore[assignment]
+            worker._jobs[("held", 1)] = object()  # type: ignore[assignment]
         await worker._handle_job_assignment(_assignment())
         return list(worker._outbox)
 
@@ -511,7 +511,7 @@ def test_duplicate_assignment_is_dropped_without_a_nack(loop: asyncio.AbstractEv
         worker = StreamingWorker(functions=[handler], max_concurrent_jobs=5)
         worker.state = "connected"
         worker._draining = asyncio.Event()
-        worker._jobs["job-1"] = object()  # type: ignore[assignment]
+        worker._jobs[("job-1", 7)] = object()  # type: ignore[assignment]
         await worker._handle_job_assignment(_assignment())
         return list(worker._outbox)
 
@@ -528,8 +528,96 @@ def test_duplicate_assignment_stays_silent_while_draining(loop: asyncio.Abstract
         worker.state = "draining"
         worker._draining = asyncio.Event()
         worker._draining.set()
-        worker._jobs["job-1"] = object()  # type: ignore[assignment]
+        worker._jobs[("job-1", 7)] = object()  # type: ignore[assignment]
         await worker._handle_job_assignment(_assignment())
         return list(worker._outbox)
 
     assert run(loop, scenario()) == []
+
+
+def test_reassigned_execution_heartbeat_keeps_new_sequence(loop: asyncio.AbstractEventLoop) -> None:
+    gates = [asyncio.Event(), asyncio.Event()]
+    started: list[int] = []
+
+    @function(id="nack-fn", triggers=[{"event": "nack.event"}])
+    async def handler(_ctx: Any) -> None:
+        n = len(started) + 1
+        started.append(n)
+        await gates[n - 1].wait()
+
+    async def scenario() -> None:
+        worker = StreamingWorker(functions=[handler], max_concurrent_jobs=3, heartbeat_interval=0.05)
+        worker.state = "connected"
+        worker._registered = True
+        worker._draining = asyncio.Event()
+        heartbeat = asyncio.create_task(worker._heartbeat_loop())
+        def beats() -> list[Any]:
+            return [m.payload.value for m in worker._outbox if m.payload.field == "heartbeat"]
+        try:
+            await worker._handle_job_assignment(_assignment())
+            await until(lambda: started == [1])
+            newer = _assignment()
+            newer.execution_seq = 8
+            newer.lease_token = "tok-8"
+            await worker._handle_job_assignment(newer)
+            await until(lambda: started == [1, 2])
+            await worker._handle_job_assignment(newer)
+            assert sum(m.payload.field == "job_ack" for m in worker._outbox) == 2
+            assert not any(m.payload.field == "job_nack" for m in worker._outbox)
+            gates[0].set()
+            await until(lambda: len(worker._jobs) == 1)
+            before = len(beats())
+            await until(lambda: len(beats()) > before)
+            assert [(j.job_id, j.execution_seq) for j in beats()[-1].jobs] == [("job-1", 8)]
+            gates[1].set()
+            await until(lambda: not worker._jobs)
+            before = len(beats())
+            await until(lambda: len(beats()) > before)
+            assert list(beats()[-1].jobs) == []
+        finally:
+            heartbeat.cancel()
+            await asyncio.gather(heartbeat, return_exceptions=True)
+            for gate in gates:
+                gate.set()
+            await worker._shutdown_now()
+
+    run(loop, scenario())
+
+
+def test_cancel_reaches_every_local_execution(loop: asyncio.AbstractEventLoop) -> None:
+    from protobuf import Oneof
+
+    from ironflow._gen.worker_pb import CancelJob, EngineMessage
+
+    started: list[int] = []
+    cancelled: list[int] = []
+
+    @function(id="nack-fn", triggers=[{"event": "nack.event"}])
+    async def handler(_ctx: Any) -> None:
+        n = len(started) + 1
+        started.append(n)
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.append(n)
+            raise
+
+    async def scenario() -> None:
+        worker = StreamingWorker(functions=[handler], max_concurrent_jobs=2)
+        worker.state = "connected"
+        worker._draining = asyncio.Event()
+        try:
+            await worker._handle_job_assignment(_assignment())
+            await until(lambda: started == [1])
+            newer = _assignment()
+            newer.execution_seq = 8
+            newer.lease_token = "tok-8"
+            await worker._handle_job_assignment(newer)
+            await until(lambda: started == [1, 2])
+            await worker._handle_engine_message(EngineMessage(payload=Oneof("cancel", CancelJob(job_id="job-1", reason="test"))))
+            await until(lambda: not worker._jobs)
+            assert sorted(cancelled) == [1, 2]
+        finally:
+            await worker._shutdown_now()
+
+    run(loop, scenario())

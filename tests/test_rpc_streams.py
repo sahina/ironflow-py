@@ -15,14 +15,20 @@ tests/integration/.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from typing import Any
 
 import pytest
 from connectrpc.code import Code
 
 from ironflow import AsyncIronflowRPC, IronflowRPC, IronflowRPCError
+from ironflow.rpc import _client as rpc_client
 from ironflow.rpc._runtime import NO_TIMEOUT
-from ironflow.rpc.v1 import CreateWebhookSourceRequest, SubscribeRequest
+from ironflow.rpc.v1 import (
+    CreateWebhookSourceRequest,
+    SubscribeOptions,
+    SubscribeRequest,
+)
 
 from .rpc_server import serve
 
@@ -371,3 +377,53 @@ def test_stream_on_a_closed_client_fails_immediately(client_cls: Any) -> None:
 
     assert "closed" in str(exc.value)
     assert "pubsub.subscribe" in str(exc.value)
+
+
+# ── closing the iterator (#3279) ─────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("path", ["translating", "resuming", "reporting"])
+def test_stream_return_is_a_generator_and_closes(client_cls: Any, path: str) -> None:
+    """The generated `cast(Generator, ...)` is only true if every interceptor path
+    yields a real generator. This is what enforces it: one case per wrapper
+    (`_translating_*`, `_resuming_*`, `_reporting_*`).
+    """
+    kwargs: dict[str, Any] = {"on_error": lambda err, ctx: None} if path == "reporting" else {}
+    request = (
+        SubscribeRequest(options=SubscribeOptions(start_after_sequence=1))
+        if path == "resuming"
+        else SubscribeRequest()
+    )
+    with serve() as srv:
+        client = client_cls(server_url=srv.url, api_key=API_KEY, **kwargs)
+        try:
+            stream = client.pubsub.subscribe(request)
+            if client_cls is AsyncIronflowRPC:
+                assert inspect.isasyncgen(stream)
+                asyncio.get_event_loop().run_until_complete(stream.aclose())
+            else:
+                assert inspect.isgenerator(stream)
+                stream.close()
+        finally:
+            close(client)
+
+
+def test_declared_stream_returns_are_generators() -> None:
+    """Static guard: `pyrefly` only checks ironflow/, so read the annotations.
+
+    Reverting the generator to Iterator makes `.close()`/`.aclose()` fail type
+    checks for users while every other gate stays green.
+    """
+    found = 0
+    for cls in vars(rpc_client).values():
+        if not (inspect.isclass(cls) and cls.__name__.startswith("_")):
+            continue
+        is_async = cls.__name__.startswith("_Async")
+        for name, fn in vars(cls).items():
+            ret = fn.__annotations__.get("return", "") if inspect.isfunction(fn) else ""
+            if "Iterator[" not in ret and "Generator[" not in ret:
+                continue
+            found += 1
+            want = "AsyncGenerator[" if is_async else "Generator["
+            assert ret.startswith(want), f"{cls.__name__}.{name}"
+    assert found

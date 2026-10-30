@@ -414,3 +414,50 @@ def test_run_info_carries_the_worker_environment(
     engine.enqueue(make_job())
     run(loop, run_until(worker_for(engine, h, environment=configured), lambda: engine.calls("terminal")))
     assert terminal(engine)["output"] == want
+
+
+def test_reassigned_execution_keeps_heartbeat_after_old_finishes(
+    loop: asyncio.AbstractEventLoop, engine: FakeEngine,
+) -> None:
+    gates = [asyncio.Event(), asyncio.Event()]
+    started: list[int] = []
+
+    async def h(ctx: Any) -> None:
+        n = ctx.event.data["n"]
+        started.append(n)
+        await gates[n - 1].wait()
+
+    def assignment(n: int) -> dict[str, Any]:
+        return make_job(execution_seq=n, lease_token=f"tok-{n}", event={
+            "id": "e", "name": "e", "data": {"n": n}, "timestamp": "2026-09-24T10:00:00Z"})
+
+    w = worker_for(engine, h, max_concurrent_jobs=3)
+
+    async def scenario() -> None:
+        task = asyncio.create_task(w.start())
+        try:
+            engine.enqueue(assignment(1))
+            await until(lambda: started == [1])
+            engine.enqueue(assignment(2))
+            await until(lambda: started == [1, 2])
+            engine.enqueue(assignment(2))
+            await until(lambda: len(engine.calls("poll")) >= 4)
+            assert len(engine.calls("ack")) == 2
+            engine.fail("terminal", 409, {"error": "STALE_EXECUTION"})
+            gates[0].set()
+            await until(lambda: len(engine.calls("terminal")) == 1 and len(w._jobs) == 1)
+            before = len(engine.calls("heartbeat"))
+            await until(lambda: len(engine.calls("heartbeat")) > before)
+            assert [j["job_id"] for j in engine.calls("heartbeat")[-1]["body"]["jobs"]] == ["run_1"]
+            gates[1].set()
+            await until(lambda: len(engine.calls("terminal")) == 2 and not w._jobs)
+            before = len(engine.calls("heartbeat"))
+            await until(lambda: len(engine.calls("heartbeat")) > before)
+            assert engine.calls("heartbeat")[-1]["body"]["jobs"] == []
+        finally:
+            for gate in gates:
+                gate.set()
+            await w.stop()
+            await task
+
+    run(loop, scenario())

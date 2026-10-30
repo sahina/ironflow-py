@@ -90,6 +90,7 @@ class JobError(_JobErrorReq, total=False):
 
 
 class EventFilter(TypedDict, total=False):
+    on_timeout: Literal["fail", "return-null"]
     event: str
     payload: Any
     match: str

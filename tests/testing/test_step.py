@@ -141,3 +141,13 @@ def test_publish_rejects_what_the_real_step_rejects() -> None:
     with pytest.raises(NonRetryableError) as e:
         asyncio.run(s.publish("orders", {"x": float("nan")}))
     assert e.value.code == "SERIALIZATION_ERROR" and s._records == []
+
+
+def test_optional_wait_timeout_and_null_payload_are_distinct() -> None:
+    s = _step(events={"reply": [None]})
+    received = asyncio.run(s.wait_for_event("first", event="reply", on_timeout="return-null"))
+    assert received is not None and received.name == "reply" and received.data is None
+    assert asyncio.run(s.wait_for_event("deadline", event="reply", on_timeout="return-null")) is None
+    assert s._records[-1] == TestStepRecord("deadline", "wait_for_event", None)
+    with pytest.raises(LookupError, match="send_event"):
+        asyncio.run(s.wait_for_event("default", event="reply"))

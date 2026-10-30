@@ -18,7 +18,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, TypeVar, overload
 
 from .._http import IronflowError
 from ._duration import (
@@ -367,19 +367,40 @@ class Step:
         wake += timedelta(microseconds=-wake.microsecond % 1000)
         raise _Yield({"step_id": step_id, "type": "sleep", "until": iso_utc(wake)})
 
+    @overload
     async def wait_for_event(
         self, name: str, *, event: str, match: str | None = None, match_value: str | None = None,
-        payload: Any = None, timeout: Duration = "7d",
-    ) -> Event:
-        """Pause until a matching event arrives. On timeout the engine fails the run (no retry)."""
+        payload: Any = None, timeout: Duration = "7d", on_timeout: Literal["fail"] = "fail",
+    ) -> Event: ...
+
+    @overload
+    async def wait_for_event(
+        self, name: str, *, event: str, match: str | None = None, match_value: str | None = None,
+        payload: Any = None, timeout: Duration = "7d", on_timeout: Literal["return-null"],
+    ) -> Event | None: ...
+
+    async def wait_for_event(
+        self, name: str, *, event: str, match: str | None = None, match_value: str | None = None,
+        payload: Any = None, timeout: Duration = "7d", on_timeout: Literal["fail", "return-null"] = "fail",
+    ) -> Event | None:
+        """Pause until an event arrives; opt in to None on timeout with return-null."""
         step_id = self._next_id(name)
         if self._ctx.is_completed(step_id):
-            return Event.from_wire(self._ctx.output(step_id))
+            output = self._ctx.output(step_id)
+            if output is None:
+                if on_timeout == "return-null":
+                    return None
+                raise NonRetryableError("The memoized wait result is null; keep on_timeout='return-null' for this wait")
+            return Event.from_wire(output)
+        if on_timeout not in ("fail", "return-null"):
+            raise ValueError("step.wait_for_event: on_timeout must be fail or return-null")
         if not isinstance(event, str) or not event.strip():
             raise ValueError(f"step.wait_for_event({name!r}): event must be a non-empty string")
         if to_seconds(timeout) <= 0:
             raise ValueError(f"step.wait_for_event({name!r}): timeout must be positive")
         event_filter: EventFilter = {"event": event.strip(), "timeout": to_wire(timeout)}
+        if on_timeout == "return-null":
+            event_filter["on_timeout"] = on_timeout
         if match is not None:
             event_filter["match"] = match
         if match_value is not None:

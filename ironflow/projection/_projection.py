@@ -22,6 +22,9 @@ class ProjectionEvent:
     timestamp: str
     source: str
     metadata: dict[str, Any]
+    entity_id: str | None = None
+    entity_type: str | None = None
+    entity_version: int | None = None
 
 
 @dataclass(frozen=True)

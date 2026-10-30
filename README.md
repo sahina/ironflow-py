@@ -450,7 +450,7 @@ first use of `IronflowRPC`.
 
 ## Where the engine source lives
 
-The Ironflow engine is **closed source** and lives at `sahina/ironflow` (private). This
+The Ironflow engine source lives at `sahina/ironflow` (private). Ironflow is licensed under the Functional Source License v1.1 with an Apache-2.0 future grant. Each release converts to Apache-2.0 on its second anniversary. This
 mirror exists so that:
 
 - PyPI's "Repository" link resolves to public source
@@ -528,5 +528,18 @@ through).
 ## License
 
 See [LICENSE](https://github.com/sahina/ironflow-py/blob/main/LICENSE) — SPDX
-`LicenseRef-Ironflow-EULA`. Not an OSI-approved open source licence; read it before
-deploying commercially.
+`LicenseRef-Ironflow-EULA`. The terms are the Functional Source License v1.1 with an
+Apache-2.0 future grant. Read them before deploying commercially.
+
+### Optional event-wait deadlines
+
+`await ctx.step.wait_for_event("confirm", event="seat.confirmed", timeout="5m",
+on_timeout="return-null")` returns an `Event` or `None`. Without the option, a
+deadline fails the run. The policy and the completed null result survive restart
+and replay. Approval helpers keep their fail-on-timeout default.
+
+Projection handler events expose `entity_id`, `entity_type`, and `entity_version`
+for entity stream events in both live delivery and rebuilds; they are `None`
+for ordinary events. `seq` is the global projection cursor, independent of the
+entity stream version. Identity comes from the engine, independently of data
+and user metadata.

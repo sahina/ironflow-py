@@ -369,9 +369,9 @@ class StreamingWorker(Worker):
         elif case == "job":
             await self._handle_job_assignment(value)
         elif case == "cancel":
-            active = self._jobs.get(value.job_id)
-            if active is not None:
-                self._abandon(active, f"server canceled job: {value.reason}")
+            for active in list(self._jobs.values()):
+                if active.job["job_id"] == value.job_id:
+                    self._abandon(active, f"server canceled job: {value.reason}")
         elif case == "shutdown":
             timeout = (
                 value.drain_timeout_ms / 1000
@@ -391,7 +391,7 @@ class StreamingWorker(Worker):
     async def _handle_job_assignment(self, proto: ProtoJobAssignment) -> None:
         # A re-delivered job that already runs here is dropped, never nacked: a
         # nack would re-queue a job that is still running.
-        if proto.job_id in self._jobs:
+        if (proto.job_id, proto.execution_seq) in self._jobs:
             self._log.debug("job %s is already active, ignoring it", proto.job_id)
             return
         # A job the worker cannot run gets a nack (#2456). A nack uses no run
@@ -657,6 +657,7 @@ class StreamingWorker(Worker):
                 "wait_event",
                 WaitEventYield(
                     event_name=event_filter["event"],
+                    on_timeout=event_filter.get("on_timeout", "fail"),
                     match_expression=event_filter.get("match", ""),
                     match_value=event_filter.get("match_value", ""),
                     timeout=timeout,

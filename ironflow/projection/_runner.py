@@ -97,6 +97,9 @@ def _event_from_proto(msg: ProjectionEventProto) -> ProjectionEvent:
         timestamp=ts,
         source=msg.source,
         metadata=meta,
+        entity_id=msg.entity_id or None,
+        entity_type=msg.entity_type or None,
+        entity_version=int(msg.entity_version) if msg.entity_id else None,
     )
 
 

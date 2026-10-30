@@ -2,7 +2,8 @@
 
 Nothing talks to an engine. ``step.run`` returns a mock if one is set, otherwise it runs the real
 body. ``step.invoke`` needs a mock. ``step.wait_for_event`` takes events queued with ``send_event``.
-Sleeps return at once. Durable-step memoization is not simulated.
+Sleeps return at once. An unqueued optional wait returns None immediately; queued None data stays an event.
+Durable-step memoization is not simulated.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast, overload
 
 from ..worker import (
     Context,
@@ -105,12 +106,29 @@ class TestStep:
     async def sleep_until(self, name: str, when: datetime | str) -> None:
         self._records.append(TestStepRecord(name, "sleep"))
 
+    @overload
     async def wait_for_event(
         self, name: str, *, event: str, match: str | None = None, match_value: str | None = None,
-        payload: Any = None, timeout: Duration = "7d",
-    ) -> Event:
+        payload: Any = None, timeout: Duration = "7d", on_timeout: Literal["fail"] = "fail",
+    ) -> Event: ...
+
+    @overload
+    async def wait_for_event(
+        self, name: str, *, event: str, match: str | None = None, match_value: str | None = None,
+        payload: Any = None, timeout: Duration = "7d", on_timeout: Literal["return-null"],
+    ) -> Event | None: ...
+
+    async def wait_for_event(
+        self, name: str, *, event: str, match: str | None = None, match_value: str | None = None,
+        payload: Any = None, timeout: Duration = "7d", on_timeout: Literal["fail", "return-null"] = "fail",
+    ) -> Event | None:
+        if on_timeout not in ("fail", "return-null"):
+            raise ValueError("step.wait_for_event: on_timeout must be fail or return-null")
         queue = self._events.get(event)
         if not queue:
+            if on_timeout == "return-null":
+                self._records.append(TestStepRecord(name, "wait_for_event", None))
+                return None
             raise LookupError(
                 f"step.wait_for_event({name!r}): no {event!r} event queued; call send_event({event!r}, data)")
         received = Event(id=f"test-evt-{next(_ids)}", name=event, data=queue.pop(0),

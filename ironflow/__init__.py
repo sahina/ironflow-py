@@ -43,6 +43,7 @@ from ._http import (
     UnsupportedMediaTypeError,
     is_redacted,
 )
+from ._run_events import RunEvent, RunVersionFilter
 from ._watch import ConfigWatchEvent, KVWatchEvent
 from .client import IronflowClient
 from .upcaster import UpcasterChainError, UpcasterRegistry
@@ -72,6 +73,8 @@ __all__ = [
     "PreconditionFailedError",
     "PreconditionRequiredError",
     "ReadinessResponse",
+    "RunEvent",
+    "RunVersionFilter",
     "ServerCapabilities",
     "UnsupportedMediaTypeError",
     "UpcasterChainError",

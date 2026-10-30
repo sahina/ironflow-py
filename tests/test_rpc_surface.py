@@ -169,6 +169,8 @@ def test_module_exports() -> None:
         "PreconditionRequiredError",
         "REDACTED_MARKER_KEY",
         "ReadinessResponse",
+        "RunEvent",
+        "RunVersionFilter",
         "ServerCapabilities",
         "UnsupportedMediaTypeError",
         "UpcasterChainError",
