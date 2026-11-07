@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, TypeVar, overload
 
 from .._http import IronflowError
+from .._tracing import execution_span
 from ._duration import (
     Duration,
     iso_utc,
@@ -29,6 +30,7 @@ from ._duration import (
     to_seconds,
     to_wire,
 )
+from ._logging import step_scope
 from ._protocol import CompletedStep, EventFilter, StepResult, YieldInfo
 
 _NAMESPACES = ("compensate:", "publish:")
@@ -417,39 +419,41 @@ class Step:
         if self._ctx.is_completed(step_id):
             return self._ctx.output(step_id)
 
-        self._ctx.on_step_started(step_id, name)
-        started = datetime.now(timezone.utc)
-        t0 = time.monotonic()
-        if timeout is None:
-            timeout = self._ctx.step_timeout
-        try:
+        with execution_span("step.run"):
+            self._ctx.on_step_started(step_id, name)
+            started = datetime.now(timezone.utc)
+            t0 = time.monotonic()
             if timeout is None:
-                output = await _invoke(fn)
-            else:
-                output = await _with_timeout(fn, to_seconds(timeout), name)
-        except StepTimeoutError as exc:
-            self._record_failure(step_id, name, started, t0, str(exc), True)
-            raise
-        except Exception as exc:
-            retryable = exc.retryable if isinstance(exc, IronflowError) else True
-            self._record_failure(step_id, name, started, t0, str(exc), retryable)
-            # A RetryAfterError in the body must still reach the engine through the wrapper.
-            retry_after = exc.retry_after if isinstance(exc, IronflowError) else None
-            raise StepError(str(exc), step_id=step_id, retryable=retryable, retry_after=retry_after) from exc
+                timeout = self._ctx.step_timeout
+            try:
+                with step_scope(self._ctx, step_id):
+                    if timeout is None:
+                        output = await _invoke(fn)
+                    else:
+                        output = await _with_timeout(fn, to_seconds(timeout), name)
+            except StepTimeoutError as exc:
+                self._record_failure(step_id, name, started, t0, str(exc), True)
+                raise
+            except Exception as exc:
+                retryable = exc.retryable if isinstance(exc, IronflowError) else True
+                self._record_failure(step_id, name, started, t0, str(exc), retryable)
+                # A RetryAfterError in the body must still reach the engine through the wrapper.
+                retry_after = exc.retry_after if isinstance(exc, IronflowError) else None
+                raise StepError(str(exc), step_id=step_id, retryable=retryable, retry_after=retry_after) from exc
 
-        try:
-            encode_json(output)
-        except (TypeError, ValueError) as exc:
-            raise NonRetryableError(
-                f"step {name!r} output is not JSON-encodable: {exc}", code="SERIALIZATION_ERROR"
-            ) from exc
+            try:
+                encode_json(output)
+            except (TypeError, ValueError) as exc:
+                raise NonRetryableError(
+                    f"step {name!r} output is not JSON-encodable: {exc}", code="SERIALIZATION_ERROR"
+                ) from exc
 
-        self._ctx.record({
-            "id": step_id, "name": name, "type": "invoke", "status": "completed", "output": output,
-            "started_at": iso_utc(started), "ended_at": iso_utc(datetime.now(timezone.utc)),
-            "duration_ms": int((time.monotonic() - t0) * 1000),
-        })
-        return output
+            self._ctx.record({
+                "id": step_id, "name": name, "type": "invoke", "status": "completed", "output": output,
+                "started_at": iso_utc(started), "ended_at": iso_utc(datetime.now(timezone.utc)),
+                "duration_ms": int((time.monotonic() - t0) * 1000),
+            })
+            return output
 
     def _invoke_step(self, function_id: str, method: str) -> str:
         if not isinstance(function_id, str) or not function_id:

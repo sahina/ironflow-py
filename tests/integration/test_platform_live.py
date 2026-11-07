@@ -1,7 +1,7 @@
 """Platform, API-key roles, cluster ops and the OpenAPI route against a real engine (#2947).
 
 `make test-platform-live` starts a fresh server and sets IRONFLOW_PLATFORM_JWT_FILE
-to the secret file the server keeps next to its database. Without it this module
+to the explicit signing file for either database backend. Without the destination this module
 skips: it bootstraps the one platform admin a server allows and rotates the JWT
 secret, so it must never share the server `make test-python-integration` uses.
 
@@ -235,6 +235,25 @@ def test_openapi_spec(server_url: str, api_key: str) -> None:
     assert body == REPO_SPEC.read_bytes()
     assert json.loads(body)["openapi"] == "3.1.0"
     assert raw(server_url, "GET", "/api/v1/openapi.json")[0] == 401
+
+
+def test_cluster_log_level(server_url: str, admin: IronflowClient) -> None:
+    assert status_of(lambda: IronflowClient(server_url).cluster_log_level({"level": "debug"})) == 401
+    viewer = admin.api_keys_create({"name": unique("log-viewer-"), "role_ids": [role_id(admin, "viewer")]})
+    client = IronflowClient(server_url, api_key=viewer["key"])
+    assert status_of(lambda: client.cluster_log_level({"level": "debug"})) == 403
+
+    result = admin.cluster_log_level({"level": "debug", "ttl": "1s"})
+    assert result["level"] == "debug" and result["delivery"] == "local"
+    assert len(result["applied_node_ids"]) == 1 and result["applied_node_ids"][0]
+    assert result["command_id"] and result["expires_at"]
+    platform = IronflowClient(server_url, api_key=login(server_url))
+    events = platform.platform_audit_list(event_type="cluster.log_level.requested")["events"]
+    assert any(
+        (event["payload"] or {}).get("command_id") == result["command_id"]
+        and (event["payload"] or {}).get("outcome") == "authorized_attempt"
+        for event in events
+    )
 
 
 def test_cluster_health(server_url: str, api_key: str, admin: IronflowClient) -> None:

@@ -527,6 +527,7 @@ class Worker:
                             environment=self._transport._environment,
                             max_attempts=job.get("max_attempts", 0), on_exhausted=job.get("on_exhausted", "")),
                 secrets=(job.get("context") or {}).get("secrets") or {},
+                carrier=job.get("context"),
                 logger=logging.LoggerAdapter(self._log, {"run_id": job["run_id"], "function_id": job["function_id"]}),
             )
 

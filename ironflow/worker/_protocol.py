@@ -37,6 +37,8 @@ class JobEvent(_JobEventReq, total=False):
 
 
 class JobContext(TypedDict, total=False):
+    traceparent: str
+    tracestate: str
     secrets: dict[str, str]
 
 

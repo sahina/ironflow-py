@@ -39,7 +39,7 @@ generated clients.
 
 **Two clients, two protocols, neither a superset of the other.** `IronflowClient`
 speaks REST and retries idempotent methods. `IronflowRPC` / `AsyncIronflowRPC`
-speak ConnectRPC and reach 101 capabilities REST does not serve — webhook
+speak ConnectRPC and reach 102 capabilities REST does not serve — webhook
 management, agent tools, time travel, pub/sub consumer groups, function
 versioning, executable deployments, raw SQL, and environment lookup/key
 rotation — including four server streams. `IronflowRPC` retries only the unary methods the protos annotate
@@ -56,6 +56,11 @@ endpoint has no generated method and `request()` cannot reach it; use a ConnectR
 subscription for a live event feed. KV and config watch are hand-written async
 iterators, `watch_kv(bucket, *, key=None)` and `watch_config(name)`. They need the
 `watch` extra: `pip install 'ironflow-py[watch]'`.
+
+`IronflowClient` timestamps are RFC 3339 strings, not `datetime` values, and the
+digits in their fractional seconds vary. For typed timestamps, use `IronflowRPC`, whose results
+carry the proto `Timestamp`, for what ConnectRPC serves. See
+[Timestamps](https://docs.ironflow.run/reference/api/python-sdk/#timestamps).
 
 ### Pull worker
 
@@ -217,7 +222,7 @@ not apply upcasters; register them for the worker's function handlers only.
 
 **Known limitation.** Events in a batch whose state save failed, or held in
 stream frames lost when the connection drops, are not redelivered — tracked
-for every SDK in [#2404](https://github.com/sahina/ironflow/issues/2404).
+for every SDK in #2404.
 
 ### Agents
 
@@ -416,7 +421,7 @@ full coverage details.
 ## Dependencies
 
 The direct runtime requirements are `connectrpc~=0.12.1`, meaning at least
-0.12.1 and below 0.13, `protobuf-py>=0.3,<0.7`, `pyqwest>=0.10,<0.11` and
+0.12.1 and below 0.13, `protobuf-py>=0.3,<0.7`, `pyqwest>=0.10,<0.12` and
 `typing_extensions>=4.4`. These bring in native dependencies:
 
 ```text
@@ -450,7 +455,7 @@ first use of `IronflowRPC`.
 
 ## Where the engine source lives
 
-The Ironflow engine source lives at `sahina/ironflow` (private). Ironflow is licensed under the Functional Source License v1.1 with an Apache-2.0 future grant. Each release converts to Apache-2.0 on its second anniversary. This
+Ironflow is closed source, under the Ironflow License (FSL v1.1 with an Apache-2.0 future grant). Two years after each release, you may also use that release under Apache-2.0. This does not mean we publish the engine's source code. This
 mirror exists so that:
 
 - PyPI's "Repository" link resolves to public source
@@ -531,7 +536,7 @@ See [LICENSE](https://github.com/sahina/ironflow-py/blob/main/LICENSE) — SPDX
 `LicenseRef-Ironflow-EULA`. The terms are the Functional Source License v1.1 with an
 Apache-2.0 future grant. Read them before deploying commercially.
 
-### Optional event-wait deadlines
+## Optional event-wait deadlines
 
 `await ctx.step.wait_for_event("confirm", event="seat.confirmed", timeout="5m",
 on_timeout="return-null")` returns an `Event` or `None`. Without the option, a
@@ -543,3 +548,103 @@ for entity stream events in both live delivery and rebuilds; they are `None`
 for ordinary events. `seq` is the global projection cursor, independent of the
 entity stream version. Identity comes from the engine, independently of data
 and user metadata.
+
+## Correlated callback logs
+
+`ctx.logger` is a standard `logging.LoggerAdapter`. Push, polling, and streaming
+callback records carry five reserved fields:
+
+| Field | Type | Value |
+| --- | --- | --- |
+| `run_id` | `str` | Full dispatch run ID |
+| `function_id` | `str` | Dispatch function ID, not the display name |
+| `step_id` | `str` | Allocated memoization key during a live `step.run` callback; `""` outside it |
+| `attempt` | `int` | Engine run attempt, not a step retry counter |
+| `trace_id` | `str` | Current valid OTel trace ID as 32 lowercase hex characters; `""` without one |
+
+Step labels work without OpenTelemetry. Nested steps restore the enclosing
+label; concurrent branches have separate labels. Child tasks and thread-backed
+callbacks stop claiming an active step when the callback exits or times out.
+Their inherited valid trace context remains usable. Memoized callbacks do not
+run or log again; code outside steps can log on every resume. Logging has no
+exactly-once guarantee.
+
+Polling and streaming keep the worker's configured `logger`; push keeps the
+`ironflow.serve` hierarchy. Transport diagnostics keep their existing routes and
+are not given callback correlation. Application handlers, filters, levels,
+formatters, and intentional silence remain in control, including `NullHandler`.
+The SDK merges call-level `extra` on Python 3.10 too. Reserved fields override
+collisions; other application fields, formatting arguments, and explicit
+`exc_info` survive. Handler exceptions follow normal callback error handling.
+
+If no application handler is reachable through the logger hierarchy, callback
+logging uses a local stderr fallback with all five keys. It does not call
+`basicConfig`, attach handlers to application loggers, or change levels. To print
+fields through your own handler, choose the exported formatter:
+
+```python
+import logging
+from ironflow.worker import CorrelationFormatter
+
+handler = logging.StreamHandler()
+handler.setFormatter(CorrelationFormatter())
+application_logger = logging.getLogger("my_app")
+application_logger.addHandler(handler)
+# Supply application_logger as Worker(..., logger=...) or StreamingWorker(..., logger=...).
+```
+
+For push, configure `logging.getLogger("ironflow.serve")` or an ancestor.
+A custom formatter can omit the fields from text; they remain on the record.
+`CorrelationFormatter()` also accepts ordinary diagnostic records, showing empty
+identity fields and attempt `0` for them.
+
+### Use an application-owned OTel Logs bridge
+
+Install a compatible OpenTelemetry Logs SDK only if your application wants it.
+The bridge below is tested on Python 3.10 with `opentelemetry-sdk==1.39.1`,
+`opentelemetry-api==1.39.1`, and semantic conventions `0.60b1`. The SDK's
+`tracing` extra supplies only the trace API; it does not configure log export.
+
+```python
+import logging
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+
+provider = LoggerProvider()
+# Add your application's chosen processors/exporters to provider.
+application_logger = logging.getLogger("my_app")
+application_logger.addHandler(LoggingHandler(logger_provider=provider))
+# Pass application_logger to Worker or StreamingWorker; use ironflow.serve for push.
+```
+
+Attach the bridge once per destination, rather than at both child and root.
+Each callback call emits one native record; the application bridge exports it
+with the five attributes and intrinsic trace ID, span ID, and trace flags from
+the active execution context. A valid unsampled context still correlates.
+Ironflow does not preformat correlation into the OTel body, configure a provider
+or exporter, introduce network activity, or collect these records in the engine.
+Your application owns exporter policy, flushing, and provider shutdown. An
+explicit no-op bridge remains silent. Arbitrary root logs are not captured or
+enriched by Ironflow.
+
+## Execution tracing
+
+Install `ironflow-py[tracing]` for the OpenTelemetry API integration. Configure
+an OpenTelemetry tracer provider and exporter in your application before starting
+a worker or serving push requests. Ironflow does not install or configure an
+exporter. Without a provider, the API uses no-op spans.
+
+Polling jobs, streaming jobs, and push requests start a `process` span parented
+on the engine's W3C `traceparent` and `tracestate`. Each executed `step.run`
+starts a child `step.run` span. Memoized steps create no span. Each resumed
+execution creates a new process span using its newly assigned engine context.
+Valid unsampled contexts propagate even when spans are not recorded. Missing or
+malformed parents start a new root, independently of ambient request context.
+Invalid or oversized trace state is discarded without losing a valid parent.
+
+Failures set error status. Durable yields and cancellation leave status unset.
+Spans end when execution exits. The integration does not copy baggage, secrets,
+payloads, exception messages, or stack traces into spans. The optional extra
+depends only on `opentelemetry-api`; applications own SDK and exporter setup.
+The base install works without selecting the extra, and tracing imports are
+safe when the API is absent. Some transport dependencies may install the API
+transitively.

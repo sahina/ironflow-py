@@ -65,7 +65,7 @@ def test_tenant_list(server_url: str, api_key: str, tenant: dict) -> None:
     assert len(rows) == 1
     row = rows[0]
     assert (row["name"], row["env_count"], row["key_count"]) == (ORG_NAME, 1, 1)
-    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", row["created_at"])
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z", row["created_at"])
 
 
 def test_env_rotate_apikey(server_url: str, tenant: dict) -> None:

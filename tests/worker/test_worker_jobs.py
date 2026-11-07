@@ -441,7 +441,12 @@ def test_reassigned_execution_keeps_heartbeat_after_old_finishes(
             engine.enqueue(assignment(2))
             await until(lambda: started == [1, 2])
             engine.enqueue(assignment(2))
-            await until(lambda: len(engine.calls("poll")) >= 4)
+            # The poll loop is sequential: a second poll from here on proves the
+            # worker handled the reply that carried the duplicate. A total poll
+            # count does not, and a duplicate handled after job 2 ends starts a
+            # third execution.
+            polled = len(engine.calls("poll"))
+            await until(lambda: len(engine.calls("poll")) >= polled + 2)
             assert len(engine.calls("ack")) == 2
             engine.fail("terminal", 409, {"error": "STALE_EXECUTION"})
             gates[0].set()

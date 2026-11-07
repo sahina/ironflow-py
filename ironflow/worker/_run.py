@@ -15,8 +15,10 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from .._http import IronflowError
+from .._tracing import execution_span, fail_span
 from ..upcaster import UpcasterChainError
 from ._function import Function, validate_event
+from ._logging import CallbackLogger
 from ._step import (
     Context,
     Event,
@@ -68,11 +70,32 @@ async def run_function(
     fn: Function, *, raw_event: Mapping[str, Any], upcasters: UpcasterRegistry | None,
     ctx: ExecutionContext, run: RunInfo, secrets: Mapping[str, str],
     logger: logging.LoggerAdapter[logging.Logger],
+    carrier: Mapping[str, object] | None = None,
+) -> dict[str, Any]:
+    with execution_span("process", carrier=carrier) as span:
+        outcome = await _run_function(fn, raw_event=raw_event, upcasters=upcasters, ctx=ctx,
+                                      run=run, secrets=secrets, logger=logger)
+        if outcome["status"] == "failed":
+            fail_span(span)
+        elif outcome["status"] == "yielded":
+            try:
+                encode_json(outcome["yield"])
+            except (TypeError, ValueError):
+                fail_span(span)
+        return outcome
+
+
+async def _run_function(
+    fn: Function, *, raw_event: Mapping[str, Any], upcasters: UpcasterRegistry | None,
+    ctx: ExecutionContext, run: RunInfo, secrets: Mapping[str, str],
+    logger: logging.LoggerAdapter[logging.Logger],
 ) -> dict[str, Any]:
     try:
         context = Context(
             event=await validate_event(fn, upcast_event(raw_event, upcasters)), step=Step(ctx),
-            run=run, logger=logger, secrets=MappingProxyType(dict(secrets)),
+            run=run, logger=CallbackLogger(logger.logger, execution=ctx, run_id=run.id,
+                                          function_id=run.function_id, attempt=run.attempt, extra=logger.extra),
+            secrets=MappingProxyType(dict(secrets)),
         )
         output = await fn.handler(context)
         try:

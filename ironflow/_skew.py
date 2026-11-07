@@ -18,6 +18,10 @@ MIN_SERVER_VERSION_SUBSCRIBE_BIDIRECTIONAL = "0.48.0"
 #: needs them; the Go and Node SDKs carry the same value.
 MIN_SERVER_VERSION_PROJECTION_LEASE = "0.44.0"
 
+#: The first server that honors the projection delivery position (ADR 0164). The
+#: Go and Node SDKs carry the same value.
+MIN_SERVER_VERSION_PROJECTION_POSITION = "0.55.0"
+
 #: Connect procedure -> first server version that serves it.
 MIN_SERVER_VERSIONS = {
     "/ironflow.v1.PubSubService/SubscribeBidirectional": MIN_SERVER_VERSION_SUBSCRIBE_BIDIRECTIONAL,

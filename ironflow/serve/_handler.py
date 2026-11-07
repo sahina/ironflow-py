@@ -144,6 +144,7 @@ async def handle(
                     environment=env(environment, "IRONFLOW_ENV") or None,
                     max_attempts=_budget(req.get("max_attempts")), on_exhausted=_policy(req.get("on_exhausted"))),
         secrets=req.get("secrets") or {},
+        carrier=headers,
         logger=logging.LoggerAdapter(_log, {"run_id": req["run_id"], "function_id": fn.id}),
     )
     if outcome["status"] == "completed":

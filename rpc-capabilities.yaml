@@ -7,7 +7,7 @@
 # RPC_SKIP. This file only answers "what do we do with each one". A served RPC
 # with no row here fails the gate by service and method name.
 #
-# Two files listing 83 paths independently is the failure ADR 0059 was written
+# Two files listing every path independently is the failure ADR 0059 was written
 # about, so this one holds classification and nothing else.
 #
 # classification:
@@ -63,8 +63,8 @@
 # The numbers live here and not in check-sdk-parity.sh so there is one place to
 # edit, not two.
 expect:
-  rest: 4
-  rpc: 97
+  rest: 9
+  rpc: 98
   stream: 4
   unsupported: 1
 
@@ -104,6 +104,11 @@ rpcs:
     classification: rpc
     capability: functions
     method: rollback
+  - path: ironflow.v1.IronflowService/ExplainEventMatch
+    classification: rpc
+    capability: events
+    method: explain_match
+
   - path: ironflow.v1.IronflowService/Trigger
     classification: rpc
     capability: runs
@@ -534,3 +539,19 @@ rpcs:
     classification: rpc
     capability: functions
     method: invoke
+
+  - path: ironflow.v1.InstanceAdminService/ReadInstance
+    classification: rest
+    rest: "GET /api/v1/platform/instance"
+  - path: ironflow.v1.InstanceAdminService/FreezeInstance
+    classification: rest
+    rest: "POST /api/v1/platform/instance/freeze"
+  - path: ironflow.v1.InstanceAdminService/ThawInstance
+    classification: rest
+    rest: "POST /api/v1/platform/instance/thaw"
+  - path: ironflow.v1.InstanceAdminService/ReconcileInstanceObligation
+    classification: rest
+    rest: "POST /api/v1/platform/instance/obligations/{id}/reconcile"
+  - path: ironflow.v1.InstanceAdminService/AttestInstanceCoverage
+    classification: rest
+    rest: "POST /api/v1/platform/instance/coverage/attest"

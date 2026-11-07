@@ -169,6 +169,8 @@ class ReadStreamRequest(Message[_ReadStreamRequestFields]):
             int64 from_version = 2;
             ```
         limit:
+            0 or unset returns every event
+
             ```proto
             int32 limit = 3;
             ```

@@ -17,7 +17,7 @@ from protobuf import DescService
 from protobuf.wkt import Empty
 
 from . import ironflow_pb
-from .ironflow_pb import CancelRunRequest, DeleteFunctionRequest, DeleteRunRequest, DeleteRunsRequest, DeleteRunsResponse, GetFunctionAtVersionRequest, GetFunctionAtVersionResponse, GetFunctionRequest, GetPausedStateRequest, GetPausedStateResponse, GetRunRequest, GetRunStepsRequest, GetRunStepsResponse, HealthRequest, HealthResponse, InfoRequest, InfoResponse, InjectStepOutputRequest, InjectStepOutputResponse, InvokeFunctionRequest, InvokeFunctionResponse, InvokeFunctionSyncRequest, InvokeFunctionSyncResponse, ListFunctionHistoryRequest, ListFunctionHistoryResponse, ListFunctionsRequest, ListFunctionsResponse, ListRunsRequest, ListRunsResponse, PatchStepRequest, PauseRunRequest, PauseRunResponse, RedactEventRequest, RedactRunRequest, RedactStepRequest, RegisterFunctionRequest, RegisterFunctionResponse, ResumeRunRequest, RollbackFunctionRequest, RollbackFunctionResponse, TriggerBatchRequest, TriggerBatchResponse, TriggerRequest, TriggerResponse, TriggerSyncRequest, TriggerSyncResponse, UpdateFunctionStatusRequest
+from .ironflow_pb import CancelRunRequest, DeleteFunctionRequest, DeleteRunRequest, DeleteRunsRequest, DeleteRunsResponse, ExplainEventMatchRequest, ExplainEventMatchResponse, GetFunctionAtVersionRequest, GetFunctionAtVersionResponse, GetFunctionRequest, GetPausedStateRequest, GetPausedStateResponse, GetRunRequest, GetRunStepsRequest, GetRunStepsResponse, HealthRequest, HealthResponse, InfoRequest, InfoResponse, InjectStepOutputRequest, InjectStepOutputResponse, InvokeFunctionRequest, InvokeFunctionResponse, InvokeFunctionSyncRequest, InvokeFunctionSyncResponse, ListFunctionHistoryRequest, ListFunctionHistoryResponse, ListFunctionsRequest, ListFunctionsResponse, ListRunsRequest, ListRunsResponse, PatchStepRequest, PauseRunRequest, PauseRunResponse, RedactEventRequest, RedactRunRequest, RedactStepRequest, RegisterFunctionRequest, RegisterFunctionResponse, ResumeRunRequest, RollbackFunctionRequest, RollbackFunctionResponse, TriggerBatchRequest, TriggerBatchResponse, TriggerRequest, TriggerResponse, TriggerSyncRequest, TriggerSyncResponse, UpdateFunctionStatusRequest
 from .types_pb import Function, Run, Step
 
 if TYPE_CHECKING:
@@ -85,6 +85,12 @@ class IronflowService(Protocol):
     async def rollback_function(self, request: RollbackFunctionRequest, ctx: RequestContext[RollbackFunctionRequest, RollbackFunctionResponse], /) -> RollbackFunctionResponse:
         """
         Roll back a function to a previous version
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def explain_event_match(self, request: ExplainEventMatchRequest, ctx: RequestContext[ExplainEventMatchRequest, ExplainEventMatchResponse], /) -> ExplainEventMatchResponse:
+        """
+        Explain current routing eligibility without emitting or dispatching an event.
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -342,6 +348,16 @@ class IronflowServiceASGIApplication(ConnectASGIApplication[IronflowService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.rollback_function,
+                ),
+                "/ironflow.v1.IronflowService/ExplainEventMatch": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ExplainEventMatch",
+                        service_name="ironflow.v1.IronflowService",
+                        input=ExplainEventMatchRequest,
+                        output=ExplainEventMatchResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=svc.explain_event_match,
                 ),
                 "/ironflow.v1.IronflowService/Trigger": Endpoint.unary(
                     method=MethodInfo(
@@ -784,6 +800,31 @@ class IronflowServiceClient(ConnectClient):
             ),
             headers=headers,
             timeout_ms=timeout_ms,
+        )
+
+    async def explain_event_match(
+        self,
+        request: ExplainEventMatchRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> ExplainEventMatchResponse:
+        """
+        Explain current routing eligibility without emitting or dispatching an event.
+        """
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ExplainEventMatch",
+                service_name="ironflow.v1.IronflowService",
+                input=ExplainEventMatchRequest,
+                output=ExplainEventMatchResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
         )
 
     async def trigger(
@@ -1357,6 +1398,12 @@ class IronflowServiceSync(Protocol):
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
+    def explain_event_match(self, request: ExplainEventMatchRequest, ctx: RequestContext[ExplainEventMatchRequest, ExplainEventMatchResponse], /) -> ExplainEventMatchResponse:
+        """
+        Explain current routing eligibility without emitting or dispatching an event.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
     def trigger(self, request: TriggerRequest, ctx: RequestContext[TriggerRequest, TriggerResponse], /) -> TriggerResponse:
         """
         Trigger an event (async by default)
@@ -1609,6 +1656,16 @@ class IronflowServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.rollback_function,
+                ),
+                "/ironflow.v1.IronflowService/ExplainEventMatch": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ExplainEventMatch",
+                        service_name="ironflow.v1.IronflowService",
+                        input=ExplainEventMatchRequest,
+                        output=ExplainEventMatchResponse,
+                        idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+                    ),
+                    function=service.explain_event_match,
                 ),
                 "/ironflow.v1.IronflowService/Trigger": EndpointSync.unary(
                     method=MethodInfo(
@@ -2043,6 +2100,30 @@ class IronflowServiceClientSync(ConnectClientSync):
             ),
             headers=headers,
             timeout_ms=timeout_ms,
+        )
+    def explain_event_match(
+        self,
+        request: ExplainEventMatchRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+        use_get: bool = False,
+    ) -> ExplainEventMatchResponse:
+        """
+        Explain current routing eligibility without emitting or dispatching an event.
+        """
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ExplainEventMatch",
+                service_name="ironflow.v1.IronflowService",
+                input=ExplainEventMatchRequest,
+                output=ExplainEventMatchResponse,
+                idempotency_level=IdempotencyLevel.NO_SIDE_EFFECTS,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+            use_get=use_get,
         )
     def trigger(
         self,

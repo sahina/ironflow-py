@@ -21,6 +21,7 @@ from ._function import (
     ThrottleConfig,
     function,
 )
+from ._logging import CorrelationFormatter
 from ._step import (
     Context,
     Event,
@@ -38,7 +39,7 @@ from ._step import (
 from ._worker import Worker, WorkerAuthError
 
 __all__ = [
-    "CancelOnSpec", "CircuitBreakerConfig", "Context", "DebounceConfig", "Duration", "Event", "Function",
+    "CancelOnSpec", "CircuitBreakerConfig", "Context", "CorrelationFormatter", "DebounceConfig", "Duration", "Event", "Function",
     "InvokeAsyncResult", "InvokeError", "NonRetryableError", "OnExhausted", "PublishResult", "RecordingProfile",
     "RetryAfterError", "RetryConfig", "RunInfo", "SchemaValidationError", "Step", "StepError", "StepTimeoutError",
     "StreamingWorker", "ThrottleConfig", "Worker", "WorkerAuthError", "function",

@@ -54,6 +54,11 @@ class ProjectionAuthError(IronflowError):
     """The engine rejected this runner's credentials. The runner stops; the worker does not."""
 
 
+class ProjectionRefusedError(IronflowError):
+    """The engine refused delivery with failed_precondition, a state no retry fixes, such as a
+    projection bound to a PUBSUB stream that was recreated (ADR 0164). The runner stops."""
+
+
 class _StreamingUnsupported(Exception):
     pass
 
@@ -151,6 +156,11 @@ class ProjectionRunner:
         self._progressed = False  # a batch with events succeeded on this stream
         self._stopping: asyncio.Event | None = None
         self._pending: list[ProjectionEvent] = []
+        # The delivery position under the lease (ADR 0164). It rises only after a whole batch
+        # commits, to the watermark the server reported for it, so it never covers an unsaved
+        # frame. `_pending_mark` is the highest seq the pending frames carry, heartbeats included.
+        self._position = 0
+        self._pending_mark = 0
         # The held lease, or None in standby. `_lost` is set when Renew finds the
         # lease fenced; each grant gets a new event.
         self._lease: ProjectionLease | None = None
@@ -284,12 +294,14 @@ class ProjectionRunner:
         )
 
     def _auth(self, exc: BaseException) -> None:
-        """Raise the error that stops the runner (401/403) or the grant (a lost lease)."""
+        """Raise the error that stops the runner (401/403, a refused delivery) or the grant (a lost lease)."""
         if isinstance(exc, ConnectError) and exc.code in (Code.UNAUTHENTICATED, Code.PERMISSION_DENIED):
             status = 401 if exc.code == Code.UNAUTHENTICATED else 403
             raise ProjectionAuthError(
                 f"projection {self._p.name}: unauthorized ({status}) — check IRONFLOW_API_KEY"
             ) from exc
+        if isinstance(exc, ConnectError) and exc.code == Code.FAILED_PRECONDITION:
+            raise ProjectionRefusedError(f"projection {self._p.name}: {exc}") from exc
         if isinstance(exc, ConnectError) and self._is_lost(exc):
             if self._lost is not None:
                 self._lost.set()  # any source, not only Renew: stop() then drains nothing
@@ -306,7 +318,8 @@ class ProjectionRunner:
             raise _LeaseLost("projection lease lost")
 
     async def run(self) -> None:
-        """Run until `stop()`. Raises `ProjectionAuthError` on 401/403, `ServerTooOldError` on a server without the lease."""
+        """Run until `stop()`. Raises `ProjectionAuthError` on 401/403, `ProjectionRefusedError` on a refused
+        delivery, `ServerTooOldError` on a server without the lease."""
         self._stopping = asyncio.Event()
         self._lost = asyncio.Event()
         self._pending = []
@@ -387,6 +400,7 @@ class ProjectionRunner:
             else:
                 if resp.granted and resp.lease is not None:
                     self._lease = resp.lease
+                    self._position = 0
                     if self._stopping.is_set():  # stop() released before this grant came back
                         await self._release()
                         return False
@@ -451,6 +465,8 @@ class ProjectionRunner:
         """
         async with self._lock:  # a timed flush that waits here then finds nothing to save
             self._pending = []
+            self._pending_mark = 0
+            self._position = 0
             self._flush_failed = False
             self._reload = False  # the next grant loads the state before it streams
             self._state = self._initial()
@@ -529,10 +545,11 @@ class ProjectionRunner:
 
     async def _drain_pending(self) -> None:
         async with self._lock:
-            batch = self._pending
+            batch, mark = self._pending, self._pending_mark
             self._pending = []
+            self._pending_mark = 0
             if self._flush_failed:
-                return  # flushing past a failed batch would skip it; the cursor redelivers both
+                return  # flushing past a failed batch would skip it; the position redelivers both
             if self._lost is not None and self._lost.is_set():
                 return  # the next holder gets these events again
             try:
@@ -540,9 +557,12 @@ class ProjectionRunner:
             except BaseException:
                 self._flush_failed = True
                 raise
+            self._position = max(self._position, mark)
             self._progressed = self._progressed or bool(batch)
 
     async def _stream_loop(self) -> None:
+        from ..rpc._runtime import ServerTooOldError
+
         assert self._stopping is not None
         failures = 0
         while not self._stopping.is_set():
@@ -566,7 +586,7 @@ class ProjectionRunner:
                 if self._stopping.is_set():
                     return
                 raise
-            except (_StreamingUnsupported, ProjectionAuthError, _LeaseLost):
+            except (_StreamingUnsupported, ProjectionAuthError, ProjectionRefusedError, _LeaseLost, ServerTooOldError):
                 raise  # a lost lease uses no reconnect ladder and no poll fallback
             except Exception as exc:  # noqa: BLE001 - every other failure reconnects
                 # A stream that delivered a frame was healthy, so a transport error restarts the
@@ -579,7 +599,8 @@ class ProjectionRunner:
                 self._log.log(level, "projection %s: stream failed (%d): %s", self._p.name, failures, exc)
                 delay = min(self.reconnect_base * 2 ** (failures - 1), self.reconnect_max)
             async with self._lock:  # waits out an in-flight flush from the old stream
-                self._pending = []  # left over after a failed flush: redelivered from the saved cursor
+                self._pending = []  # left over after a failed flush: redelivered from the position
+                self._pending_mark = 0
                 self._flush_failed = False
             await self._sleep(delay)
 
@@ -599,9 +620,17 @@ class ProjectionRunner:
         reader.result()
 
     async def _read_stream(self) -> None:
+        from .._skew import MIN_SERVER_VERSION_PROJECTION_POSITION
+        from ..rpc._runtime import ServerTooOldError
+
         req = StreamProjectionEventsRequest(
-            name=self._p.name, batch_size=self._p.batch_size, accept_heartbeats=True, lease=self._lease
+            name=self._p.name,
+            batch_size=self._p.batch_size,
+            accept_heartbeats=True,
+            lease=self._lease,
+            position=self._position,
         )
+        opened = False
         timer: asyncio.TimerHandle | None = None
         flush_error: list[BaseException] = []
         reader = asyncio.current_task()
@@ -612,6 +641,11 @@ class ProjectionRunner:
                 try:
                     msg = await anext(stream)
                 except StopAsyncIteration:
+                    # A current server sends OPEN before it can end a stream cleanly, so a clean end without OPEN is an old server.
+                    if not opened:
+                        raise ServerTooOldError(
+                            "StreamProjectionEvents position", MIN_SERVER_VERSION_PROJECTION_POSITION
+                        ) from None
                     break
                 except ConnectError as exc:  # only errors from the stream itself are classified here
                     self._auth(exc)  # a lost lease raises here, so the frames received are dropped
@@ -619,8 +653,17 @@ class ProjectionRunner:
                         raise _StreamingUnsupported from exc
                     await self._drain_pending()  # frames already received are valid (as Node does)
                     raise
+                if not opened:
+                    # A server older than ADR 0164 ignores the position and sends no OPEN frame.
+                    if msg.kind != ProjectionEventKind.OPEN:
+                        raise ServerTooOldError("StreamProjectionEvents position", MIN_SERVER_VERSION_PROJECTION_POSITION)
+                    opened = True
+                    continue
                 self._got_frame = True
+                self._pending_mark = max(self._pending_mark, msg.seq)
                 if msg.kind == ProjectionEventKind.HEARTBEAT:
+                    if not self._pending:
+                        await self._drain_pending()  # raises the position behind any flush in flight
                     continue
                 self._pending.append(_event_from_proto(msg))
                 if len(self._pending) >= self._p.batch_size:
@@ -659,16 +702,23 @@ class ProjectionRunner:
         task.add_done_callback(self._timed.discard)
 
     async def _poll_loop(self) -> None:
+        from .._skew import MIN_SERVER_VERSION_PROJECTION_POSITION
+        from ..rpc._runtime import ServerTooOldError
+
         assert self._stopping is not None
         backoff = self.poll_min
         while not self._stopping.is_set():
             self._check_lease()
             try:
                 resp = await self._client.poll_projection_events(
-                    PollProjectionEventsRequest(name=self._p.name, batch_size=self._p.batch_size, lease=self._lease),
+                    PollProjectionEventsRequest(
+                        name=self._p.name, batch_size=self._p.batch_size, lease=self._lease, position=self._position
+                    ),
                     headers=self._headers(),
                     timeout_ms=self.rpc_timeout_ms,
                 )
+                if not resp.has_field("position"):
+                    raise ServerTooOldError("PollProjectionEvents position", MIN_SERVER_VERSION_PROJECTION_POSITION)
                 events = [_event_from_proto(m) for m in resp.events]
                 if events and self._p.mode == "managed":
                     current = _to_python(resp, "current_state", "current_state_value")
@@ -676,10 +726,11 @@ class ProjectionRunner:
                         self._state = current
                 async with self._lock:
                     await self._flush(events)
+                self._position = max(self._position, resp.last_event_seq)
                 if events:
                     backoff = self.poll_min
                     continue
-            except _LeaseLost:
+            except (_LeaseLost, ServerTooOldError):
                 raise
             except ConnectError as exc:
                 self._auth(exc)

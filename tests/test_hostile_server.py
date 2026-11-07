@@ -10,6 +10,7 @@ a reverse proxy, a load balancer, a captive portal, a stale DNS record.
 from __future__ import annotations
 
 import json
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
@@ -224,12 +225,21 @@ class TestResponseSizeIsBounded:
             f"error body became a {len(str(exc.value))}-byte exception message"
         )
 
-    def test_deeply_nested_json_surfaces_as_ironflow_error(self, server) -> None:
+    def test_deeply_nested_json_surfaces_as_ironflow_error(
+        self, server, monkeypatch
+    ) -> None:
         """RecursionError is a server-controlled input, not a bug in the caller."""
-        server.script(Response(status=200, raw=b"[" * 200_000 + b"]" * 200_000))
+        # The native scanner's nesting limit depends on the available C stack.
+        # The Python scanner uses the interpreter's recursion limit instead.
+        decoder = json.JSONDecoder()
+        decoder.scan_once = json.scanner.py_make_scanner(decoder)
+        monkeypatch.setattr(json, "_default_decoder", decoder)
+        depth = sys.getrecursionlimit() + 1
+        server.script(Response(status=200, raw=b"[" * depth + b"]" * depth))
         c = IronflowClient(server_url=server.url, max_attempts=1)
-        with pytest.raises(IronflowError):
+        with pytest.raises(IronflowError) as exc:
             c.events_list()
+        assert isinstance(exc.value.__cause__, RecursionError)
 
 
 class TestTotalTimeoutBoundsTheAttempt:

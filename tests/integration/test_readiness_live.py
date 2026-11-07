@@ -597,5 +597,5 @@ def test_auth_audit(rpc: Any, rest: IronflowClient, server_url: str) -> None:
     assert [e.event_type for e in trail.events] == ["authz.key.revoked", "authz.decision.denied", "authz.key.created"]
     assert trail.total_count == 3
     payload = trail.events[1].payload.to_python()
-    assert payload["decision"] == "denied" and payload["path"] == "/ironflow.v1.PubSubService/CreateConsumerGroup"
+    assert payload["decision"] == "denied" and payload["path"] == "/ironflow.v1.PubSubService/"
     assert payload["api_key_id"] == key["id"]

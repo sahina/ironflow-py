@@ -26,7 +26,7 @@ from ironflow._gen.projection_pb import (
 from ironflow.projection import create_projection
 from ironflow.projection._runner import ProjectionRunner, _event_from_proto, _LeaseLost
 from ironflow.rpc._runtime import ServerTooOldError
-from tests.projection.fake_service import FakeProjectionService, granted
+from tests.projection.fake_service import FakeProjectionService, granted, opened
 from tests.worker.conftest import run
 
 TRANSPORTS = ["poll", "stream"]
@@ -106,7 +106,7 @@ class LeaseFake(FakeProjectionService):
         self.pulls.append(_epoch(req))
         if self.stale(req):
             raise lost()
-        return PollProjectionEventsResponse(events=self.batches.pop(0) if self.batches else [])
+        return PollProjectionEventsResponse(events=self.batches.pop(0) if self.batches else [], position=0)
 
     async def stream_projection_events(self, req: Any, **_: Any) -> AsyncIterator[Any]:  # type: ignore[override]
         if self.poll_only:
@@ -114,7 +114,8 @@ class LeaseFake(FakeProjectionService):
         self.pulls.append(_epoch(req))
         if self.stale(req):
             raise lost()
-        sent = False  # one batch per stream: the next one comes after a rewind, on the next open
+        yield opened()
+        sent = False  # one batch per stream: the next one comes after a reconnect, on the next open
         while True:
             if self.stream_fence and self.stale(req):
                 raise lost()

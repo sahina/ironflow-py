@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -28,6 +29,19 @@ def make_job(job_id: str = "run_1", **overrides: Any) -> dict[str, Any]:
     }
     job.update(overrides)
     return job
+
+
+class _QuietHTTPServer(ThreadingHTTPServer):
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        # The worker drops its socket as soon as a test stops polling. The
+        # response write then raises BrokenPipeError, and BaseServer prints a
+        # traceback to stderr. That is the client leaving, not a failed
+        # request, and under load it lands in whatever test is asserting a
+        # silent stderr.
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+            return
+        super().handle_error(request, client_address)
 
 
 class FakeEngine:
@@ -70,7 +84,7 @@ class FakeEngine:
             def do_PUT(self) -> None:
                 self._serve("PUT")
 
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._server = _QuietHTTPServer(("127.0.0.1", 0), Handler)
         self.url = f"http://127.0.0.1:{self._server.server_address[1]}"
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()

@@ -13,6 +13,8 @@ from ironflow._gen.projection_pb import (
     AcquireProjectionLeaseResponse,
     GetProjectionResponse,
     PollProjectionEventsResponse,
+    ProjectionEvent,
+    ProjectionEventKind,
     ProjectionLease,
     RegisterProjectionResponse,
     ReleaseProjectionLeaseResponse,
@@ -28,6 +30,18 @@ def granted(epoch: int = 1, ttl: float = 3600.0) -> AcquireProjectionLeaseRespon
         lease=ProjectionLease(token=f"sdk:t{epoch}", epoch=epoch),
         ttl=Duration(seconds=int(ttl), nanos=int(ttl % 1 * 1e9)),
     )
+
+
+def opened(seq: int = 0) -> ProjectionEvent:
+    """The OPEN frame a server that honors the delivery position sends first (ADR 0164)."""
+    return ProjectionEvent(kind=ProjectionEventKind.OPEN, seq=seq)
+
+
+def echoed(resp: Any) -> Any:
+    """A poll response with the position echo a server of ADR 0164 always sends."""
+    if isinstance(resp, PollProjectionEventsResponse) and not resp.has_field("position"):
+        resp.position = 0
+    return resp
 
 
 DEFAULTS: dict[str, Any] = {
@@ -63,7 +77,7 @@ class FakeProjectionService:
 
         async def call(request: Any, **kw: Any) -> Any:
             self.kwargs.append((method, kw))
-            return self._next(method, request)
+            return echoed(self._next(method, request))
 
         return call
 
@@ -73,6 +87,7 @@ class FakeProjectionService:
         frames = self.streams.pop(0) if self.streams else []
         if isinstance(frames, BaseException):
             raise frames
+        yield opened(request.position or 0)
         for f in frames:
             if isinstance(f, BaseException):
                 raise f

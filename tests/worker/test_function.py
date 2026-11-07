@@ -83,7 +83,7 @@ def test_public_exports() -> None:
     import ironflow.worker as w
 
     assert sorted(w.__all__) == sorted([
-        "CancelOnSpec", "CircuitBreakerConfig", "Context", "DebounceConfig", "Duration", "Event", "Function",
+        "CancelOnSpec", "CircuitBreakerConfig", "Context", "CorrelationFormatter", "DebounceConfig", "Duration", "Event", "Function",
         "InvokeAsyncResult", "InvokeError", "NonRetryableError", "OnExhausted", "PublishResult", "RecordingProfile",
         "RetryAfterError", "RetryConfig", "RunInfo", "SchemaValidationError", "Step", "StepError", "StepTimeoutError",
         "StreamingWorker", "ThrottleConfig", "Worker", "WorkerAuthError", "function",

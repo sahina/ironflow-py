@@ -68,6 +68,8 @@ if TYPE_CHECKING:
         ExecuteSQLRequest,
         ExecuteSQLResponse,
         ExpireWebhookSecretPrevRequest,
+        ExplainEventMatchRequest,
+        ExplainEventMatchResponse,
         Function,
         GetAuditTrailRequest,
         GetAuditTrailResponse,
@@ -521,6 +523,19 @@ class _Events:
     def __init__(self, owner: IronflowRPC, client: ironflow_connect.IronflowServiceClientSync) -> None:
         self._owner = owner
         self._client = client
+
+    # rpc: ironflow.v1.IronflowService/ExplainEventMatch
+    def explain_match(
+        self,
+        request: ExplainEventMatchRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ExplainEventMatchResponse:
+        self._owner._check_open("events.explain_match")
+        return self._client.explain_event_match(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
 
     # rpc: ironflow.v1.IronflowService/Emit
     def emit(
@@ -2045,6 +2060,19 @@ class _AsyncEvents:
     def __init__(self, owner: AsyncIronflowRPC, client: ironflow_connect.IronflowServiceClient) -> None:
         self._owner = owner
         self._client = client
+
+    # rpc: ironflow.v1.IronflowService/ExplainEventMatch
+    async def explain_match(
+        self,
+        request: ExplainEventMatchRequest,
+        *,
+        timeout: float | _NoTimeout | None = None,
+    ) -> ExplainEventMatchResponse:
+        self._owner._check_open("events.explain_match")
+        return await self._client.explain_event_match(
+            request,
+            timeout_ms=_timeout_ms(timeout, self._owner._default_timeout),
+        )
 
     # rpc: ironflow.v1.IronflowService/Emit
     async def emit(
