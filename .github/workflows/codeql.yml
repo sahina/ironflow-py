@@ -1,0 +1,45 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+
+# Default for every job. The analyze job replaces this set; it does not merge.
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Least privilege for a public repo using the default query pack:
+    # contents:read to check out, security-events:write to upload SARIF.
+    # actions:read is only required in private repositories. packages:read is
+    # only required to fetch private CodeQL packs.
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: python
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4.39.3
+        with:
+          category: "/language:${{ matrix.language }}"

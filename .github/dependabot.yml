@@ -1,0 +1,15 @@
+# Dependency updates for this mirror.
+#
+# pip covers the only package manifest, root pyproject.toml (no lockfile).
+# github-actions covers the workflows under .github/workflows.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
