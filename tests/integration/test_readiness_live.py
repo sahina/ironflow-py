@@ -136,7 +136,7 @@ def test_run_list(rpc: Any, seed: dict[str, Any]) -> None:
 def test_run_steps(rpc: Any, seed: dict[str, Any]) -> None:
     hold = _hold(seed)
     (step,) = rpc.runs.get_steps(GetRunStepsRequest(run_id=seed["runId"])).steps
-    assert (step.step_id, step.run_id, step.stored_status) == (seed["stepId"], seed["runId"], "completed")
+    assert (step.id, step.run_id, step.stored_status) == (seed["stepId"], seed["runId"], "completed")
     assert step.output.to_python() == seed["stepOutput"]
     note, wait = rpc.runs.get_steps(GetRunStepsRequest(run_id=hold["runId"])).steps
     assert (note.id, note.stored_status, note.output.to_python()) == (hold["noteStepId"], "completed", {"sdk": "python"})

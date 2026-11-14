@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from protobuf.wkt import FieldMask, Struct, Timestamp, Value
 
 
-_EmitRequestFields: TypeAlias = Literal["event", "data", "data_value", "idempotency_key", "metadata", "namespace", "version"]
+_EmitRequestFields: TypeAlias = Literal["event", "data", "data_value", "idempotency_key", "metadata", "version"]
 
 class EmitRequest(Message[_EmitRequestFields]):
     """
@@ -59,12 +59,6 @@ class EmitRequest(Message[_EmitRequestFields]):
             ```proto
             optional google.protobuf.Struct metadata = 4;
             ```
-        namespace:
-            Namespace (default: "default")
-
-            ```proto
-            string namespace = 5;
-            ```
         version:
             Event schema version (default 1)
 
@@ -73,7 +67,7 @@ class EmitRequest(Message[_EmitRequestFields]):
             ```
     """
 
-    __slots__ = ("event", "data", "data_value", "idempotency_key", "metadata", "namespace", "version")
+    __slots__ = ("event", "data", "data_value", "idempotency_key", "metadata", "version")
 
     if TYPE_CHECKING:
 
@@ -85,7 +79,6 @@ class EmitRequest(Message[_EmitRequestFields]):
             data_value: Value | None = None,
             idempotency_key: str = "",
             metadata: Struct | None = None,
-            namespace: str = "",
             version: int = 0,
         ) -> None:
             pass
@@ -95,7 +88,6 @@ class EmitRequest(Message[_EmitRequestFields]):
         data_value: Value | None
         idempotency_key: str
         metadata: Struct | None
-        namespace: str
         version: int
 
 _EmitResponseFields: TypeAlias = Literal["run_ids", "event_id"]
@@ -174,7 +166,7 @@ class SubscribeRequest(Message[_SubscribeRequestFields]):
         pattern: str
         options: SubscribeOptions | None
 
-_SubscribeOptionsFields: TypeAlias = Literal["replay", "include_metadata", "filter", "namespace", "consumer_group", "ack_mode", "backpressure", "start_after_sequence"]
+_SubscribeOptionsFields: TypeAlias = Literal["replay", "include_metadata", "filter", "consumer_group", "start_after_sequence"]
 
 class SubscribeOptions(Message[_SubscribeOptionsFields]):
     """
@@ -201,29 +193,11 @@ class SubscribeOptions(Message[_SubscribeOptionsFields]):
             ```proto
             string filter = 3;
             ```
-        namespace:
-            Namespace (default: "default")
-
-            ```proto
-            string namespace = 4;
-            ```
         consumer_group:
             Consumer group to join for load-balanced delivery (optional)
 
             ```proto
             string consumer_group = 5;
-            ```
-        ack_mode:
-            Acknowledgment mode (default: AUTO)
-
-            ```proto
-            ironflow.v1.AckMode ack_mode = 6;
-            ```
-        backpressure:
-            Backpressure handling (default: BUFFER)
-
-            ```proto
-            ironflow.v1.BackpressureMode backpressure = 7;
             ```
         start_after_sequence:
             Resume delivery AFTER this stream sequence, as last seen on
@@ -252,7 +226,7 @@ class SubscribeOptions(Message[_SubscribeOptionsFields]):
             ```
     """
 
-    __slots__ = ("replay", "include_metadata", "filter", "namespace", "consumer_group", "ack_mode", "backpressure", "start_after_sequence")
+    __slots__ = ("replay", "include_metadata", "filter", "consumer_group", "start_after_sequence")
 
     if TYPE_CHECKING:
 
@@ -262,10 +236,7 @@ class SubscribeOptions(Message[_SubscribeOptionsFields]):
             replay: int = 0,
             include_metadata: bool = False,
             filter: str = "",
-            namespace: str = "",
             consumer_group: str = "",
-            ack_mode: AckMode | None = None,
-            backpressure: BackpressureMode | None = None,
             start_after_sequence: int | None = None,
         ) -> None:
             pass
@@ -273,10 +244,7 @@ class SubscribeOptions(Message[_SubscribeOptionsFields]):
         replay: int
         include_metadata: bool
         filter: str
-        namespace: str
         consumer_group: str
-        ack_mode: AckMode
-        backpressure: BackpressureMode
         start_after_sequence: int
 
 _SubscriptionEventFields: TypeAlias = Literal["subscription_id", "event_id", "topic", "data", "data_value", "metadata", "sequence", "delivery_attempt"]
@@ -370,7 +338,7 @@ class SubscriptionEvent(Message[_SubscriptionEventFields]):
         sequence: int
         delivery_attempt: int
 
-_EventMetadataFields: TypeAlias = Literal["timestamp", "source", "namespace", "custom"]
+_EventMetadataFields: TypeAlias = Literal["timestamp", "custom"]
 
 class EventMetadata(Message[_EventMetadataFields]):
     """
@@ -385,18 +353,6 @@ class EventMetadata(Message[_EventMetadataFields]):
             ```proto
             optional google.protobuf.Timestamp timestamp = 1;
             ```
-        source:
-            Source of the event
-
-            ```proto
-            string source = 2;
-            ```
-        namespace:
-            Event namespace
-
-            ```proto
-            string namespace = 3;
-            ```
         custom:
             Additional custom metadata
 
@@ -405,7 +361,7 @@ class EventMetadata(Message[_EventMetadataFields]):
             ```
     """
 
-    __slots__ = ("timestamp", "source", "namespace", "custom")
+    __slots__ = ("timestamp", "custom")
 
     if TYPE_CHECKING:
 
@@ -413,15 +369,11 @@ class EventMetadata(Message[_EventMetadataFields]):
             self,
             *,
             timestamp: Timestamp | None = None,
-            source: str = "",
-            namespace: str = "",
             custom: Struct | None = None,
         ) -> None:
             pass
 
         timestamp: Timestamp | None
-        source: str
-        namespace: str
         custom: Struct | None
 
 _SubscriptionAckFields: TypeAlias = Literal["event_id", "ack_type", "redeliver_delay_ms", "ack_id"]
@@ -650,7 +602,7 @@ class StreamHeartbeat(Message[_StreamHeartbeatFields]):
         ) -> None:
             pass
 
-_AckEventRequestFields: TypeAlias = Literal["namespace", "group_name", "consumer_id", "event_id", "ack_type", "redeliver_delay_ms"]
+_AckEventRequestFields: TypeAlias = Literal["group_name", "consumer_id", "event_id", "ack_type", "redeliver_delay_ms"]
 
 class AckEventRequest(Message[_AckEventRequestFields]):
     """
@@ -659,13 +611,6 @@ class AckEventRequest(Message[_AckEventRequestFields]):
     ```
 
     Attributes:
-        namespace:
-            Namespace (default: "default"). Accepted for symmetry with
-            JoinConsumerGroupRequest; the engine ignores it.
-
-            ```proto
-            string namespace = 1;
-            ```
         group_name:
             Consumer group name.
 
@@ -699,14 +644,13 @@ class AckEventRequest(Message[_AckEventRequestFields]):
             ```
     """
 
-    __slots__ = ("namespace", "group_name", "consumer_id", "event_id", "ack_type", "redeliver_delay_ms")
+    __slots__ = ("group_name", "consumer_id", "event_id", "ack_type", "redeliver_delay_ms")
 
     if TYPE_CHECKING:
 
         def __init__(
             self,
             *,
-            namespace: str = "",
             group_name: str = "",
             consumer_id: str = "",
             event_id: str = "",
@@ -715,7 +659,6 @@ class AckEventRequest(Message[_AckEventRequestFields]):
         ) -> None:
             pass
 
-        namespace: str
         group_name: str
         consumer_id: str
         event_id: str
@@ -740,7 +683,7 @@ class AckEventResponse(Message[_AckEventResponseFields]):
         ) -> None:
             pass
 
-_ConsumerGroupFields: TypeAlias = Literal["id", "namespace", "name", "pattern", "filter_expr", "ack_mode", "backpressure", "max_inflight", "max_redeliveries", "redeliver_delay_ms", "metadata", "status", "member_count", "created_at", "updated_at"]
+_ConsumerGroupFields: TypeAlias = Literal["id", "name", "pattern", "filter_expr", "ack_mode", "backpressure", "max_inflight", "max_redeliveries", "redeliver_delay_ms", "metadata", "status", "member_count", "created_at", "updated_at"]
 
 class ConsumerGroup(Message[_ConsumerGroupFields]):
     """
@@ -755,14 +698,8 @@ class ConsumerGroup(Message[_ConsumerGroupFields]):
             ```proto
             string id = 1;
             ```
-        namespace:
-            Namespace
-
-            ```proto
-            string namespace = 2;
-            ```
         name:
-            Human-readable name (unique within namespace)
+            Human-readable name (unique within the environment)
 
             ```proto
             string name = 3;
@@ -841,7 +778,7 @@ class ConsumerGroup(Message[_ConsumerGroupFields]):
             ```
     """
 
-    __slots__ = ("id", "namespace", "name", "pattern", "filter_expr", "ack_mode", "backpressure", "max_inflight", "max_redeliveries", "redeliver_delay_ms", "metadata", "status", "member_count", "created_at", "updated_at")
+    __slots__ = ("id", "name", "pattern", "filter_expr", "ack_mode", "backpressure", "max_inflight", "max_redeliveries", "redeliver_delay_ms", "metadata", "status", "member_count", "created_at", "updated_at")
 
     if TYPE_CHECKING:
 
@@ -849,7 +786,6 @@ class ConsumerGroup(Message[_ConsumerGroupFields]):
             self,
             *,
             id: str = "",
-            namespace: str = "",
             name: str = "",
             pattern: str = "",
             filter_expr: str = "",
@@ -867,7 +803,6 @@ class ConsumerGroup(Message[_ConsumerGroupFields]):
             pass
 
         id: str
-        namespace: str
         name: str
         pattern: str
         filter_expr: str
@@ -882,7 +817,7 @@ class ConsumerGroup(Message[_ConsumerGroupFields]):
         created_at: Timestamp | None
         updated_at: Timestamp | None
 
-_CreateConsumerGroupRequestFields: TypeAlias = Literal["namespace", "name", "pattern", "filter_expr", "ack_mode", "backpressure", "max_inflight", "max_redeliveries", "redeliver_delay_ms", "metadata"]
+_CreateConsumerGroupRequestFields: TypeAlias = Literal["name", "pattern", "filter_expr", "ack_mode", "backpressure", "max_inflight", "max_redeliveries", "redeliver_delay_ms", "metadata"]
 
 class CreateConsumerGroupRequest(Message[_CreateConsumerGroupRequestFields]):
     """
@@ -891,14 +826,8 @@ class CreateConsumerGroupRequest(Message[_CreateConsumerGroupRequestFields]):
     ```
 
     Attributes:
-        namespace:
-            Namespace (default: "default")
-
-            ```proto
-            string namespace = 1;
-            ```
         name:
-            Unique name within namespace
+            Unique name within the environment
 
             ```proto
             string name = 2;
@@ -953,14 +882,13 @@ class CreateConsumerGroupRequest(Message[_CreateConsumerGroupRequestFields]):
             ```
     """
 
-    __slots__ = ("namespace", "name", "pattern", "filter_expr", "ack_mode", "backpressure", "max_inflight", "max_redeliveries", "redeliver_delay_ms", "metadata")
+    __slots__ = ("name", "pattern", "filter_expr", "ack_mode", "backpressure", "max_inflight", "max_redeliveries", "redeliver_delay_ms", "metadata")
 
     if TYPE_CHECKING:
 
         def __init__(
             self,
             *,
-            namespace: str = "",
             name: str = "",
             pattern: str = "",
             filter_expr: str = "",
@@ -973,7 +901,6 @@ class CreateConsumerGroupRequest(Message[_CreateConsumerGroupRequestFields]):
         ) -> None:
             pass
 
-        namespace: str
         name: str
         pattern: str
         filter_expr: str
@@ -984,7 +911,7 @@ class CreateConsumerGroupRequest(Message[_CreateConsumerGroupRequestFields]):
         redeliver_delay_ms: int
         metadata: Struct | None
 
-_GetConsumerGroupRequestFields: TypeAlias = Literal["namespace", "name"]
+_GetConsumerGroupRequestFields: TypeAlias = Literal["name"]
 
 class GetConsumerGroupRequest(Message[_GetConsumerGroupRequestFields]):
     """
@@ -993,12 +920,6 @@ class GetConsumerGroupRequest(Message[_GetConsumerGroupRequestFields]):
     ```
 
     Attributes:
-        namespace:
-            Namespace (default: "default")
-
-            ```proto
-            string namespace = 1;
-            ```
         name:
             Consumer group name
 
@@ -1007,22 +928,20 @@ class GetConsumerGroupRequest(Message[_GetConsumerGroupRequestFields]):
             ```
     """
 
-    __slots__ = ("namespace", "name")
+    __slots__ = ("name",)
 
     if TYPE_CHECKING:
 
         def __init__(
             self,
             *,
-            namespace: str = "",
             name: str = "",
         ) -> None:
             pass
 
-        namespace: str
         name: str
 
-_ListConsumerGroupsRequestFields: TypeAlias = Literal["namespace", "status", "limit", "cursor"]
+_ListConsumerGroupsRequestFields: TypeAlias = Literal["status", "limit", "cursor"]
 
 class ListConsumerGroupsRequest(Message[_ListConsumerGroupsRequestFields]):
     """
@@ -1031,12 +950,6 @@ class ListConsumerGroupsRequest(Message[_ListConsumerGroupsRequestFields]):
     ```
 
     Attributes:
-        namespace:
-            Namespace filter (empty = all namespaces)
-
-            ```proto
-            string namespace = 1;
-            ```
         status:
             Status filter
 
@@ -1057,21 +970,19 @@ class ListConsumerGroupsRequest(Message[_ListConsumerGroupsRequestFields]):
             ```
     """
 
-    __slots__ = ("namespace", "status", "limit", "cursor")
+    __slots__ = ("status", "limit", "cursor")
 
     if TYPE_CHECKING:
 
         def __init__(
             self,
             *,
-            namespace: str = "",
             status: ConsumerGroupStatus | None = None,
             limit: int = 0,
             cursor: str = "",
         ) -> None:
             pass
 
-        namespace: str
         status: ConsumerGroupStatus
         limit: int
         cursor: str
@@ -1133,7 +1044,7 @@ class UpdateConsumerGroupRequest(Message[_UpdateConsumerGroupRequestFields]):
     Attributes:
         group:
             The consumer group to update, with new values for the fields to be updated.
-            The namespace and name fields identify the group; other fields contain the new values.
+            The name field identifies the group; other fields contain the new values.
 
             ```proto
             optional ironflow.v1.ConsumerGroup group = 1;
@@ -1163,7 +1074,7 @@ class UpdateConsumerGroupRequest(Message[_UpdateConsumerGroupRequestFields]):
         group: ConsumerGroup | None
         update_mask: FieldMask | None
 
-_DeleteConsumerGroupRequestFields: TypeAlias = Literal["namespace", "name"]
+_DeleteConsumerGroupRequestFields: TypeAlias = Literal["name"]
 
 class DeleteConsumerGroupRequest(Message[_DeleteConsumerGroupRequestFields]):
     """
@@ -1172,12 +1083,6 @@ class DeleteConsumerGroupRequest(Message[_DeleteConsumerGroupRequestFields]):
     ```
 
     Attributes:
-        namespace:
-            Namespace (default: "default")
-
-            ```proto
-            string namespace = 1;
-            ```
         name:
             Consumer group name
 
@@ -1186,22 +1091,20 @@ class DeleteConsumerGroupRequest(Message[_DeleteConsumerGroupRequestFields]):
             ```
     """
 
-    __slots__ = ("namespace", "name")
+    __slots__ = ("name",)
 
     if TYPE_CHECKING:
 
         def __init__(
             self,
             *,
-            namespace: str = "",
             name: str = "",
         ) -> None:
             pass
 
-        namespace: str
         name: str
 
-_JoinConsumerGroupRequestFields: TypeAlias = Literal["namespace", "group_name", "consumer_id", "client_id"]
+_JoinConsumerGroupRequestFields: TypeAlias = Literal["group_name", "consumer_id", "client_id"]
 
 class JoinConsumerGroupRequest(Message[_JoinConsumerGroupRequestFields]):
     """
@@ -1210,12 +1113,6 @@ class JoinConsumerGroupRequest(Message[_JoinConsumerGroupRequestFields]):
     ```
 
     Attributes:
-        namespace:
-            Namespace (default: "default")
-
-            ```proto
-            string namespace = 1;
-            ```
         group_name:
             Consumer group name
 
@@ -1238,21 +1135,19 @@ class JoinConsumerGroupRequest(Message[_JoinConsumerGroupRequestFields]):
             ```
     """
 
-    __slots__ = ("namespace", "group_name", "consumer_id", "client_id")
+    __slots__ = ("group_name", "consumer_id", "client_id")
 
     if TYPE_CHECKING:
 
         def __init__(
             self,
             *,
-            namespace: str = "",
             group_name: str = "",
             consumer_id: str = "",
             client_id: str = "",
         ) -> None:
             pass
 
-        namespace: str
         group_name: str
         consumer_id: str
         client_id: str
@@ -1770,7 +1665,8 @@ class AckResultCode(Enum):
             ACK_RESULT_CODE_INVALID_ARGUMENT = 2
             ```
         INTERNAL:
-            The NATS ack failed; the client may retry.
+            The NATS ack failed for a reason other than an outage; the client may
+            retry.
 
             ```proto
             ACK_RESULT_CODE_INTERNAL = 3
@@ -1782,6 +1678,13 @@ class AckResultCode(Enum):
             ```proto
             ACK_RESULT_CODE_NOT_FOUND = 4
             ```
+        UNAVAILABLE:
+            NATS cannot take the ack now. The event stays in flight: a retry once
+            NATS is back settles it, and an ack that never lands lets it redeliver.
+
+            ```proto
+            ACK_RESULT_CODE_UNAVAILABLE = 5
+            ```
     """
 
     UNSPECIFIED = 0
@@ -1789,10 +1692,11 @@ class AckResultCode(Enum):
     INVALID_ARGUMENT = 2
     INTERNAL = 3
     NOT_FOUND = 4
+    UNAVAILABLE = 5
 
 
 _DESC = file_desc(
-    b'\n\x18ironflow/v1/pubsub.proto\x12\x0bironflow.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a google/protobuf/field_mask.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\x9d\x02\n\x0bEmitRequest\x12\x14\n\x05event\x18\x01 \x01(\tR\x05event\x12+\n\x04data\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x07 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12\'\n\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x123\n\x08metadata\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12\x1c\n\tnamespace\x18\x05 \x01(\tR\tnamespace\x12\x18\n\x07version\x18\x06 \x01(\x05R\x07version"B\n\x0cEmitResponse\x12\x17\n\x07run_ids\x18\x01 \x03(\tR\x06runIds\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId"e\n\x10SubscribeRequest\x12\x18\n\x07pattern\x18\x01 \x01(\tR\x07pattern\x127\n\x07options\x18\x02 \x01(\x0b2\x1d.ironflow.v1.SubscribeOptionsR\x07options"\xf6\x02\n\x10SubscribeOptions\x12\x16\n\x06replay\x18\x01 \x01(\x05R\x06replay\x12)\n\x10include_metadata\x18\x02 \x01(\x08R\x0fincludeMetadata\x12\x16\n\x06filter\x18\x03 \x01(\tR\x06filter\x12\x1c\n\tnamespace\x18\x04 \x01(\tR\tnamespace\x12%\n\x0econsumer_group\x18\x05 \x01(\tR\rconsumerGroup\x12/\n\x08ack_mode\x18\x06 \x01(\x0e2\x14.ironflow.v1.AckModeR\x07ackMode\x12A\n\x0cbackpressure\x18\x07 \x01(\x0e2\x1d.ironflow.v1.BackpressureModeR\x0cbackpressure\x125\n\x14start_after_sequence\x18\x08 \x01(\x04H\x00R\x12startAfterSequence\x88\x01\x01B\x17\n\x15_start_after_sequence"\xd0\x02\n\x11SubscriptionEvent\x12\'\n\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId\x12\x14\n\x05topic\x18\x03 \x01(\tR\x05topic\x12+\n\x04data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x08 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x126\n\x08metadata\x18\x05 \x01(\x0b2\x1a.ironflow.v1.EventMetadataR\x08metadata\x12\x1a\n\x08sequence\x18\x06 \x01(\x04R\x08sequence\x12)\n\x10delivery_attempt\x18\x07 \x01(\x05R\x0fdeliveryAttempt"\xb0\x01\n\rEventMetadata\x128\n\ttimestamp\x18\x01 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x16\n\x06source\x18\x02 \x01(\tR\x06source\x12\x1c\n\tnamespace\x18\x03 \x01(\tR\tnamespace\x12/\n\x06custom\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x06custom"\xa2\x01\n\x0fSubscriptionAck\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12/\n\x08ack_type\x18\x02 \x01(\x0e2\x14.ironflow.v1.AckTypeR\x07ackType\x12,\n\x12redeliver_delay_ms\x18\x03 \x01(\x05R\x10redeliverDelayMs\x12\x15\n\x06ack_id\x18\x04 \x01(\x04R\x05ackId"\x99\x01\n\x1dSubscribeBidirectionalRequest\x12;\n\x04join\x18\x01 \x01(\x0b2%.ironflow.v1.JoinConsumerGroupRequestH\x00R\x04join\x120\n\x03ack\x18\x02 \x01(\x0b2\x1c.ironflow.v1.SubscriptionAckH\x00R\x03ackB\t\n\x07payload"\x96\x02\n\x1eSubscribeBidirectionalResponse\x12:\n\x06joined\x18\x01 \x01(\x0b2 .ironflow.v1.ConsumerGroupJoinedH\x00R\x06joined\x126\n\x05event\x18\x02 \x01(\x0b2\x1e.ironflow.v1.SubscriptionEventH\x00R\x05event\x127\n\nack_result\x18\x03 \x01(\x0b2\x16.ironflow.v1.AckResultH\x00R\tackResult\x12<\n\theartbeat\x18\x04 \x01(\x0b2\x1c.ironflow.v1.StreamHeartbeatH\x00R\theartbeatB\t\n\x07payload"\xa8\x01\n\x13ConsumerGroupJoined\x12\'\n\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1d\n\ngroup_name\x18\x02 \x01(\tR\tgroupName\x12\x18\n\x07pattern\x18\x03 \x01(\tR\x07pattern\x12/\n\x08ack_mode\x18\x04 \x01(\x0e2\x14.ironflow.v1.AckModeR\x07ackMode"\x87\x01\n\tAckResult\x12\x15\n\x06ack_id\x18\x01 \x01(\x04R\x05ackId\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId\x12.\n\x04code\x18\x03 \x01(\x0e2\x1a.ironflow.v1.AckResultCodeR\x04code\x12\x18\n\x07message\x18\x04 \x01(\tR\x07message"\x11\n\x0fStreamHeartbeat"\xe9\x01\n\x0fAckEventRequest\x12\x1c\n\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x1d\n\ngroup_name\x18\x02 \x01(\tR\tgroupName\x12\x1f\n\x0bconsumer_id\x18\x03 \x01(\tR\nconsumerId\x12\x19\n\x08event_id\x18\x04 \x01(\tR\x07eventId\x12/\n\x08ack_type\x18\x05 \x01(\x0e2\x14.ironflow.v1.AckTypeR\x07ackType\x12,\n\x12redeliver_delay_ms\x18\x06 \x01(\x05R\x10redeliverDelayMs"\x12\n\x10AckEventResponse"\x84\x05\n\rConsumerGroup\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x12\x18\n\x07pattern\x18\x04 \x01(\tR\x07pattern\x12\x1f\n\x0bfilter_expr\x18\x05 \x01(\tR\nfilterExpr\x12/\n\x08ack_mode\x18\x06 \x01(\x0e2\x14.ironflow.v1.AckModeR\x07ackMode\x12A\n\x0cbackpressure\x18\x07 \x01(\x0e2\x1d.ironflow.v1.BackpressureModeR\x0cbackpressure\x12!\n\x0cmax_inflight\x18\x08 \x01(\x05R\x0bmaxInflight\x12)\n\x10max_redeliveries\x18\t \x01(\x05R\x0fmaxRedeliveries\x12,\n\x12redeliver_delay_ms\x18\n \x01(\x05R\x10redeliverDelayMs\x123\n\x08metadata\x18\x0b \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x128\n\x06status\x18\x0c \x01(\x0e2 .ironflow.v1.ConsumerGroupStatusR\x06status\x12!\n\x0cmember_count\x18\r \x01(\x05R\x0bmemberCount\x129\n\ncreated_at\x18\x0e \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x0f \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAt"\xae\x03\n\x1aCreateConsumerGroupRequest\x12\x1c\n\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n\x07pattern\x18\x03 \x01(\tR\x07pattern\x12\x1f\n\x0bfilter_expr\x18\x04 \x01(\tR\nfilterExpr\x12/\n\x08ack_mode\x18\x05 \x01(\x0e2\x14.ironflow.v1.AckModeR\x07ackMode\x12A\n\x0cbackpressure\x18\x06 \x01(\x0e2\x1d.ironflow.v1.BackpressureModeR\x0cbackpressure\x12!\n\x0cmax_inflight\x18\x07 \x01(\x05R\x0bmaxInflight\x12)\n\x10max_redeliveries\x18\x08 \x01(\x05R\x0fmaxRedeliveries\x12,\n\x12redeliver_delay_ms\x18\t \x01(\x05R\x10redeliverDelayMs\x123\n\x08metadata\x18\n \x01(\x0b2\x17.google.protobuf.StructR\x08metadata"K\n\x17GetConsumerGroupRequest\x12\x1c\n\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name"\xa1\x01\n\x19ListConsumerGroupsRequest\x12\x1c\n\tnamespace\x18\x01 \x01(\tR\tnamespace\x128\n\x06status\x18\x02 \x01(\x0e2 .ironflow.v1.ConsumerGroupStatusR\x06status\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n\x06cursor\x18\x04 \x01(\tR\x06cursor"\x92\x01\n\x1aListConsumerGroupsResponse\x122\n\x06groups\x18\x01 \x03(\x0b2\x1a.ironflow.v1.ConsumerGroupR\x06groups\x12\x1f\n\x0bnext_cursor\x18\x02 \x01(\tR\nnextCursor\x12\x1f\n\x0btotal_count\x18\x03 \x01(\x05R\ntotalCount"\x8b\x01\n\x1aUpdateConsumerGroupRequest\x120\n\x05group\x18\x01 \x01(\x0b2\x1a.ironflow.v1.ConsumerGroupR\x05group\x12;\n\x0bupdate_mask\x18\x02 \x01(\x0b2\x1a.google.protobuf.FieldMaskR\nupdateMask"N\n\x1aDeleteConsumerGroupRequest\x12\x1c\n\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name"\x95\x01\n\x18JoinConsumerGroupRequest\x12\x1c\n\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x1d\n\ngroup_name\x18\x02 \x01(\tR\tgroupName\x12\x1f\n\x0bconsumer_id\x18\x03 \x01(\tR\nconsumerId\x12\x1b\n\tclient_id\x18\x04 \x01(\tR\x08clientId"j\n\x12ServerCapabilities\x12\x1e\n\ntransports\x18\x01 \x03(\tR\ntransports\x12\x1a\n\x08features\x18\x02 \x03(\tR\x08features\x12\x18\n\x07version\x18\x03 \x01(\tR\x07version"\xb3\x01\n\x0ePublishRequest\x12\x14\n\x05topic\x18\x01 \x01(\tR\x05topic\x12+\n\x04data\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x04 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12\'\n\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey"f\n\x0fPublishResponse\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12\x1a\n\x08sequence\x18\x02 \x01(\x04R\x08sequence\x12\x1c\n\tduplicate\x18\x03 \x01(\x08R\tduplicate"\x13\n\x11ListTopicsRequest"D\n\x12ListTopicsResponse\x12.\n\x06topics\x18\x01 \x03(\x0b2\x16.ironflow.v1.TopicInfoR\x06topics"\xf5\x01\n\tTopicInfo\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12#\n\rmessage_count\x18\x02 \x01(\x03R\x0cmessageCount\x12%\n\x0econsumer_count\x18\x03 \x01(\x05R\rconsumerCount\x12D\n\x10first_message_at\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\x0efirstMessageAt\x12B\n\x0flast_message_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\rlastMessageAt",\n\x14GetTopicStatsRequest\x12\x14\n\x05topic\x18\x01 \x01(\tR\x05topic"\xc1\x01\n\x15GetTopicStatsResponse\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12#\n\rmessage_count\x18\x02 \x01(\x03R\x0cmessageCount\x12%\n\x0econsumer_count\x18\x03 \x01(\x05R\rconsumerCount\x12\x10\n\x03lag\x18\x04 \x01(\x03R\x03lag\x12\x1b\n\tfirst_seq\x18\x05 \x01(\x04R\x08firstSeq\x12\x19\n\x08last_seq\x18\x06 \x01(\x04R\x07lastSeq*K\n\x07AckMode\x12\x18\n\x14ACK_MODE_UNSPECIFIED\x10\x00\x12\x11\n\rACK_MODE_AUTO\x10\x01\x12\x13\n\x0fACK_MODE_MANUAL\x10\x02*\x8c\x01\n\x10BackpressureMode\x12!\n\x1dBACKPRESSURE_MODE_UNSPECIFIED\x10\x00\x12\x1a\n\x16BACKPRESSURE_MODE_DROP\x10\x01\x12\x1b\n\x17BACKPRESSURE_MODE_BLOCK\x10\x02\x12\x1c\n\x18BACKPRESSURE_MODE_BUFFER\x10\x03*\xa3\x01\n\x13ConsumerGroupStatus\x12%\n!CONSUMER_GROUP_STATUS_UNSPECIFIED\x10\x00\x12 \n\x1cCONSUMER_GROUP_STATUS_ACTIVE\x10\x01\x12 \n\x1cCONSUMER_GROUP_STATUS_PAUSED\x10\x02\x12!\n\x1dCONSUMER_GROUP_STATUS_DELETED\x10\x03*Z\n\x07AckType\x12\x18\n\x14ACK_TYPE_UNSPECIFIED\x10\x00\x12\x10\n\x0cACK_TYPE_ACK\x10\x01\x12\x10\n\x0cACK_TYPE_NAK\x10\x02\x12\x11\n\rACK_TYPE_TERM\x10\x03*\xab\x01\n\rAckResultCode\x12\x1f\n\x1bACK_RESULT_CODE_UNSPECIFIED\x10\x00\x12\x16\n\x12ACK_RESULT_CODE_OK\x10\x01\x12$\n ACK_RESULT_CODE_INVALID_ARGUMENT\x10\x02\x12\x1c\n\x18ACK_RESULT_CODE_INTERNAL\x10\x03\x12\x1d\n\x19ACK_RESULT_CODE_NOT_FOUND\x10\x042\x86\t\n\rPubSubService\x12;\n\x04Emit\x12\x18.ironflow.v1.EmitRequest\x1a\x19.ironflow.v1.EmitResponse\x12L\n\tSubscribe\x12\x1d.ironflow.v1.SubscribeRequest\x1a\x1e.ironflow.v1.SubscriptionEvent0\x01\x12u\n\x16SubscribeBidirectional\x12*.ironflow.v1.SubscribeBidirectionalRequest\x1a+.ironflow.v1.SubscribeBidirectionalResponse(\x010\x01\x12G\n\x08AckEvent\x12\x1c.ironflow.v1.AckEventRequest\x1a\x1d.ironflow.v1.AckEventResponse\x12Z\n\x13CreateConsumerGroup\x12\'.ironflow.v1.CreateConsumerGroupRequest\x1a\x1a.ironflow.v1.ConsumerGroup\x12Y\n\x10GetConsumerGroup\x12$.ironflow.v1.GetConsumerGroupRequest\x1a\x1a.ironflow.v1.ConsumerGroup"\x03\x90\x02\x01\x12j\n\x12ListConsumerGroups\x12&.ironflow.v1.ListConsumerGroupsRequest\x1a\'.ironflow.v1.ListConsumerGroupsResponse"\x03\x90\x02\x01\x12Z\n\x13UpdateConsumerGroup\x12\'.ironflow.v1.UpdateConsumerGroupRequest\x1a\x1a.ironflow.v1.ConsumerGroup\x12V\n\x13DeleteConsumerGroup\x12\'.ironflow.v1.DeleteConsumerGroupRequest\x1a\x16.google.protobuf.Empty\x12\\\n\x11JoinConsumerGroup\x12%.ironflow.v1.JoinConsumerGroupRequest\x1a\x1e.ironflow.v1.SubscriptionEvent0\x01\x12D\n\x07Publish\x12\x1b.ironflow.v1.PublishRequest\x1a\x1c.ironflow.v1.PublishResponse\x12R\n\nListTopics\x12\x1e.ironflow.v1.ListTopicsRequest\x1a\x1f.ironflow.v1.ListTopicsResponse"\x03\x90\x02\x01\x12[\n\rGetTopicStats\x12!.ironflow.v1.GetTopicStatsRequest\x1a".ironflow.v1.GetTopicStatsResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
+    b'\n\x18ironflow/v1/pubsub.proto\x12\x0bironflow.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a google/protobuf/field_mask.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto"\x90\x02\n\x0bEmitRequest\x12\x14\n\x05event\x18\x01 \x01(\tR\x05event\x12+\n\x04data\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x07 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12\'\n\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey\x123\n\x08metadata\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x12\x18\n\x07version\x18\x06 \x01(\x05R\x07versionJ\x04\x08\x05\x10\x06R\tnamespace"B\n\x0cEmitResponse\x12\x17\n\x07run_ids\x18\x01 \x03(\tR\x06runIds\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId"e\n\x10SubscribeRequest\x12\x18\n\x07pattern\x18\x01 \x01(\tR\x07pattern\x127\n\x07options\x18\x02 \x01(\x0b2\x1d.ironflow.v1.SubscribeOptionsR\x07options"\x99\x02\n\x10SubscribeOptions\x12\x16\n\x06replay\x18\x01 \x01(\x05R\x06replay\x12)\n\x10include_metadata\x18\x02 \x01(\x08R\x0fincludeMetadata\x12\x16\n\x06filter\x18\x03 \x01(\tR\x06filter\x12%\n\x0econsumer_group\x18\x05 \x01(\tR\rconsumerGroup\x125\n\x14start_after_sequence\x18\x08 \x01(\x04H\x00R\x12startAfterSequence\x88\x01\x01B\x17\n\x15_start_after_sequenceJ\x04\x08\x04\x10\x05J\x04\x08\x06\x10\x07J\x04\x08\x07\x10\x08R\tnamespaceR\x08ack_modeR\x0cbackpressure"\xd0\x02\n\x11SubscriptionEvent\x12\'\n\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId\x12\x14\n\x05topic\x18\x03 \x01(\tR\x05topic\x12+\n\x04data\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x08 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x126\n\x08metadata\x18\x05 \x01(\x0b2\x1a.ironflow.v1.EventMetadataR\x08metadata\x12\x1a\n\x08sequence\x18\x06 \x01(\x04R\x08sequence\x12)\n\x10delivery_attempt\x18\x07 \x01(\x05R\x0fdeliveryAttempt"\x99\x01\n\rEventMetadata\x128\n\ttimestamp\x18\x01 \x01(\x0b2\x1a.google.protobuf.TimestampR\ttimestamp\x12/\n\x06custom\x18\x04 \x01(\x0b2\x17.google.protobuf.StructR\x06customJ\x04\x08\x02\x10\x03J\x04\x08\x03\x10\x04R\x06sourceR\tnamespace"\xa2\x01\n\x0fSubscriptionAck\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12/\n\x08ack_type\x18\x02 \x01(\x0e2\x14.ironflow.v1.AckTypeR\x07ackType\x12,\n\x12redeliver_delay_ms\x18\x03 \x01(\x05R\x10redeliverDelayMs\x12\x15\n\x06ack_id\x18\x04 \x01(\x04R\x05ackId"\x99\x01\n\x1dSubscribeBidirectionalRequest\x12;\n\x04join\x18\x01 \x01(\x0b2%.ironflow.v1.JoinConsumerGroupRequestH\x00R\x04join\x120\n\x03ack\x18\x02 \x01(\x0b2\x1c.ironflow.v1.SubscriptionAckH\x00R\x03ackB\t\n\x07payload"\x96\x02\n\x1eSubscribeBidirectionalResponse\x12:\n\x06joined\x18\x01 \x01(\x0b2 .ironflow.v1.ConsumerGroupJoinedH\x00R\x06joined\x126\n\x05event\x18\x02 \x01(\x0b2\x1e.ironflow.v1.SubscriptionEventH\x00R\x05event\x127\n\nack_result\x18\x03 \x01(\x0b2\x16.ironflow.v1.AckResultH\x00R\tackResult\x12<\n\theartbeat\x18\x04 \x01(\x0b2\x1c.ironflow.v1.StreamHeartbeatH\x00R\theartbeatB\t\n\x07payload"\xa8\x01\n\x13ConsumerGroupJoined\x12\'\n\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1d\n\ngroup_name\x18\x02 \x01(\tR\tgroupName\x12\x18\n\x07pattern\x18\x03 \x01(\tR\x07pattern\x12/\n\x08ack_mode\x18\x04 \x01(\x0e2\x14.ironflow.v1.AckModeR\x07ackMode"\x87\x01\n\tAckResult\x12\x15\n\x06ack_id\x18\x01 \x01(\x04R\x05ackId\x12\x19\n\x08event_id\x18\x02 \x01(\tR\x07eventId\x12.\n\x04code\x18\x03 \x01(\x0e2\x1a.ironflow.v1.AckResultCodeR\x04code\x12\x18\n\x07message\x18\x04 \x01(\tR\x07message"\x11\n\x0fStreamHeartbeat"\xdc\x01\n\x0fAckEventRequest\x12\x1d\n\ngroup_name\x18\x02 \x01(\tR\tgroupName\x12\x1f\n\x0bconsumer_id\x18\x03 \x01(\tR\nconsumerId\x12\x19\n\x08event_id\x18\x04 \x01(\tR\x07eventId\x12/\n\x08ack_type\x18\x05 \x01(\x0e2\x14.ironflow.v1.AckTypeR\x07ackType\x12,\n\x12redeliver_delay_ms\x18\x06 \x01(\x05R\x10redeliverDelayMsJ\x04\x08\x01\x10\x02R\tnamespace"\x12\n\x10AckEventResponse"\xf7\x04\n\rConsumerGroup\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x12\x18\n\x07pattern\x18\x04 \x01(\tR\x07pattern\x12\x1f\n\x0bfilter_expr\x18\x05 \x01(\tR\nfilterExpr\x12/\n\x08ack_mode\x18\x06 \x01(\x0e2\x14.ironflow.v1.AckModeR\x07ackMode\x12A\n\x0cbackpressure\x18\x07 \x01(\x0e2\x1d.ironflow.v1.BackpressureModeR\x0cbackpressure\x12!\n\x0cmax_inflight\x18\x08 \x01(\x05R\x0bmaxInflight\x12)\n\x10max_redeliveries\x18\t \x01(\x05R\x0fmaxRedeliveries\x12,\n\x12redeliver_delay_ms\x18\n \x01(\x05R\x10redeliverDelayMs\x123\n\x08metadata\x18\x0b \x01(\x0b2\x17.google.protobuf.StructR\x08metadata\x128\n\x06status\x18\x0c \x01(\x0e2 .ironflow.v1.ConsumerGroupStatusR\x06status\x12!\n\x0cmember_count\x18\r \x01(\x05R\x0bmemberCount\x129\n\ncreated_at\x18\x0e \x01(\x0b2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n\nupdated_at\x18\x0f \x01(\x0b2\x1a.google.protobuf.TimestampR\tupdatedAtJ\x04\x08\x02\x10\x03R\tnamespace"\xa1\x03\n\x1aCreateConsumerGroupRequest\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n\x07pattern\x18\x03 \x01(\tR\x07pattern\x12\x1f\n\x0bfilter_expr\x18\x04 \x01(\tR\nfilterExpr\x12/\n\x08ack_mode\x18\x05 \x01(\x0e2\x14.ironflow.v1.AckModeR\x07ackMode\x12A\n\x0cbackpressure\x18\x06 \x01(\x0e2\x1d.ironflow.v1.BackpressureModeR\x0cbackpressure\x12!\n\x0cmax_inflight\x18\x07 \x01(\x05R\x0bmaxInflight\x12)\n\x10max_redeliveries\x18\x08 \x01(\x05R\x0fmaxRedeliveries\x12,\n\x12redeliver_delay_ms\x18\t \x01(\x05R\x10redeliverDelayMs\x123\n\x08metadata\x18\n \x01(\x0b2\x17.google.protobuf.StructR\x08metadataJ\x04\x08\x01\x10\x02R\tnamespace">\n\x17GetConsumerGroupRequest\x12\x12\n\x04name\x18\x02 \x01(\tR\x04nameJ\x04\x08\x01\x10\x02R\tnamespace"\x94\x01\n\x19ListConsumerGroupsRequest\x128\n\x06status\x18\x02 \x01(\x0e2 .ironflow.v1.ConsumerGroupStatusR\x06status\x12\x14\n\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n\x06cursor\x18\x04 \x01(\tR\x06cursorJ\x04\x08\x01\x10\x02R\tnamespace"\x92\x01\n\x1aListConsumerGroupsResponse\x122\n\x06groups\x18\x01 \x03(\x0b2\x1a.ironflow.v1.ConsumerGroupR\x06groups\x12\x1f\n\x0bnext_cursor\x18\x02 \x01(\tR\nnextCursor\x12\x1f\n\x0btotal_count\x18\x03 \x01(\x05R\ntotalCount"\x8b\x01\n\x1aUpdateConsumerGroupRequest\x120\n\x05group\x18\x01 \x01(\x0b2\x1a.ironflow.v1.ConsumerGroupR\x05group\x12;\n\x0bupdate_mask\x18\x02 \x01(\x0b2\x1a.google.protobuf.FieldMaskR\nupdateMask"A\n\x1aDeleteConsumerGroupRequest\x12\x12\n\x04name\x18\x02 \x01(\tR\x04nameJ\x04\x08\x01\x10\x02R\tnamespace"\x88\x01\n\x18JoinConsumerGroupRequest\x12\x1d\n\ngroup_name\x18\x02 \x01(\tR\tgroupName\x12\x1f\n\x0bconsumer_id\x18\x03 \x01(\tR\nconsumerId\x12\x1b\n\tclient_id\x18\x04 \x01(\tR\x08clientIdJ\x04\x08\x01\x10\x02R\tnamespace"j\n\x12ServerCapabilities\x12\x1e\n\ntransports\x18\x01 \x03(\tR\ntransports\x12\x1a\n\x08features\x18\x02 \x03(\tR\x08features\x12\x18\n\x07version\x18\x03 \x01(\tR\x07version"\xb3\x01\n\x0ePublishRequest\x12\x14\n\x05topic\x18\x01 \x01(\tR\x05topic\x12+\n\x04data\x18\x02 \x01(\x0b2\x17.google.protobuf.StructR\x04data\x125\n\ndata_value\x18\x04 \x01(\x0b2\x16.google.protobuf.ValueR\tdataValue\x12\'\n\x0fidempotency_key\x18\x03 \x01(\tR\x0eidempotencyKey"f\n\x0fPublishResponse\x12\x19\n\x08event_id\x18\x01 \x01(\tR\x07eventId\x12\x1a\n\x08sequence\x18\x02 \x01(\x04R\x08sequence\x12\x1c\n\tduplicate\x18\x03 \x01(\x08R\tduplicate"\x13\n\x11ListTopicsRequest"D\n\x12ListTopicsResponse\x12.\n\x06topics\x18\x01 \x03(\x0b2\x16.ironflow.v1.TopicInfoR\x06topics"\xf5\x01\n\tTopicInfo\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12#\n\rmessage_count\x18\x02 \x01(\x03R\x0cmessageCount\x12%\n\x0econsumer_count\x18\x03 \x01(\x05R\rconsumerCount\x12D\n\x10first_message_at\x18\x04 \x01(\x0b2\x1a.google.protobuf.TimestampR\x0efirstMessageAt\x12B\n\x0flast_message_at\x18\x05 \x01(\x0b2\x1a.google.protobuf.TimestampR\rlastMessageAt",\n\x14GetTopicStatsRequest\x12\x14\n\x05topic\x18\x01 \x01(\tR\x05topic"\xc1\x01\n\x15GetTopicStatsResponse\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12#\n\rmessage_count\x18\x02 \x01(\x03R\x0cmessageCount\x12%\n\x0econsumer_count\x18\x03 \x01(\x05R\rconsumerCount\x12\x10\n\x03lag\x18\x04 \x01(\x03R\x03lag\x12\x1b\n\tfirst_seq\x18\x05 \x01(\x04R\x08firstSeq\x12\x19\n\x08last_seq\x18\x06 \x01(\x04R\x07lastSeq*K\n\x07AckMode\x12\x18\n\x14ACK_MODE_UNSPECIFIED\x10\x00\x12\x11\n\rACK_MODE_AUTO\x10\x01\x12\x13\n\x0fACK_MODE_MANUAL\x10\x02*\x8c\x01\n\x10BackpressureMode\x12!\n\x1dBACKPRESSURE_MODE_UNSPECIFIED\x10\x00\x12\x1a\n\x16BACKPRESSURE_MODE_DROP\x10\x01\x12\x1b\n\x17BACKPRESSURE_MODE_BLOCK\x10\x02\x12\x1c\n\x18BACKPRESSURE_MODE_BUFFER\x10\x03*\xa3\x01\n\x13ConsumerGroupStatus\x12%\n!CONSUMER_GROUP_STATUS_UNSPECIFIED\x10\x00\x12 \n\x1cCONSUMER_GROUP_STATUS_ACTIVE\x10\x01\x12 \n\x1cCONSUMER_GROUP_STATUS_PAUSED\x10\x02\x12!\n\x1dCONSUMER_GROUP_STATUS_DELETED\x10\x03*Z\n\x07AckType\x12\x18\n\x14ACK_TYPE_UNSPECIFIED\x10\x00\x12\x10\n\x0cACK_TYPE_ACK\x10\x01\x12\x10\n\x0cACK_TYPE_NAK\x10\x02\x12\x11\n\rACK_TYPE_TERM\x10\x03*\xcc\x01\n\rAckResultCode\x12\x1f\n\x1bACK_RESULT_CODE_UNSPECIFIED\x10\x00\x12\x16\n\x12ACK_RESULT_CODE_OK\x10\x01\x12$\n ACK_RESULT_CODE_INVALID_ARGUMENT\x10\x02\x12\x1c\n\x18ACK_RESULT_CODE_INTERNAL\x10\x03\x12\x1d\n\x19ACK_RESULT_CODE_NOT_FOUND\x10\x04\x12\x1f\n\x1bACK_RESULT_CODE_UNAVAILABLE\x10\x052\x86\t\n\rPubSubService\x12;\n\x04Emit\x12\x18.ironflow.v1.EmitRequest\x1a\x19.ironflow.v1.EmitResponse\x12L\n\tSubscribe\x12\x1d.ironflow.v1.SubscribeRequest\x1a\x1e.ironflow.v1.SubscriptionEvent0\x01\x12u\n\x16SubscribeBidirectional\x12*.ironflow.v1.SubscribeBidirectionalRequest\x1a+.ironflow.v1.SubscribeBidirectionalResponse(\x010\x01\x12G\n\x08AckEvent\x12\x1c.ironflow.v1.AckEventRequest\x1a\x1d.ironflow.v1.AckEventResponse\x12Z\n\x13CreateConsumerGroup\x12\'.ironflow.v1.CreateConsumerGroupRequest\x1a\x1a.ironflow.v1.ConsumerGroup\x12Y\n\x10GetConsumerGroup\x12$.ironflow.v1.GetConsumerGroupRequest\x1a\x1a.ironflow.v1.ConsumerGroup"\x03\x90\x02\x01\x12j\n\x12ListConsumerGroups\x12&.ironflow.v1.ListConsumerGroupsRequest\x1a\'.ironflow.v1.ListConsumerGroupsResponse"\x03\x90\x02\x01\x12Z\n\x13UpdateConsumerGroup\x12\'.ironflow.v1.UpdateConsumerGroupRequest\x1a\x1a.ironflow.v1.ConsumerGroup\x12V\n\x13DeleteConsumerGroup\x12\'.ironflow.v1.DeleteConsumerGroupRequest\x1a\x16.google.protobuf.Empty\x12\\\n\x11JoinConsumerGroup\x12%.ironflow.v1.JoinConsumerGroupRequest\x1a\x1e.ironflow.v1.SubscriptionEvent0\x01\x12D\n\x07Publish\x12\x1b.ironflow.v1.PublishRequest\x1a\x1c.ironflow.v1.PublishResponse\x12R\n\nListTopics\x12\x1e.ironflow.v1.ListTopicsRequest\x1a\x1f.ironflow.v1.ListTopicsResponse"\x03\x90\x02\x01\x12[\n\rGetTopicStats\x12!.ironflow.v1.GetTopicStatsRequest\x1a".ironflow.v1.GetTopicStatsResponse"\x03\x90\x02\x01B:Z8github.com/sahina/ironflow/api/go/ironflow/v1;ironflowv1b\x06proto3',
     [
         empty_pb.desc(),
         field_mask_pb.desc(),
