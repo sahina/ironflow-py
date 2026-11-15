@@ -17,7 +17,7 @@ permissions:
 jobs:
   build:
     name: Build ironflow-py artifacts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     env:
       # All untrusted inputs routed through env vars; never interpolate
@@ -102,7 +102,8 @@ jobs:
 
   publish:
     name: Publish prepared Python artifacts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
     needs: build
     # Half of the OIDC claim PyPI matches on; the other half is this file's
     # name. Both must equal what the Trusted Publisher on PyPI declares, or
