@@ -440,22 +440,22 @@ def test_schema_test_upcast(rpc: Any, seed: dict[str, Any]) -> None:
 def test_pubsub_cg_manage(rpc: Any) -> None:
     name = f"pysdk-cg-{time.time_ns()}"
     pattern = f"topic:pysdk.cg.{name}"
-    rpc.pubsub.create_consumer_group(CreateConsumerGroupRequest(name=name, namespace="default", pattern=pattern, max_redeliveries=3))
-    got = rpc.pubsub.get_consumer_group(GetConsumerGroupRequest(name=name, namespace="default"))
+    rpc.pubsub.create_consumer_group(CreateConsumerGroupRequest(name=name, pattern=pattern, max_redeliveries=3))
+    got = rpc.pubsub.get_consumer_group(GetConsumerGroupRequest(name=name))
     assert (got.name, got.pattern, got.max_redeliveries) == (name, pattern, 3)
-    groups = rpc.pubsub.list_consumer_groups(ListConsumerGroupsRequest(namespace="default")).groups
+    groups = rpc.pubsub.list_consumer_groups(ListConsumerGroupsRequest()).groups
     assert name in [g.name for g in groups]
     updated = rpc.pubsub.update_consumer_group(
         UpdateConsumerGroupRequest(
-            group=ConsumerGroup(name=name, namespace="default", max_redeliveries=7),
+            group=ConsumerGroup(name=name, max_redeliveries=7),
             update_mask=FieldMask(paths=["max_redeliveries"]),
         )
     )
     assert updated.max_redeliveries == 7
-    assert rpc.pubsub.get_consumer_group(GetConsumerGroupRequest(name=name, namespace="default")).max_redeliveries == 7
-    rpc.pubsub.delete_consumer_group(DeleteConsumerGroupRequest(name=name, namespace="default"))
+    assert rpc.pubsub.get_consumer_group(GetConsumerGroupRequest(name=name)).max_redeliveries == 7
+    rpc.pubsub.delete_consumer_group(DeleteConsumerGroupRequest(name=name))
     with pytest.raises(IronflowRPCError) as exc:
-        rpc.pubsub.get_consumer_group(GetConsumerGroupRequest(name=name, namespace="default"))
+        rpc.pubsub.get_consumer_group(GetConsumerGroupRequest(name=name))
     assert exc.value.code == "not_found", exc.value.code
 
 
