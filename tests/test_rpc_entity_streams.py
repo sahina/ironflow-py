@@ -4,6 +4,8 @@ import asyncio
 from typing import Any
 
 import pytest
+from connectrpc.code import Code
+from connectrpc.errors import ConnectError
 from protobuf.wkt import Timestamp, Value
 
 from ironflow import AsyncIronflowRPC, IronflowRPC, IronflowRPCError
@@ -18,7 +20,44 @@ from ironflow.rpc.v1 import (
     ReadStreamRequest,
 )
 
-from .rpc_server import serve
+from .rpc_server import StubEntityStreamService, serve
+
+
+@pytest.mark.parametrize("client_cls", [IronflowRPC, AsyncIronflowRPC])
+def test_busy_append_is_unavailable_and_not_resent(
+    client_cls: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = 0
+
+    async def busy(_self: Any, _request: Any, _ctx: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        raise ConnectError(
+            Code.UNAVAILABLE,
+            "entity stream append met a busy outbox; nothing was written, retry",
+        )
+
+    monkeypatch.setattr(StubEntityStreamService, "append_event", busy)
+
+    async def exercise() -> None:
+        with serve() as server:
+            client = client_cls(server_url=server.url)
+            try:
+                with pytest.raises(IronflowRPCError) as exc:
+                    result = client.streams.append_event(
+                        AppendEventRequest(entity_id="order-1")
+                    )
+                    if asyncio.iscoroutine(result):
+                        await result
+                assert exc.value.code == "unavailable"
+            finally:
+                if isinstance(client, AsyncIronflowRPC):
+                    await client.aclose()
+                else:
+                    client.close()
+
+    asyncio.run(exercise())
+    assert calls == 1
 
 
 @pytest.mark.parametrize("client_cls", [IronflowRPC, AsyncIronflowRPC])

@@ -103,12 +103,20 @@ def test_transform_returning_nan_data_is_transform_failed() -> None:
     assert status == 400 and body["error"]["code"] == "TRANSFORM_FAILED"
 
 
-def test_emit_network_error_and_rejection_are_502() -> None:
+def test_emit_network_error_is_502() -> None:
     FakeTransport.reply = IronflowError("down", code="NETWORK_ERROR", retryable=True)
-    assert call([stripe()], "stripe", server_url="http://engine")[1]["error"]["code"] == "EMIT_FAILED"
-    FakeTransport.reply = FakeReply(403, {"code": "permission_denied"})
     status, body = call([stripe()], "stripe", server_url="http://engine")
     assert status == 502 and body["error"]["code"] == "EMIT_FAILED"
+
+
+# A permanent refusal answers 502 on purpose: see the SDK webhook handlers in ADR 0184.
+@pytest.mark.parametrize(
+    ("refused", "code"), [(409, "already_exists"), (400, "invalid_argument"), (403, "permission_denied")])
+def test_emit_refusal_is_502(refused: int, code: str) -> None:
+    FakeTransport.reply = FakeReply(refused, {"code": code})
+    status, body = call([stripe()], "stripe", server_url="http://engine")
+    assert status == 502 and body["error"]["code"] == "EMIT_FAILED"
+    assert code in body["error"]["message"]
 
 
 def test_get_webhook_is_405() -> None:
