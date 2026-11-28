@@ -490,7 +490,7 @@ passes having proved your toolchain works rather than that the wheel does.
 
 ## Read-only mirror
 
-This repo is **read-only**. Pull requests will be closed without review. Source changes
+This repo is **read-only**. Only maintainers can open pull requests. Source changes
 land in the engine repo and are synced here at each release.
 
 ## Bug reports

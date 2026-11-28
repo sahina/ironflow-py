@@ -14,7 +14,7 @@ Issues are disabled here. Everything goes to one tracker: [sahina/ironflow-issue
 
 ## Pull requests
 
-Pull requests opened against this repository will be closed without review. The only commits expected here come from the release pipeline mirroring source from the engine repo.
+Only maintainers can open pull requests here; GitHub refuses them from anyone else, including AI agents and bots. The only commits expected here come from the release pipeline mirroring source from the engine repo.
 
 If you have a fix in mind, file an issue describing the bug and the proposed fix. The engine team will land the change in the private repo and it will appear here at the next release.
 
